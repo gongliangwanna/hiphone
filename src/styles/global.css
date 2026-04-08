@@ -2,12 +2,20 @@
 @import "../platform/design-tokens/tokens.css";
 @import "./fonts.css";
 
+html,
+body,
+#root {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
 /* Prevent text selection and touch callouts inside the device */
 .device-root {
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
+  touch-action: none;
 }
 
 *,

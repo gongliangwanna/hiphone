@@ -5,8 +5,12 @@ export function StatusBar() {
 
   return (
     <div
-      className="flex items-center justify-between px-[22px]"
-      style={{ height: 48, paddingTop: 12 }}
+      className="flex items-center justify-between"
+      style={{
+        height: 'calc(var(--status-top-padding) + 36px)',
+        paddingTop: 'var(--status-top-padding)',
+        paddingInline: 'var(--shell-side-padding)',
+      }}
       data-testid="status-bar"
     >
       {/* Left: Time */}

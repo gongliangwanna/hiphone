@@ -1,12 +1,16 @@
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, type CSSProperties } from 'react';
 import { StatusBar } from '../StatusBar/StatusBar';
 import { HomeIndicator } from '../HomeIndicator/HomeIndicator';
 import { Springboard } from '../Springboard/Springboard';
 import { LockScreen } from '../LockScreen/LockScreen';
 import { wallpapers } from '../Springboard/apps.data';
 import { useSystemStore } from '@/platform/stores/systemStore';
+import { getSpringboardMetrics } from './viewportProfile';
+import { useViewportProfile } from './useViewportProfile';
 
 const MAX_BLUR = 14;
+
+type ShellStyle = CSSProperties & Record<`--${string}`, string>;
 
 function easeOutQuad(t: number): number {
   return t * (2 - t);
@@ -17,6 +21,8 @@ export function Device() {
   const wallpaperId = useSystemStore((s) => s.wallpaperId);
   const unlock = useSystemStore((s) => s.unlock);
   const desktopRef = useRef<HTMLDivElement>(null);
+  const viewportProfile = useViewportProfile();
+  const metrics = getSpringboardMetrics(viewportProfile.sizeTier);
 
   const wallpaper = wallpapers.find((w) => w.id === wallpaperId) ?? wallpapers[0]!;
 
@@ -47,15 +53,31 @@ export function Device() {
     }
   }, [isLocked]);
 
+  const rootStyle: ShellStyle = {
+    '--safe-top': 'env(safe-area-inset-top, 0px)',
+    '--safe-right': 'env(safe-area-inset-right, 0px)',
+    '--safe-bottom': 'env(safe-area-inset-bottom, 0px)',
+    '--safe-left': 'env(safe-area-inset-left, 0px)',
+    '--shell-side-padding': `${metrics.sidePadding}px`,
+    '--status-top-padding': 'max(12px, calc(var(--safe-top) + 6px))',
+    '--home-indicator-bottom': 'max(8px, var(--safe-bottom))',
+    '--lock-actions-bottom': 'max(24px, calc(var(--safe-bottom) + 12px))',
+    '--springboard-top-padding': `${metrics.springboardTopPadding}px`,
+    width: viewportProfile.shellMode === 'fullscreen' ? '100vw' : `${viewportProfile.width}px`,
+    height: viewportProfile.shellMode === 'fullscreen' ? '100dvh' : `${viewportProfile.height}px`,
+    minHeight: viewportProfile.shellMode === 'fullscreen' ? '100vh' : undefined,
+    maxWidth: viewportProfile.shellMode === 'fullscreen' ? 'none' : undefined,
+    maxHeight: viewportProfile.shellMode === 'fullscreen' ? 'none' : undefined,
+    borderRadius: 0,
+  };
+
   return (
     <div
       className="device-root relative mx-auto flex flex-col overflow-hidden bg-black"
-      style={{
-        width: '100vw',
-        height: '100vh',
-        maxWidth: 393,
-        maxHeight: 'min(100vh, calc(100vw * 2.164))',
-      }}
+      style={rootStyle}
+      data-testid="device-root"
+      data-shell-mode={viewportProfile.shellMode}
+      data-size-tier={viewportProfile.sizeTier}
     >
       <div
         className="absolute inset-0 bg-cover bg-center"
@@ -70,7 +92,10 @@ export function Device() {
       >
         <StatusBar />
         <div className="flex-1 overflow-hidden">
-          <Springboard />
+          <Springboard
+            sizeTier={viewportProfile.sizeTier}
+            viewportWidth={viewportProfile.width}
+          />
         </div>
         <HomeIndicator />
       </div>

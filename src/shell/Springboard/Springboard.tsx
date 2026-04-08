@@ -3,6 +3,7 @@ import { apps, dock } from './apps.data';
 import { IconGrid } from './IconGrid';
 import { Dock } from './Dock';
 import { PageIndicator } from './PageIndicator';
+import { getSpringboardMetrics, type SizeTier } from '../Device/viewportProfile';
 
 const COLS = 4;
 const ROWS = 5;
@@ -19,13 +20,18 @@ function paginate(appList: typeof apps, size: number) {
 const pages = paginate(apps, PAGE_SIZE);
 const TOTAL_PAGES = pages.length;
 
-export function Springboard() {
+interface SpringboardProps {
+  sizeTier: SizeTier;
+  viewportWidth: number;
+}
+
+export function Springboard({ sizeTier, viewportWidth }: SpringboardProps) {
   const [currentPage, setCurrentPage] = useState(0);
   const [dragOffset, setDragOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
-  const viewportRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
   const dragRef = useRef({ startX: 0, startTime: 0 });
+  const metrics = getSpringboardMetrics(sizeTier);
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     isDraggingRef.current = true;
@@ -81,16 +87,15 @@ export function Springboard() {
     [currentPage],
   );
 
-  const viewportWidth = viewportRef.current?.offsetWidth || 393;
   const baseOffset = currentPage * 100;
-  const dragPercent = (dragOffset / viewportWidth) * 100;
+  const dragPercent = (dragOffset / Math.max(viewportWidth, 1)) * 100;
   const translateX = baseOffset - dragPercent;
 
   return (
     <div className="flex h-full flex-col" data-testid="springboard">
       <div
-        ref={viewportRef}
-        className="flex-1 overflow-hidden pt-2"
+        className="flex-1 overflow-hidden"
+        style={{ paddingTop: 'var(--springboard-top-padding)' }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -100,15 +105,19 @@ export function Springboard() {
           style={{ transform: `translateX(-${translateX}%)` }}
         >
           {pages.map((pageApps, i) => (
-            <div key={i} className="w-full flex-shrink-0 px-[22px] pt-4">
-              <IconGrid apps={pageApps} />
+            <div
+              key={i}
+              className="w-full flex-shrink-0"
+              style={{ paddingInline: 'var(--shell-side-padding)' }}
+            >
+              <IconGrid apps={pageApps} metrics={metrics} />
             </div>
           ))}
         </div>
       </div>
 
       <PageIndicator totalPages={TOTAL_PAGES} currentPage={currentPage} />
-      <Dock apps={dock} />
+      <Dock apps={dock} metrics={metrics} />
     </div>
   );
 }

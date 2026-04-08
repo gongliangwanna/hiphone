@@ -1,6 +1,10 @@
 export function HomeIndicator() {
   return (
-    <div className="flex justify-center pb-2" data-testid="home-indicator">
+    <div
+      className="flex justify-center"
+      style={{ paddingBottom: 'var(--home-indicator-bottom)' }}
+      data-testid="home-indicator"
+    >
       <div
         className="bg-white/60"
         style={{

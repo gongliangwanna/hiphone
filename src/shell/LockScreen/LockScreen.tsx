@@ -93,7 +93,14 @@ export function LockScreen({ onUnlock, visible, wallpaper, onDragProgress }: Loc
 
         <div className="relative z-10 flex h-full flex-col">
           {/* Top bar */}
-          <div className="flex items-center justify-between px-[22px]" style={{ height: 54, paddingTop: 14 }}>
+          <div
+            className="flex items-center justify-between"
+            style={{
+              height: 'calc(var(--status-top-padding) + 42px)',
+              paddingTop: 'var(--status-top-padding)',
+              paddingInline: 'var(--shell-side-padding)',
+            }}
+          >
             <span className="text-[15px] font-normal text-white">中国电信</span>
             <StatusIcons />
           </div>
@@ -126,7 +133,13 @@ export function LockScreen({ onUnlock, visible, wallpaper, onDragProgress }: Loc
           <div className="flex-1" />
 
           {/* Bottom action buttons */}
-          <div className="flex items-end justify-between px-[46px] pb-6">
+          <div
+            className="flex items-end justify-between"
+            style={{
+              paddingInline: 'calc(var(--shell-side-padding) + 24px)',
+              paddingBottom: 'var(--lock-actions-bottom)',
+            }}
+          >
             <div className="flex h-[50px] w-[50px] items-center justify-center rounded-full bg-white/15">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
                 <path d="M9 21h6v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z" />
