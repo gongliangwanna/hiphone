@@ -1,0 +1,17 @@
+@import "tailwindcss";
+@import "../platform/design-tokens/tokens.css";
+@import "./fonts.css";
+
+/* Prevent text selection and touch callouts inside the device */
+.device-root {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}

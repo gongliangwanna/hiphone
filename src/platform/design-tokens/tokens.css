@@ -1,0 +1,89 @@
+/* Design Tokens — Light mode only for V1 */
+/* Dark mode selectors are reserved but empty for future use */
+
+:root {
+  /* Typography */
+  --font-family: -apple-system, "SF Pro Text", "SF Pro Display", "PingFang SC", "Helvetica Neue", system-ui, sans-serif;
+  --font-size-largeTitle: 34px;
+  --font-size-title1: 28px;
+  --font-size-title2: 22px;
+  --font-size-title3: 20px;
+  --font-size-headline: 17px;
+  --font-size-body: 17px;
+  --font-size-callout: 16px;
+  --font-size-subhead: 15px;
+  --font-size-footnote: 13px;
+  --font-size-caption1: 12px;
+  --font-size-caption2: 11px;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-heavy: 800;
+
+  /* Spacing (4pt grid) */
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-5: 20px;
+  --spacing-6: 24px;
+  --spacing-8: 32px;
+  --spacing-10: 40px;
+  --spacing-12: 48px;
+  --spacing-16: 64px;
+  --spacing-hitTargetMin: 44px;
+
+  /* Radius (concentric) */
+  --radius-device: 54px;
+  --radius-card: 22px;
+  --radius-group: 16px;
+  --radius-button: 12px;
+  --radius-chip: 10px;
+  --radius-icon: 18px;
+  --radius-homeIndicator: 3px;
+
+  /* Materials — Liquid Glass (nav layer only) */
+  --material-thin-blur: 20px;
+  --material-thin-saturate: 180%;
+  --material-thin-bg: rgba(255, 255, 255, 0.55);
+  --material-regular-blur: 30px;
+  --material-regular-saturate: 180%;
+  --material-regular-bg: rgba(255, 255, 255, 0.70);
+  --material-thick-blur: 40px;
+  --material-thick-saturate: 180%;
+  --material-thick-bg: rgba(255, 255, 255, 0.85);
+  --material-chrome-blur: 50px;
+  --material-chrome-saturate: 200%;
+  --material-chrome-bg: rgba(242, 242, 247, 0.95);
+
+  /* System Colors — Light */
+  --color-label: #000000;
+  --color-secondaryLabel: rgba(60, 60, 67, 0.6);
+  --color-tertiaryLabel: rgba(60, 60, 67, 0.3);
+  --color-quaternaryLabel: rgba(60, 60, 67, 0.18);
+  --color-separator: rgba(60, 60, 67, 0.29);
+  --color-opaqueSeparator: rgba(195, 195, 199, 1);
+  --color-systemBackground: #ffffff;
+  --color-secondarySystemBackground: rgba(242, 242, 247, 1);
+  --color-tertiarySystemBackground: rgba(255, 255, 255, 1);
+  --color-systemFill: rgba(120, 120, 128, 0.2);
+  --color-secondarySystemFill: rgba(120, 120, 128, 0.16);
+  --color-tertiarySystemFill: rgba(118, 118, 128, 0.12);
+  --color-quaternarySystemFill: rgba(116, 116, 128, 0.08);
+
+  /* System Tint Colors */
+  --color-systemBlue: rgba(0, 122, 255, 1);
+  --color-systemGreen: rgba(52, 199, 89, 1);
+  --color-systemIndigo: rgba(88, 86, 214, 1);
+  --color-systemOrange: rgba(255, 149, 0, 1);
+  --color-systemPink: rgba(255, 45, 85, 1);
+  --color-systemPurple: rgba(175, 82, 222, 1);
+  --color-systemRed: rgba(255, 59, 48, 1);
+  --color-systemTeal: rgba(90, 200, 250, 1);
+  --color-systemYellow: rgba(255, 204, 0, 1);
+}
+
+/* Dark mode — reserved for M6, not used in V1 */
+/* :root[data-theme="dark"] { ... } */

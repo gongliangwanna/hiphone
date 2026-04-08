@@ -1,0 +1,5 @@
+/* SF Pro system font stack — do NOT self-host SF for copyright reasons */
+:root {
+  --font-system: -apple-system, "SF Pro Text", "SF Pro Display",
+    "PingFang SC", "Helvetica Neue", system-ui, sans-serif;
+}
