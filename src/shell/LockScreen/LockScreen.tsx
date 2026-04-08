@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { LockTime } from './LockTime';
 import { HomeIndicator } from '../HomeIndicator/HomeIndicator';
 import { shouldCommitUnlock } from '@/platform/gesture/thresholds';
@@ -15,19 +15,13 @@ interface LockScreenProps {
 export function LockScreen({ onUnlock, visible, wallpaper, onDragProgress }: LockScreenProps) {
   const [dragOffset, setDragOffset] = useState(0);
   const [animating, setAnimating] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);
   const dragRef = useRef({ startX: 0, startY: 0, startTime: 0 });
   const samplesRef = useRef<VelocitySample[]>([]);
 
-  useEffect(() => {
-    if (!visible && !animating) {
-      setDismissed(true);
-    }
-  }, [visible, animating]);
-
-  if (dismissed) return null;
+  // Immediately unmount when not visible and not mid-animation
+  if (!visible && !animating) return null;
 
   const handlePointerDown = (e: React.PointerEvent) => {
     if (!visible) return;
@@ -67,7 +61,10 @@ export function LockScreen({ onUnlock, visible, wallpaper, onDragProgress }: Loc
       setAnimating(true);
       setDragOffset(-containerHeight);
       onDragProgress?.(1);
-      setTimeout(onUnlock, 350);
+      setTimeout(() => {
+        onUnlock();
+        setAnimating(false);
+      }, 350);
     } else {
       setAnimating(true);
       setDragOffset(0);

@@ -24,9 +24,11 @@ export function Springboard() {
   const [dragOffset, setDragOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const isDraggingRef = useRef(false);
   const dragRef = useRef({ startX: 0, startTime: 0 });
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    isDraggingRef.current = true;
     dragRef.current = {
       startX: e.clientX,
       startTime: Date.now(),
@@ -38,10 +40,9 @@ export function Springboard() {
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent) => {
-      if (!isDragging) return;
+      if (!isDraggingRef.current) return;
       const dx = e.clientX - dragRef.current.startX;
 
-      // Clamp at boundaries with rubber-band resistance
       let offset = dx;
       if (currentPage === 0 && dx > 0) {
         offset = dx * 0.3;
@@ -51,19 +52,20 @@ export function Springboard() {
 
       setDragOffset(offset);
     },
-    [isDragging, currentPage],
+    [currentPage],
   );
 
   const handlePointerUp = useCallback(
     (e: React.PointerEvent) => {
-      if (!isDragging) return;
+      if (!isDraggingRef.current) return;
+      isDraggingRef.current = false;
 
       const dx = e.clientX - dragRef.current.startX;
       const dt = Date.now() - dragRef.current.startTime;
-      const velocity = dt > 0 ? dx / dt : 0; // px/ms
+      const velocity = dt > 0 ? dx / dt : 0;
 
-      const THRESHOLD = 50; // px
-      const VELOCITY_THRESHOLD = 0.3; // px/ms
+      const THRESHOLD = 50;
+      const VELOCITY_THRESHOLD = 0.3;
 
       let nextPage = currentPage;
       if (dx < -THRESHOLD || velocity < -VELOCITY_THRESHOLD) {
@@ -76,10 +78,9 @@ export function Springboard() {
       setDragOffset(0);
       setCurrentPage(nextPage);
     },
-    [isDragging, currentPage],
+    [currentPage],
   );
 
-  // Calculate translateX: base page offset + drag offset as % of viewport
   const viewportWidth = viewportRef.current?.offsetWidth || 393;
   const baseOffset = currentPage * 100;
   const dragPercent = (dragOffset / viewportWidth) * 100;
