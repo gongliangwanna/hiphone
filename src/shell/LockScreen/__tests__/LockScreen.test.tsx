@@ -26,6 +26,11 @@ describe('LockScreen', () => {
     expect(screen.getByTestId('lock-date')).toBeInTheDocument();
   });
 
+  it('uses directional touch-action for vertical unlock gesture handling', () => {
+    render(<LockScreen onUnlock={mockUnlock} visible wallpaper={WALLPAPER} />);
+    expect(screen.getByTestId('lock-screen')).toHaveStyle({ touchAction: 'pan-x' });
+  });
+
   it('calls onUnlock on fast upward swipe', () => {
     render(<LockScreen onUnlock={mockUnlock} visible wallpaper={WALLPAPER} />);
     const container = screen.getByTestId('lock-screen');

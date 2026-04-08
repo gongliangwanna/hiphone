@@ -6,9 +6,10 @@ import type { SpringboardMetrics } from '../Device/viewportProfile';
 interface DockProps {
   apps: AppInfo[];
   metrics: SpringboardMetrics;
+  reduceTransparency?: boolean;
 }
 
-export function Dock({ apps, metrics }: DockProps) {
+export function Dock({ apps, metrics, reduceTransparency = false }: DockProps) {
   return (
     <div
       style={{
@@ -20,7 +21,9 @@ export function Dock({ apps, metrics }: DockProps) {
     >
       <Material
         variant="thick"
+        disableBackdrop={reduceTransparency}
         className="flex items-center justify-around rounded-[var(--radius-card)] px-2 py-2"
+        data-testid="dock-material"
       >
         {apps.map((app) => (
           <AppIcon key={app.id} app={app} hideLabel metrics={metrics} />

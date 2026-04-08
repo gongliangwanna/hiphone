@@ -9,6 +9,7 @@ export function PageIndicator({ totalPages, currentPage }: PageIndicatorProps) {
       {Array.from({ length: totalPages }, (_, i) => (
         <div
           key={i}
+          data-testid={`page-dot-${i}`}
           className="rounded-full transition-opacity"
           style={{
             width: 7,

@@ -77,6 +77,7 @@ export function LockScreen({ onUnlock, visible, wallpaper, onDragProgress }: Loc
       ref={containerRef}
       className="absolute inset-0 z-20"
       data-testid="lock-screen"
+      style={{ touchAction: 'pan-x' }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}

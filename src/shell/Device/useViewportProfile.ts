@@ -4,8 +4,8 @@ import { resolveViewportProfile, type ViewportEnvironment, type ViewportProfile 
 const COARSE_POINTER_QUERY = '(hover: none) and (pointer: coarse)';
 
 function getViewportEnvironment(): ViewportEnvironment {
-  const viewportWidth = window.innerWidth;
-  const viewportHeight = window.innerHeight;
+  const viewportWidth = window.visualViewport?.width ?? window.innerWidth;
+  const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
   const coarsePointer = window.matchMedia?.(COARSE_POINTER_QUERY).matches ?? false;
 
   return {

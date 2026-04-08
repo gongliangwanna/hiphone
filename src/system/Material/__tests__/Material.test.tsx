@@ -37,4 +37,14 @@ describe('Material', () => {
     render(<Material>Inside content</Material>);
     expect(screen.getByText('Inside content')).toBeInTheDocument();
   });
+
+  it('can disable backdrop filter for performance-sensitive interactions', () => {
+    render(
+      <Material disableBackdrop data-testid="mat">
+        Inside content
+      </Material>,
+    );
+    const el = screen.getByTestId('mat');
+    expect(el.style.backdropFilter).toBe('none');
+  });
 });

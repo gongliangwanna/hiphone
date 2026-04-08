@@ -71,8 +71,9 @@ describe('Device', () => {
     const root = screen.getByTestId('device-root');
 
     expect(root).toHaveAttribute('data-shell-mode', 'fullscreen');
-    expect(root.getAttribute('style')).toContain('width: 100vw');
-    expect(root.getAttribute('style')).toContain('height: 100dvh');
+    expect(root.getAttribute('style')).toContain('width: 390px');
+    expect(root.getAttribute('style')).toContain('height: 844px');
+    expect(root.getAttribute('style')).toContain('min-height: 844px');
     expect(root.getAttribute('style')).toContain('max-width: none');
     expect(root.getAttribute('style')).toContain('max-height: none');
     expect(root.style.borderRadius).toBe('0px');
