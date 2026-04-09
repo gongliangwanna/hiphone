@@ -109,7 +109,7 @@ describe('appRuntimeStore', () => {
 
   // ---------- card dismiss ----------
 
-  it('card dismiss removes the focused task when thresholds are met', () => {
+  it('card dismiss commits but does not remove app (UI calls removeApp after animation)', () => {
     const origin1 = { x: 10, y: 20, width: 60, height: 60 };
     const origin2 = { x: 100, y: 200, width: 60, height: 60 };
     useAppRuntimeStore.getState().openApp('settings', origin1);
@@ -121,8 +121,15 @@ describe('appRuntimeStore', () => {
 
     useAppRuntimeStore.getState().startCardDismiss('wechat', 400, 600);
     useAppRuntimeStore.getState().updateCardDismiss(240, -1.2);
-    useAppRuntimeStore.getState().finishCardDismiss();
+    const result = useAppRuntimeStore.getState().finishCardDismiss();
 
+    expect(result.committed).toBe(true);
+    // App is NOT yet removed — UI will call removeApp after fly-away animation
+    expect(useAppRuntimeStore.getState().recentApps.map((task) => task.id)).toEqual(['wechat', 'settings']);
+    expect(useAppRuntimeStore.getState().dismissReason).toBe('card');
+
+    // Simulate UI calling removeApp after animation completes
+    useAppRuntimeStore.getState().removeApp('wechat');
     expect(useAppRuntimeStore.getState().recentApps.map((task) => task.id)).toEqual(['settings']);
     expect(useAppRuntimeStore.getState().switcherAppId).toBe('settings');
   });
@@ -188,10 +195,12 @@ describe('appRuntimeStore', () => {
 
   // ---------- P5: projection-based card dismiss ----------
 
-  it('finishCardDismiss commits when projected travel passes 35% of card height', () => {
+  it('finishCardDismiss commits when projected travel passes 20% of card height', () => {
     useAppRuntimeStore.getState().openApp('settings', { x: 0, y: 0, width: 60, height: 60 });
     useAppRuntimeStore.setState({ presentationMode: 'switcher', switcherAppId: 'settings' });
     useAppRuntimeStore.getState().startCardDismiss('settings', 400, 600);
+    // deltaY = -80, velocity = -0.8. projected = -80 + (-0.8*499) ≈ -479.
+    // threshold = -600*0.20 = -120. Committed.
     useAppRuntimeStore.getState().updateCardDismiss(320, -0.8);
 
     const result = useAppRuntimeStore.getState().finishCardDismiss();
@@ -199,11 +208,13 @@ describe('appRuntimeStore', () => {
     expect(result.committed).toBe(true);
   });
 
-  it('finishCardDismiss does not commit when projected travel stays within 35% of card height', () => {
+  it('finishCardDismiss does not commit when projected travel stays within 20% of card height', () => {
     useAppRuntimeStore.getState().openApp('settings', { x: 0, y: 0, width: 60, height: 60 });
     useAppRuntimeStore.setState({ presentationMode: 'switcher', switcherAppId: 'settings' });
     useAppRuntimeStore.getState().startCardDismiss('settings', 400, 600);
-    useAppRuntimeStore.getState().updateCardDismiss(320, -0.2);
+    // deltaY = -10, velocity = -0.05. projected = -10 + (-0.05*499) ≈ -34.95.
+    // threshold = -600*0.20 = -120. Not committed.
+    useAppRuntimeStore.getState().updateCardDismiss(390, -0.05);
 
     const result = useAppRuntimeStore.getState().finishCardDismiss();
 

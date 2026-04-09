@@ -22,7 +22,7 @@ export type DismissReason = 'home' | 'card' | null;
 // Projection threshold for card dismiss: projected travel exceeds this
 // fraction of the card height → commit. Single physics-based decision that
 // replaces the old distance-OR-velocity double-threshold.
-const CARD_DISMISS_PROJECTED_RATIO = 0.35;
+const CARD_DISMISS_PROJECTED_RATIO = 0.20;
 
 interface CardDismissContext {
   appId: string | null;
@@ -237,7 +237,10 @@ export const useAppRuntimeStore = create<AppRuntimeState>()((set, get) => ({
         appOrigin: shouldExitSwitcher ? null : nextActiveTask?.origin ?? null,
         switcherAppId: shouldExitSwitcher ? null : nextSwitcherAppId,
         presentationMode: shouldExitSwitcher ? 'foreground' : state.presentationMode,
-        dismissedAppId: id,
+        // Don't set dismissedAppId here — it would cause AppHost to render
+        // a spurious exit animation (the "ghost app" flash-back bug).
+        dismissedAppId: null,
+        dismissReason: null,
       };
     }),
 
@@ -299,7 +302,9 @@ export const useAppRuntimeStore = create<AppRuntimeState>()((set, get) => ({
       return { committed: false, velocity: velocityY, appId };
     }
 
-    get().removeApp(appId);
+    // Don't removeApp here — the UI layer (AppSwitcher) will call removeApp
+    // after the fly-away animation completes, so the card stays in the DOM
+    // during the animation. Just reset the dismiss gesture state.
     set({
       dismissReason: 'card',
       ...resetCardDismissState(),
