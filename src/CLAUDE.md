@@ -10,3 +10,4 @@
 - 所有组件使用 Tailwind utility 优先，避免 inline style（动画除外）
 - 动画 spring 参数只能从 `@/platform/design-tokens/motion` import
 - 交互元素命中区 ≥44px，使用 `<HitArea>` 包裹
+- **图标必须使用 iOS SF Symbol 风格**: 所有系统 UI 中的图标（Shell 层、AssistiveTouch、ControlCenter、Settings 等）必须遵循 SF Symbol 设计规范——统一描边（stroke）风格、圆角线帽（round linecap/linejoin）、1.5-2px 线宽、视觉重心居中。禁止使用 Material Design 风格的实心填充图标或随意自创的简笔画。

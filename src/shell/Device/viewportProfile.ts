@@ -25,6 +25,29 @@ export interface SpringboardMetrics {
   springboardTopPadding: number;
 }
 
+/**
+ * Physical display corner radius (in pt) of the matching iPhone class.
+ * Values are the continuous-corner radii from Apple's hardware:
+ *   - compact  ≈ iPhone 13 mini / XR / 11   → 41.5 pt
+ *   - regular  ≈ iPhone 14 / 15 / 16        → 47.33 pt
+ *   - large    ≈ iPhone 14 Pro Max / 15 Pro → 55.0 pt
+ *
+ * The switcher card rounds to this radius (because the card *is* a
+ * scaled-down image of the screen), and the AppHost morph/exit transitions
+ * land on this radius when showing the scene at card size. Hardcoding 30
+ * here is wrong — a card that's more square-cornered than the device reads
+ * as "cheap", and a card that's more round-cornered reads as toy-like.
+ */
+export const DEVICE_CORNER_RADIUS_BY_SIZE_TIER: Record<SizeTier, number> = {
+  compact: 41.5,
+  regular: 47.33,
+  large: 55,
+};
+
+export function getDeviceCornerRadius(sizeTier: SizeTier): number {
+  return DEVICE_CORNER_RADIUS_BY_SIZE_TIER[sizeTier];
+}
+
 export const DEVICE_FRAME_WIDTH = 430;
 export const DEVICE_FRAME_HEIGHT = 932;
 const DEVICE_ASPECT_RATIO = DEVICE_FRAME_WIDTH / DEVICE_FRAME_HEIGHT;

@@ -1,6 +1,5 @@
 import { useState, useRef } from 'react';
 import { LockTime } from './LockTime';
-import { HomeIndicator } from '../HomeIndicator/HomeIndicator';
 import { shouldCommitUnlock } from '@/platform/gesture/thresholds';
 import { computeVelocity, type VelocitySample } from '@/platform/gesture/velocity';
 import { Solar } from 'lunar-javascript';
@@ -89,7 +88,12 @@ export function LockScreen({ onUnlock, visible, wallpaper, onDragProgress }: Loc
           transition: animating ? 'transform 350ms cubic-bezier(0.2, 0.9, 0.3, 1)' : 'none',
         }}
       >
-        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${wallpaper})` }} />
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: wallpaper ? `url(${wallpaper})` : 'none' }}
+          data-perf-layer="lockscreen-wallpaper"
+          data-perf-active={String(Boolean(wallpaper))}
+        />
         <div className="absolute inset-0 bg-black/10" />
 
         <div className="relative z-10 flex h-full flex-col">
@@ -154,7 +158,6 @@ export function LockScreen({ onUnlock, visible, wallpaper, onDragProgress }: Loc
             </div>
           </div>
 
-          <HomeIndicator />
         </div>
       </div>
     </div>

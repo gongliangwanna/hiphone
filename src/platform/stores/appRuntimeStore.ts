@@ -1,0 +1,332 @@
+import { create } from 'zustand';
+import { project } from '@/platform/gesture/projection';
+
+export interface AppOrigin {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface RuntimeAppTask {
+  id: string;
+  origin: AppOrigin | null;
+}
+
+export type AppTransitionSource = 'icon' | 'switcher';
+export type AppPresentationMode = 'foreground' | 'switcher';
+/** Why an app is currently in "dismissed" state. Drives the exit animation
+ *  shape in `AppHost`: 'card' flies out the top, 'home' drops down the bottom. */
+export type DismissReason = 'home' | 'card' | null;
+
+// Projection threshold for card dismiss: projected travel exceeds this
+// fraction of the card height → commit. Single physics-based decision that
+// replaces the old distance-OR-velocity double-threshold.
+const CARD_DISMISS_PROJECTED_RATIO = 0.35;
+
+interface CardDismissContext {
+  appId: string | null;
+  startY: number;
+  cardHeight: number;
+  /** Signed displacement from startY (negative = finger moved up). Stored
+   *  raw (not clamped to card height) so projection can reason about
+   *  flicks that carry past the card bounds. */
+  deltaY: number;
+  /** Normalized 0..1 upward progress relative to card height. UI-only;
+   *  decision logic uses `deltaY` + `velocityY` via `project()`. */
+  progress: number;
+  velocityY: number;
+}
+
+/** Return value of `finishCardDismiss`. P0c — UI layer uses `velocity` to
+ *  drive a velocity-aware fly-away, and `committed` to decide spring target. */
+export interface FinishCardDismissResult {
+  committed: boolean;
+  /** px / ms, negative = upward, 0 when no gesture was in progress. */
+  velocity: number;
+  appId: string | null;
+}
+
+export interface AppRuntimeState {
+  activeAppId: string | null;
+  appOrigin: AppOrigin | null;
+  /** Rect of the switcher card the user tapped to activate, in device-root
+   *  local coordinates. Set by `activateAppFromCard`, used by `AppHost` to
+   *  morph from that location. */
+  switcherCardOrigin: AppOrigin | null;
+  /** Device-root dimensions captured at the time the switcher card was
+   *  tapped. Paired with `switcherCardOrigin` so AppHost can compute the
+   *  scale/translate for the morph without re-measuring the DOM. */
+  switcherCardViewport: { width: number; height: number } | null;
+  recentApps: RuntimeAppTask[];
+  switcherAppId: string | null;
+  transitionSource: AppTransitionSource;
+  presentationMode: AppPresentationMode;
+  dismissedAppId: string | null;
+  /** Why the current dismissed app is being dismissed. Set by callers of
+   *  `removeApp` (finishCardDismiss → 'card', exitAppToHome → 'home'). */
+  dismissReason: DismissReason;
+  openApp: (id: string, origin: AppOrigin) => void;
+  activateApp: (id: string, source?: AppTransitionSource) => void;
+  activateAppFromCard: (
+    id: string,
+    cardRect: AppOrigin,
+    viewport: { width: number; height: number },
+  ) => void;
+  goHome: () => void;
+  /** Exit the current app back to the springboard with a dismiss animation.
+   *  Unlike `goHome()` which is an instant transition, this sets
+   *  `dismissedAppId` + `dismissReason` so AppHost plays the drop-down exit. */
+  exitAppToHome: () => void;
+  /** Enter switcher mode directly (e.g. from AssistiveTouch menu). */
+  openSwitcher: () => void;
+  removeApp: (id: string) => void;
+  focusAppInSwitcher: (id: string | null) => void;
+  startCardDismiss: (appId: string, startY: number, cardHeight: number) => void;
+  updateCardDismiss: (currentY: number, velocityY: number) => void;
+  finishCardDismiss: () => FinishCardDismissResult;
+  clearDismissedApp: () => void;
+  cardDismiss: CardDismissContext;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function moveTaskToFront(tasks: RuntimeAppTask[], task: RuntimeAppTask): RuntimeAppTask[] {
+  return [task, ...tasks.filter((item) => item.id !== task.id)];
+}
+
+function resolveFallbackTask(tasks: RuntimeAppTask[], removedIndex: number): RuntimeAppTask | null {
+  if (tasks.length === 0) return null;
+
+  return tasks[Math.min(removedIndex, tasks.length - 1)] ?? tasks[0] ?? null;
+}
+
+function resetCardDismissState() {
+  return {
+    cardDismiss: {
+      appId: null,
+      startY: 0,
+      cardHeight: 1,
+      deltaY: 0,
+      progress: 0,
+      velocityY: 0,
+    },
+  };
+}
+
+export const useAppRuntimeStore = create<AppRuntimeState>()((set, get) => ({
+  activeAppId: null,
+  appOrigin: null,
+  switcherCardOrigin: null,
+  switcherCardViewport: null,
+  recentApps: [],
+  switcherAppId: null,
+  transitionSource: 'icon',
+  presentationMode: 'foreground',
+  dismissedAppId: null,
+  dismissReason: null,
+  cardDismiss: {
+    appId: null,
+    startY: 0,
+    cardHeight: 1,
+    deltaY: 0,
+    progress: 0,
+    velocityY: 0,
+  },
+
+  openApp: (id, origin) =>
+    set((state) => {
+      const task = { id, origin };
+
+      return {
+        activeAppId: id,
+        appOrigin: origin,
+        switcherCardOrigin: null,
+        switcherCardViewport: null,
+        recentApps: moveTaskToFront(state.recentApps, task),
+        switcherAppId: id,
+        transitionSource: 'icon',
+        presentationMode: 'foreground',
+        dismissedAppId: null,
+        dismissReason: null,
+        ...resetCardDismissState(),
+      };
+    }),
+
+  activateApp: (id, source = 'switcher') =>
+    set((state) => {
+      const task = state.recentApps.find((item) => item.id === id) ?? { id, origin: null };
+
+      return {
+        activeAppId: id,
+        appOrigin: task.origin,
+        recentApps: moveTaskToFront(state.recentApps, task),
+        switcherAppId: id,
+        transitionSource: source,
+        presentationMode: 'foreground',
+        dismissedAppId: null,
+        dismissReason: null,
+        ...resetCardDismissState(),
+      };
+    }),
+
+  activateAppFromCard: (id, cardRect, viewport) => {
+    set({ switcherCardOrigin: cardRect, switcherCardViewport: viewport });
+    get().activateApp(id, 'switcher');
+  },
+
+  goHome: () =>
+    set((state) => ({
+      activeAppId: null,
+      appOrigin: null,
+      switcherCardOrigin: null,
+      switcherCardViewport: null,
+      switcherAppId: state.activeAppId ?? state.switcherAppId ?? state.recentApps[0]?.id ?? null,
+      presentationMode: 'foreground',
+      dismissedAppId: null,
+      dismissReason: null,
+      ...resetCardDismissState(),
+    })),
+
+  exitAppToHome: () => {
+    const state = get();
+    if (!state.activeAppId) return;
+    const exitingId = state.activeAppId;
+    set({
+      activeAppId: null,
+      appOrigin: null,
+      switcherCardOrigin: null,
+      switcherCardViewport: null,
+      presentationMode: 'foreground',
+      switcherAppId: exitingId,
+      dismissedAppId: exitingId,
+      dismissReason: 'home',
+      ...resetCardDismissState(),
+    });
+  },
+
+  openSwitcher: () =>
+    set((state) => {
+      if (!state.activeAppId || state.recentApps.length === 0) return {};
+      return {
+        presentationMode: 'switcher',
+        switcherAppId: state.activeAppId,
+      };
+    }),
+
+  removeApp: (id) =>
+    set((state) => {
+      const removedIndex = state.recentApps.findIndex((task) => task.id === id);
+      const nextRecentApps = state.recentApps.filter((task) => task.id !== id);
+      const fallbackTask = resolveFallbackTask(nextRecentApps, removedIndex);
+      const nextActiveAppId =
+        state.activeAppId === id ? fallbackTask?.id ?? null : state.activeAppId;
+      const nextActiveTask =
+        nextActiveAppId == null
+          ? null
+          : nextRecentApps.find((task) => task.id === nextActiveAppId) ?? null;
+      const nextSwitcherAppId =
+        state.switcherAppId === id ? fallbackTask?.id ?? null : state.switcherAppId;
+      const shouldExitSwitcher = state.presentationMode === 'switcher' && nextRecentApps.length === 0;
+
+      return {
+        recentApps: nextRecentApps,
+        activeAppId: shouldExitSwitcher ? null : nextActiveAppId,
+        appOrigin: shouldExitSwitcher ? null : nextActiveTask?.origin ?? null,
+        switcherAppId: shouldExitSwitcher ? null : nextSwitcherAppId,
+        presentationMode: shouldExitSwitcher ? 'foreground' : state.presentationMode,
+        dismissedAppId: id,
+      };
+    }),
+
+  focusAppInSwitcher: (id) =>
+    set({
+      switcherAppId: id,
+    }),
+
+  startCardDismiss: (appId, startY, cardHeight) =>
+    set({
+      dismissedAppId: appId,
+      cardDismiss: {
+        appId,
+        startY,
+        cardHeight: Math.max(cardHeight, 1),
+        deltaY: 0,
+        progress: 0,
+        velocityY: 0,
+      },
+    }),
+
+  updateCardDismiss: (currentY, velocityY) =>
+    set((state) => {
+      if (!state.cardDismiss.appId) return {};
+
+      const deltaY = currentY - state.cardDismiss.startY;
+      const progress = clamp(Math.abs(Math.min(deltaY, 0)) / state.cardDismiss.cardHeight, 0, 1);
+
+      return {
+        cardDismiss: {
+          ...state.cardDismiss,
+          deltaY,
+          progress,
+          velocityY,
+        },
+      };
+    }),
+
+  finishCardDismiss: () => {
+    const state = get();
+    const { appId, deltaY, cardHeight, velocityY } = state.cardDismiss;
+
+    if (!appId) {
+      set({
+        dismissedAppId: null,
+        ...resetCardDismissState(),
+      });
+      return { committed: false, velocity: 0, appId: null };
+    }
+
+    const projected = project(deltaY, velocityY);
+    const committed = projected < -(cardHeight * CARD_DISMISS_PROJECTED_RATIO);
+
+    if (!committed) {
+      set({
+        dismissedAppId: null,
+        ...resetCardDismissState(),
+      });
+      return { committed: false, velocity: velocityY, appId };
+    }
+
+    get().removeApp(appId);
+    set({
+      dismissReason: 'card',
+      ...resetCardDismissState(),
+    });
+    return { committed: true, velocity: velocityY, appId };
+  },
+
+  clearDismissedApp: () =>
+    set({
+      dismissedAppId: null,
+      dismissReason: null,
+    }),
+}));
+
+/**
+ * Derived gesture intent — simplified after removing home gesture mode.
+ * Now only distinguishes between idle and switcher-active.
+ */
+export type GestureIntent = 'idle' | 'switcher-active';
+
+export function deriveGestureIntent(
+  presentationMode: AppPresentationMode,
+): GestureIntent {
+  if (presentationMode === 'switcher') return 'switcher-active';
+  return 'idle';
+}
+
+export function useGestureIntent(): GestureIntent {
+  return useAppRuntimeStore((s) => deriveGestureIntent(s.presentationMode));
+}

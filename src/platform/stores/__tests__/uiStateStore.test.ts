@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { useUIStateStore } from '../uiStateStore';
 
 describe('uiStateStore', () => {
@@ -22,18 +22,13 @@ describe('uiStateStore', () => {
   });
 
   it('closeOverlay resets to none', () => {
-    useUIStateStore.getState().openOverlay('switcher');
+    useUIStateStore.getState().openOverlay('control-center');
     useUIStateStore.getState().closeOverlay();
     expect(useUIStateStore.getState().overlay).toBe('none');
   });
 
   it('supports all overlay types', () => {
-    const types = [
-      'notifications',
-      'control-center',
-      'switcher',
-      'spotlight',
-    ] as const;
+    const types = ['notifications', 'control-center', 'spotlight'] as const;
     for (const type of types) {
       useUIStateStore.getState().openOverlay(type);
       expect(useUIStateStore.getState().overlay).toBe(type);

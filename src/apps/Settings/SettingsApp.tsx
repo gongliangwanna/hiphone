@@ -1,0 +1,88 @@
+import { useEffect, useRef } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import { useSettingsNavStore } from './settingsNavStore';
+import { useAppRuntimeStore } from '@/platform/stores/appRuntimeStore';
+import { SettingsHome } from './SettingsHome';
+import { AboutPage } from './AboutPage';
+import { WallpaperPage } from './WallpaperPage';
+import { AppScreen, NavBar } from '@/system';
+
+const PAGE_TITLES: Record<string, string> = {
+  home: '设置',
+  about: '关于本机',
+  wallpaper: '壁纸',
+};
+
+const PAGE_COMPONENTS: Record<string, React.ComponentType> = {
+  home: SettingsHome,
+  about: AboutPage,
+  wallpaper: WallpaperPage,
+};
+
+/** iOS push/pop slide — 350ms, ease-out */
+const SLIDE_MS = 350;
+const SLIDE_EASE = [0.32, 0.72, 0, 1] as const;
+
+export function SettingsApp() {
+  const stack = useSettingsNavStore((s) => s.stack);
+  const pop = useSettingsNavStore((s) => s.pop);
+  const reset = useSettingsNavStore((s) => s.reset);
+  const goHome = useAppRuntimeStore((s) => s.goHome);
+  const prevLengthRef = useRef(stack.length);
+
+  const currentPage = stack[stack.length - 1] ?? 'home';
+  const title = PAGE_TITLES[currentPage] ?? '设置';
+  const showBack = stack.length > 1;
+
+  // +1 = forward (push), -1 = backward (pop)
+  const direction = stack.length > prevLengthRef.current ? 1 : -1;
+  useEffect(() => {
+    prevLengthRef.current = stack.length;
+  }, [stack.length]);
+
+  const handleBack = () => {
+    if (stack.length <= 1) {
+      reset();
+      goHome();
+    } else {
+      pop();
+    }
+  };
+
+  const PageComponent = PAGE_COMPONENTS[currentPage] ?? SettingsHome;
+  const header =
+    currentPage === 'home' && !showBack ? (
+      <NavBar title={title} variant="largeTitle" />
+    ) : (
+      <NavBar title={title} showBack={showBack} onBack={handleBack} />
+    );
+
+  return (
+    <AppScreen backgroundColor="var(--color-secondarySystemBackground)">
+      <div
+        className="relative flex-1 overflow-hidden"
+        data-testid="settings-app"
+      >
+        <AnimatePresence initial={false}>
+          <motion.div
+            key={currentPage}
+            className="absolute inset-0 flex min-h-0 flex-col"
+            style={{
+              backgroundColor: 'var(--color-secondarySystemBackground)',
+              willChange: 'transform',
+            }}
+            initial={{ x: `${direction * 100}%` }}
+            animate={{ x: '0%' }}
+            exit={{ x: `${direction * -30}%` }}
+            transition={{ duration: SLIDE_MS / 1000, ease: SLIDE_EASE }}
+          >
+            {header}
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <PageComponent />
+            </div>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    </AppScreen>
+  );
+}

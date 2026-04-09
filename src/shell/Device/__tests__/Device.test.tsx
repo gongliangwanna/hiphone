@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Device } from '../Device';
+import { PERF_DEBUG_STORAGE_KEY } from '@/platform/perf/diagnostics';
+import { usePerfDebugStore } from '@/platform/stores/perfDebugStore';
 import { useSystemStore } from '@/platform/stores/systemStore';
 import type { ViewportProfile } from '../viewportProfile';
 
@@ -23,6 +25,15 @@ vi.mock('../useViewportProfile', () => ({
 describe('Device', () => {
   beforeEach(() => {
     useSystemStore.setState({ isLocked: false });
+    usePerfDebugStore.setState({
+      enabled: false,
+      disableWallpaper: false,
+      disableDesktopFilter: false,
+      reduceTransparency: false,
+      hideIconImages: false,
+    });
+    window.localStorage.removeItem(PERF_DEBUG_STORAGE_KEY);
+    window.history.pushState({}, '', '/');
     viewportProfileRef.current = {
       shellMode: 'simulator',
       sizeTier: 'large',
@@ -58,6 +69,19 @@ describe('Device', () => {
     expect(screen.queryByTestId('lock-time')).not.toBeInTheDocument();
   });
 
+  it('does not render the performance hud by default', () => {
+    render(<Device />);
+    expect(screen.queryByTestId('perf-hud')).not.toBeInTheDocument();
+  });
+
+  it('renders the performance hud when perf mode is enabled from query params', async () => {
+    window.history.pushState({}, '', '/?perf=1');
+
+    render(<Device />);
+
+    expect(await screen.findByTestId('perf-hud')).toBeInTheDocument();
+  });
+
   it('renders a fullscreen shell without a rounded device frame', () => {
     viewportProfileRef.current = {
       shellMode: 'fullscreen',
@@ -91,6 +115,8 @@ describe('Device', () => {
     expect(root.style.getPropertyValue('--safe-top')).toBe('env(safe-area-inset-top, 0px)');
     expect(root.style.getPropertyValue('--safe-bottom')).toBe('env(safe-area-inset-bottom, 0px)');
     expect(root.style.getPropertyValue('--shell-side-padding')).toBe('24px');
+    expect(root.style.getPropertyValue('--status-bar-height')).toBe('calc(var(--status-top-padding) + 36px)');
+    expect(root.style.getPropertyValue('--app-safe-top')).toBe('var(--status-bar-height)');
     expect(root.style.getPropertyValue('--springboard-top-padding')).toBe('18px');
   });
 });

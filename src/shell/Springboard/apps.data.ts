@@ -85,6 +85,12 @@ export const apps: AppInfo[] = [...systemApps, ...cnApps];
 /** Dock apps */
 export const dock: AppInfo[] = dockApps;
 
+const allAppEntries: AppInfo[] = [...apps, ...dock];
+
+export function getAppInfoById(id: string): AppInfo | undefined {
+  return allAppEntries.find((app) => app.id === id);
+}
+
 /** Available wallpapers */
 export const wallpapers = [
   { id: 'ios-26-stock-01', src: '/resource/wallpapers/ios/ios-26-stock-01.png' },
