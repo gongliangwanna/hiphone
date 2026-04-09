@@ -6,7 +6,7 @@ import { useAppRuntimeStore } from '@/platform/stores/appRuntimeStore';
 import { useViewportProfile } from '@/shell/Device/useViewportProfile';
 import { getDeviceCornerRadius } from '@/shell/Device/viewportProfile';
 
-const SWITCHER_SCALE = 0.70; // Match CARD_WIDTH_RATIO in AppSwitcher
+const SWITCHER_SCALE = 0.66; // Match CARD_WIDTH_RATIO in AppSwitcher
 
 export function AppHost() {
   const activeAppId = useAppRuntimeStore((s) => s.activeAppId);

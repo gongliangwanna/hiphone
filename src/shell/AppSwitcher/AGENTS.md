@@ -3,8 +3,8 @@
 iOS 18 风格的 app 切换面板。改动前务必读一遍本页。
 
 ## 布局模型
-- 横向滚动容器使用 `scroll-snap-type: x proximity`（不是 `mandatory`），让卡片自然减速停靠，不强制回弹。
-- 卡片宽度 = `viewportWidth * CARD_WIDTH_RATIO`（0.70），通过 `flex: 0 0 <px>` 固定。不使用百分比 flex-basis + minWidth/maxWidth 的混合模式——会在不同视口下冲突。
+- 横向滚动容器使用 `scroll-snap-type: x mandatory`。用户每次滑动的意图是选择一张卡片，最终必须有一张卡片停在屏幕中央。
+- 卡片宽度 = `viewportWidth * CARD_WIDTH_RATIO`（0.66），通过 `flex: 0 0 <px>` 固定。不使用百分比 flex-basis + minWidth/maxWidth 的混合模式——会在不同视口下冲突。
 - 侧边留白通过内层 flex 容器的 `paddingLeft/paddingRight` 实现（不用 `marginInline`，不用 `scrollPaddingInline`——双重间距会和 snap 算法打架导致回弹 bug）。
 - 卡片圆角 = `deviceCornerRadius * (cardWidth / 390)`，按缩放比例计算，不硬编码。
 - `SwitcherAppContent` 直接用 `cardWidth / 390` 作为 scale，不再通过 ResizeObserver 监听。
@@ -26,4 +26,8 @@ iOS 18 风格的 app 切换面板。改动前务必读一遍本页。
 1. **removeApp 不发同步 event**：`finishCardDismiss` commit 后**同步**调用 `removeApp(appId)`。
 2. **exit 动画 flies-to-wrong-place**：检查 `AppHost.exitAnimation` 的 `dismissReason === 'card'` 分支。
 3. **AppSwitcher 不要读 `dismissedAppId`/`clearDismissedApp`**：这两个字段所有权在 `AppHost`。
-4. **SWITCHER_SCALE 必须和 CARD_WIDTH_RATIO 同步**：`AppHost.tsx` 的 `SWITCHER_SCALE` 必须等于 `AppSwitcher.tsx` 的 `CARD_WIDTH_RATIO`（当前 0.70）。改一处必须改另一处。
+4. **SWITCHER_SCALE 必须和 CARD_WIDTH_RATIO 同步**：`AppHost.tsx` 的 `SWITCHER_SCALE` 必须等于 `AppSwitcher.tsx` 的 `CARD_WIDTH_RATIO`（当前 0.66）。改一处必须改另一处。
+5. **scroll-snap-type 必须是 mandatory**：用户滑动的目的是选择下一张/上一张卡片，不是停在中间状态。每次滑动结束必须有一张卡片居中。
+6. **背景双层模糊**：进入 switcher 时壁纸层和桌面层同时模糊暗化。壁纸层 `blur(25px) brightness(0.78) saturate(1.2)`；桌面层 `blur(18px) brightness(0.6)`。
+7. **不要再用 spacer item 做首尾留白**：`gap + width:max-content + dummy flex item` 的组合会让尾部 scroll extent 和 snap 几何再次分叉，首尾留白统一放在内层 flex 的 `paddingLeft/paddingRight`。
+8. **DismissGestureSurface 必须是 `touch-action: pan-x`**：`auto` 会让浏览器在方向锁完成前抢走手势，导致上滑 dismiss 在多卡片场景下经常被横向滚动吞掉。

@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { AppSwitcher } from './AppSwitcher';
+import {
+  AppSwitcher,
+  computeSpacerWidth,
+  CARD_WIDTH_RATIO,
+  CARD_GAP,
+  shouldLockDismissGesture,
+} from './AppSwitcher';
 import { useAppRuntimeStore } from '@/platform/stores/appRuntimeStore';
 import { useSystemStore } from '@/platform/stores/systemStore';
 
@@ -12,6 +18,14 @@ describe('AppSwitcher', () => {
       unobserve() {}
       disconnect() {}
     };
+    Object.defineProperty(HTMLElement.prototype, 'setPointerCapture', {
+      configurable: true,
+      value: () => {},
+    });
+    Object.defineProperty(HTMLElement.prototype, 'releasePointerCapture', {
+      configurable: true,
+      value: () => {},
+    });
     useSystemStore.setState({ isLocked: false });
     useAppRuntimeStore.setState({
       activeAppId: 'settings',
@@ -70,17 +84,56 @@ describe('AppSwitcher', () => {
     expect(s.transitionSource).toBe('switcher');
   });
 
-  it('dismisses a selected card after an upward drag', () => {
+  it('dismisses a selected card after an upward diagonal drag', () => {
     useAppRuntimeStore.getState().focusAppInSwitcher('wechat');
     render(<AppSwitcher />);
     const surface = screen.getByTestId('switcher-card-surface-wechat');
 
     act(() => {
-      fireEvent.pointerDown(surface, { clientY: 400, pointerId: 1 });
-      fireEvent.pointerMove(surface, { clientY: 280, pointerId: 1 });
-      fireEvent.pointerUp(surface, { clientY: 280, pointerId: 1 });
+      fireEvent.pointerDown(surface, { clientX: 120, clientY: 400, pointerId: 1 });
+      fireEvent.pointerMove(surface, { clientX: 146, clientY: 360, pointerId: 1 });
+      fireEvent.pointerUp(surface, { clientX: 146, clientY: 220, pointerId: 1 });
     });
 
     expect(useAppRuntimeStore.getState().recentApps.map((task) => task.id)).toEqual(['settings']);
+  });
+
+  it('does not dismiss a card during a horizontal swipe', () => {
+    render(<AppSwitcher />);
+    const surface = screen.getByTestId('switcher-card-surface-settings');
+
+    act(() => {
+      fireEvent.pointerDown(surface, { clientX: 120, clientY: 400, pointerId: 1 });
+      fireEvent.pointerMove(surface, { clientX: 184, clientY: 390, pointerId: 1 });
+      fireEvent.pointerUp(surface, { clientX: 184, clientY: 390, pointerId: 1 });
+    });
+
+    expect(useAppRuntimeStore.getState().recentApps.map((task) => task.id)).toEqual([
+      'settings',
+      'wechat',
+    ]);
+  });
+
+  it('computes enough scroll range to center the last card', () => {
+    const vw = 390;
+    const cardWidth = Math.round(vw * CARD_WIDTH_RATIO); // 257
+    const spacer = computeSpacerWidth(vw, cardWidth, CARD_GAP); // 56.5
+    const n = 3;
+    // Total: spacer + gap + n*card + (n-1)*gap + gap + spacer
+    const total = spacer + CARD_GAP + n * cardWidth + (n - 1) * CARD_GAP + CARD_GAP + spacer;
+    const maxScroll = total - vw;
+    const lastCenter = spacer + CARD_GAP + (n - 1) * (cardWidth + CARD_GAP) + cardWidth / 2;
+    const required = lastCenter - vw / 2;
+
+    expect(total).toBe(924);
+    expect(maxScroll).toBe(534);
+    expect(required).toBe(534);
+    expect(maxScroll).toBeGreaterThanOrEqual(required);
+  });
+
+  it('locks upward drags more easily than horizontal drags', () => {
+    expect(shouldLockDismissGesture(26, -40)).toBe(true);
+    expect(shouldLockDismissGesture(64, -10)).toBe(false);
+    expect(shouldLockDismissGesture(3, -5)).toBeNull();
   });
 });

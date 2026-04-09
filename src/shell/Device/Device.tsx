@@ -118,11 +118,15 @@ export function Device() {
     if (isLocked) {
       el.style.transition = 'none';
       el.style.filter = `blur(${MAX_BLUR}px) brightness(1)`;
+    } else if (presentationMode === 'switcher') {
+      // Blur + dim the springboard when app switcher is visible
+      el.style.transition = 'filter 250ms ease-out';
+      el.style.filter = 'blur(18px) brightness(0.6)';
     } else {
       el.style.transition = 'filter 300ms ease-out';
       el.style.filter = 'none';
     }
-  }, [disableDesktopFilter, isLocked]);
+  }, [disableDesktopFilter, isLocked, presentationMode]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -228,19 +232,7 @@ export function Device() {
         onDragProgress={handleDragProgress}
       />
 
-      <AnimatePresence>
-        {showSwitcher && (
-          <motion.div
-            key="app-switcher"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
-          >
-            <AppSwitcher />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {showSwitcher && <AppSwitcher />}
 
       <AppHost />
 

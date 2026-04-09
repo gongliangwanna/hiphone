@@ -19,7 +19,7 @@ export function AboutPage() {
           <AboutRow title="型号名称" detail="Web Simulator" hasBorder />
           <AboutRow title="型号号码" detail="WEB-001" hasBorder />
           <AboutRow title="序列号" detail="HI2026APR08" hasBorder />
-          <AboutRow title="构建版本" detail="2026.04.08" />
+          <AboutRow title="构建版本" detail="2026.04.09-v2" />
         </div>
       </div>
     </div>

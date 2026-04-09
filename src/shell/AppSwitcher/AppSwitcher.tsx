@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, useCallback, type PointerEvent, type ReactNode } from 'react';
 import {
-  AnimatePresence,
   animate,
   motion,
   useMotionValue,
@@ -14,10 +13,40 @@ import { getAppInfoById } from '@/shell/Springboard/apps.data';
 import { useViewportProfile } from '@/shell/Device/useViewportProfile';
 import { getDeviceCornerRadius } from '@/shell/Device/viewportProfile';
 
-/** Gap between cards in px. */
-const CARD_GAP = 14;
-/** Card width as fraction of viewport width (iOS ≈ 68-72%). */
-const CARD_WIDTH_RATIO = 0.70;
+export const CARD_WIDTH_RATIO = 0.66;
+export const CARD_GAP = 10;
+const DIRECTION_LOCK_THRESHOLD = 8;
+const DISMISS_DIRECTION_LOCK_RATIO = 1.15;
+
+/**
+ * Compute the extra margin for the first/last card so it can be centered.
+ *
+ * Layout: [marginLeft_first][card][ml][card]...[card][marginRight_last]
+ *
+ * First card: marginLeft = spacer + gap. Card center at (spacer+gap) + cw/2.
+ * For center: (spacer+gap) + cw/2 = vw/2 => spacer = vw/2 - cw/2 - gap.
+ *
+ * Last card: marginRight = spacer + gap (same value).
+ * Total width = (spacer+gap) + n*cw + (n-1)*gap + (spacer+gap)
+ * maxScroll = total - vw. Required = lastCenter - vw/2.
+ * They are equal by construction.
+ */
+export function computeSpacerWidth(viewportWidth: number, cardWidth: number, gap: number): number {
+  return Math.max(0, (viewportWidth - cardWidth) / 2 - gap);
+}
+
+export function shouldLockDismissGesture(
+  deltaX: number,
+  deltaY: number,
+  threshold: number = DIRECTION_LOCK_THRESHOLD,
+  verticalRatio: number = DISMISS_DIRECTION_LOCK_RATIO,
+): boolean | null {
+  const dx = Math.abs(deltaX);
+  const dy = Math.abs(deltaY);
+  if (dx < threshold && dy < threshold) return null;
+  if (deltaY >= 0) return false;
+  return dy >= Math.max(threshold, dx * verticalRatio);
+}
 
 export function AppSwitcher() {
   const activeAppId = useAppRuntimeStore((s) => s.activeAppId);
@@ -37,17 +66,13 @@ export function AppSwitcher() {
 
   const vw = viewportProfile.width;
   const cardWidth = Math.round(vw * CARD_WIDTH_RATIO);
-  // Side inset = enough to center any single card, including the first/last.
-  // (viewportWidth - cardWidth) / 2 ensures even the edge cards can reach center.
-  const sideInset = Math.round((vw - cardWidth) / 2);
+  const spacerWidth = computeSpacerWidth(vw, cardWidth, CARD_GAP);
 
-  // Focus first card on mount
   useEffect(() => {
     if (!visible || recentApps.length === 0 || switcherAppId) return;
     focusAppInSwitcher(activeAppId ?? recentApps[0]?.id ?? null);
   }, [activeAppId, focusAppInSwitcher, recentApps, switcherAppId, visible]);
 
-  // Scroll selected card into view on mount
   useEffect(() => {
     if (!visible || !selectedId) {
       hasScrolledRef.current = false;
@@ -56,24 +81,20 @@ export function AppSwitcher() {
     if (hasScrolledRef.current) return;
     hasScrolledRef.current = true;
 
-    const scroller = scrollRef.current;
-    if (!scroller) return;
-
-    // requestAnimationFrame to ensure DOM has laid out the cards
     requestAnimationFrame(() => {
+      const scroller = scrollRef.current;
+      if (!scroller) return;
       const target = scroller.querySelector<HTMLElement>(`[data-card-id="${selectedId}"]`);
       if (!target) return;
-      const scrollerRect = scroller.getBoundingClientRect();
+      const scrollerW = scroller.getBoundingClientRect().width;
       const targetRect = target.getBoundingClientRect();
-      const currentScroll = scroller.scrollLeft;
-      const targetCenter = targetRect.left - scrollerRect.left + currentScroll + targetRect.width / 2;
-      const scrollerCenter = scrollerRect.width / 2;
-      scroller.scrollLeft = targetCenter - scrollerCenter;
+      const scrollerRect = scroller.getBoundingClientRect();
+      const targetCenter = targetRect.left - scrollerRect.left + scroller.scrollLeft + targetRect.width / 2;
+      scroller.scrollLeft = targetCenter - scrollerW / 2;
     });
   }, [visible, selectedId]);
 
-  // Track nearest card during scroll
-  const handleScroll = () => {
+  const handleScroll = useCallback(() => {
     const scroller = scrollRef.current;
     if (!scroller) return;
     const cards = Array.from(scroller.querySelectorAll<HTMLElement>('[data-switcher-card="true"]'));
@@ -94,10 +115,10 @@ export function AppSwitcher() {
       }
     }
 
-    if (nearestId && nearestId !== switcherAppId) {
+    if (nearestId && nearestId !== useAppRuntimeStore.getState().switcherAppId) {
       focusAppInSwitcher(nearestId);
     }
-  };
+  }, [focusAppInSwitcher]);
 
   if (!visible || recentApps.length === 0) return null;
 
@@ -117,48 +138,56 @@ export function AppSwitcher() {
         className="h-full overflow-x-auto overflow-y-hidden"
         data-testid="app-switcher-strip"
         style={{
-          scrollSnapType: 'x proximity',
-          paddingTop: 'calc(var(--status-bar-height) + 14px)',
-          paddingBottom: 'calc(var(--app-safe-bottom) + 18px)',
+          scrollSnapType: 'x mandatory',
           WebkitOverflowScrolling: 'touch',
         }}
         onScroll={handleScroll}
       >
-        <div
-          className="flex h-full items-center"
-          style={{
-            gap: CARD_GAP,
-            paddingLeft: sideInset,
-            paddingRight: sideInset,
-          }}
-        >
-          <AnimatePresence initial={true}>
-            {recentApps.map((task, index) => (
-              <SwitcherCard
-                key={task.id}
-                appId={task.id}
-                index={index}
-                cardWidth={cardWidth}
-                isActivating={task.id === activatingId}
-                isActivatingOther={activatingId !== null && task.id !== activatingId}
-                deviceCornerRadius={deviceCornerRadius}
-                onActivate={(payload) => {
-                  setActivatingId(task.id);
-                  if (payload) {
-                    activateAppFromCard(task.id, payload.rect, payload.viewport);
-                  } else {
-                    activateApp(task.id, 'switcher');
-                  }
-                }}
-                onFocus={() => focusAppInSwitcher(task.id)}
-              />
-            ))}
-          </AnimatePresence>
+        {/* WebKit ignores trailing empty divs AND margin-right on the last
+            flex child for scrollWidth. The only reliable way to extend scroll
+            extent is a trailing element with real rendered content. We use a
+            1×1 transparent div as the trailing spacer. */}
+        <div className="flex h-full items-center" data-testid="app-switcher-track">
+          {recentApps.map((task, i) => (
+            <SwitcherCard
+              key={task.id}
+              appId={task.id}
+              cardWidth={cardWidth}
+              marginLeft={i === 0 ? spacerWidth + CARD_GAP : CARD_GAP}
+              isActivating={task.id === activatingId}
+              isActivatingOther={activatingId !== null && task.id !== activatingId}
+              deviceCornerRadius={deviceCornerRadius}
+              onActivate={(payload) => {
+                setActivatingId(task.id);
+                if (payload) {
+                  activateAppFromCard(task.id, payload.rect, payload.viewport);
+                } else {
+                  activateApp(task.id, 'switcher');
+                }
+              }}
+              onFocus={() => focusAppInSwitcher(task.id)}
+            />
+          ))}
+
+          {/* Trailing spacer — must have real content (1×1 div) so WebKit
+              includes it in scrollWidth. Empty divs get ignored. */}
+          <div
+            style={{
+              flexShrink: 0,
+              width: spacerWidth + CARD_GAP,
+              minHeight: 1,
+            }}
+            aria-hidden
+          >
+            <div style={{ width: 1, height: 1 }} />
+          </div>
         </div>
       </div>
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
 
 interface CardActivatePayload {
   rect: AppOrigin;
@@ -167,8 +196,8 @@ interface CardActivatePayload {
 
 interface SwitcherCardProps {
   appId: string;
-  index: number;
   cardWidth: number;
+  marginLeft: number;
   isActivating: boolean;
   isActivatingOther: boolean;
   deviceCornerRadius: number;
@@ -178,8 +207,8 @@ interface SwitcherCardProps {
 
 function SwitcherCard({
   appId,
-  index,
   cardWidth,
+  marginLeft,
   isActivating,
   isActivatingOther,
   deviceCornerRadius,
@@ -191,49 +220,29 @@ function SwitcherCard({
   const updateCardDismiss = useAppRuntimeStore((s) => s.updateCardDismiss);
   const finishCardDismiss = useAppRuntimeStore((s) => s.finishCardDismiss);
   const draggedRef = useRef(false);
-  const cardHeightRef = useRef(600);
   const animationRef = useRef<ReturnType<typeof animate> | null>(null);
   const cardBodyRef = useRef<HTMLDivElement>(null);
-  const isFirstRenderRef = useRef(true);
-  const entranceDelay = isFirstRenderRef.current ? index * 0.035 : 0;
-  useEffect(() => {
-    isFirstRenderRef.current = false;
-  }, []);
 
   const dragY = useMotionValue(0);
-  const scaleFromDrag = useTransform(dragY, [-300, 0], [0.9, 1], { clamp: true });
-  const opacityFromDrag = useTransform(dragY, [-260, -60, 0], [0, 1, 1], { clamp: true });
+  const scaleFromDrag = useTransform(dragY, [-300, 0], [0.92, 1], { clamp: true });
 
-  useEffect(() => {
-    return () => {
-      animationRef.current?.stop();
-    };
-  }, []);
+  useEffect(() => () => { animationRef.current?.stop(); }, []);
 
   const cardBodyRadius = deviceCornerRadius * (cardWidth / 390);
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 24, scale: 0.97 }}
-      animate={{
-        opacity: isActivating ? 0 : isActivatingOther ? 0 : 1,
-        scale: 1,
-        y: 0,
-      }}
-      exit={{ opacity: 0, scale: 0.88, y: -30 }}
-      transition={
-        isActivatingOther
-          ? { duration: 0.16, ease: 'easeOut' }
-          : { type: 'spring', ...spring.smooth, delay: entranceDelay }
-      }
       style={{
-        flex: `0 0 ${cardWidth}px`,
+        flexShrink: 0,
+        width: cardWidth,
+        marginLeft,
         scrollSnapAlign: 'center',
         visibility: isActivating ? 'hidden' : 'visible',
         y: dragY,
         scale: scaleFromDrag,
-        opacity: opacityFromDrag,
+        opacity: isActivating ? 0 : isActivatingOther ? 0 : 1,
       }}
+      transition={{ duration: isActivatingOther ? 0.16 : 0 }}
     >
       <button
         type="button"
@@ -248,25 +257,16 @@ function SwitcherCard({
           ) as HTMLElement | null;
           const cardRect = cardBodyRef.current?.getBoundingClientRect();
           const deviceRect = deviceRoot?.getBoundingClientRect();
-
-          if (!cardRect || !deviceRect) {
-            onActivate(null);
-            return;
-          }
-
-          const payload: CardActivatePayload = {
+          if (!cardRect || !deviceRect) { onActivate(null); return; }
+          onActivate({
             rect: {
               x: cardRect.left - deviceRect.left,
               y: cardRect.top - deviceRect.top,
               width: cardRect.width,
               height: cardRect.height,
             },
-            viewport: {
-              width: deviceRect.width,
-              height: deviceRect.height,
-            },
-          };
-          onActivate(payload);
+            viewport: { width: deviceRect.width, height: deviceRect.height },
+          });
         }}
         onPointerDown={onFocus}
         data-card-id={appId}
@@ -280,54 +280,41 @@ function SwitcherCard({
             aspectRatio: '9 / 19.5',
             borderRadius: cardBodyRadius,
             position: 'relative',
-            boxShadow: '0 16px 48px rgba(0,0,0,0.35), 0 4px 12px rgba(0,0,0,0.2)',
+            boxShadow: '0 18px 50px rgba(0,0,0,0.35), 0 4px 14px rgba(0,0,0,0.18)',
           }}
         >
           <DismissGestureSurface
             appId={appId}
-            onDismissGestureStart={(startY, height) => {
+            onDismissStart={(startY, height) => {
               draggedRef.current = false;
-              const effectiveHeight = Math.max(height, 200);
-              cardHeightRef.current = effectiveHeight;
               animationRef.current?.stop();
               animationRef.current = null;
               dragY.set(0);
-              startCardDismiss(appId, startY, effectiveHeight);
+              startCardDismiss(appId, startY, Math.max(height, 200));
             }}
-            onDismissGestureMove={(currentY, velocityY, deltaY) => {
-              if (deltaY < 0) {
-                draggedRef.current = true;
-              }
-              const rawUpward = Math.min(deltaY, 0);
-              dragY.set(rawUpward);
+            onDismissMove={(deltaY, currentY, velocityY) => {
+              draggedRef.current = true;
+              dragY.set(Math.min(deltaY, 0));
               updateCardDismiss(currentY, velocityY);
             }}
-            onDismissGestureEnd={(currentY, velocityY, deltaY) => {
-              if (deltaY < 0) {
-                draggedRef.current = true;
-              }
+            onDismissEnd={(currentY, velocityY) => {
               updateCardDismiss(currentY, velocityY);
               const result = finishCardDismiss();
-
               if (result.committed) {
-                const target = -Math.max(window.innerHeight || 900, 900);
-                animationRef.current = animate(dragY, target, {
-                  type: 'spring',
-                  ...spring.criticalDamped,
+                animationRef.current = animate(dragY, -(window.innerHeight || 900), {
+                  type: 'spring', ...spring.criticalDamped,
                   velocity: result.velocity * 1000,
                 });
               } else {
                 animationRef.current = animate(dragY, 0, {
-                  type: 'spring',
-                  ...spring.interactive,
+                  type: 'spring', ...spring.interactive,
                   velocity: result.velocity * 1000,
                 });
               }
             }}
-            onDismissGestureCancel={() => {
+            onDismissCancel={() => {
               animationRef.current = animate(dragY, 0, {
-                type: 'spring',
-                ...spring.interactive,
+                type: 'spring', ...spring.interactive,
               });
             }}
           >
@@ -349,7 +336,7 @@ function SwitcherCard({
         ) : null}
         <span
           style={{
-            color: 'rgba(255, 255, 255, 0.9)',
+            color: 'rgba(255,255,255,0.9)',
             fontSize: '13px',
             fontWeight: 500,
             textShadow: '0 1px 4px rgba(0,0,0,0.5)',
@@ -362,18 +349,15 @@ function SwitcherCard({
   );
 }
 
+// ---------------------------------------------------------------------------
+
 function SwitcherAppContent({ appId, cardWidth }: { appId: string; cardWidth: number }) {
   const scale = cardWidth / 390;
-
   return (
     <div className="absolute inset-0 overflow-hidden">
       <div
         className="absolute left-0 top-0 origin-top-left"
-        style={{
-          width: '390px',
-          height: '844px',
-          transform: `scale(${scale})`,
-        }}
+        style={{ width: 390, height: 844, transform: `scale(${scale})` }}
       >
         <AppScene appId={appId} />
       </div>
@@ -381,72 +365,81 @@ function SwitcherAppContent({ appId, cardWidth }: { appId: string; cardWidth: nu
   );
 }
 
+// ---------------------------------------------------------------------------
+
 interface DismissGestureSurfaceProps {
   appId: string;
   children: ReactNode;
-  onDismissGestureStart: (startY: number, height: number) => void;
-  onDismissGestureMove: (currentY: number, velocityY: number, deltaY: number) => void;
-  onDismissGestureEnd: (currentY: number, velocityY: number, deltaY: number) => void;
-  onDismissGestureCancel: () => void;
+  onDismissStart: (startY: number, height: number) => void;
+  onDismissMove: (deltaY: number, currentY: number, velocityY: number) => void;
+  onDismissEnd: (currentY: number, velocityY: number) => void;
+  onDismissCancel: () => void;
 }
 
 function DismissGestureSurface({
   appId,
   children,
-  onDismissGestureStart,
-  onDismissGestureMove,
-  onDismissGestureEnd,
-  onDismissGestureCancel,
+  onDismissStart,
+  onDismissMove,
+  onDismissEnd,
+  onDismissCancel,
 }: DismissGestureSurfaceProps) {
-  const pointerRef = useRef({
-    active: false,
-    pointerId: -1,
-    startY: 0,
-  });
+  const stateRef = useRef<'idle' | 'pending' | 'locked'>('idle');
+  const pointerRef = useRef({ pointerId: -1, startX: 0, startY: 0 });
   const samplesRef = useRef<VelocitySample[]>([]);
 
   return (
     <div
       className="h-full w-full"
       style={{ touchAction: 'pan-x' }}
-      onPointerDown={(event: PointerEvent<HTMLDivElement>) => {
-        const rect = event.currentTarget.getBoundingClientRect();
-        pointerRef.current = {
-          active: true,
-          pointerId: event.pointerId,
-          startY: event.clientY,
-        };
-        samplesRef.current = [{ time: performance.now(), x: 0, y: event.clientY }];
-        onDismissGestureStart(event.clientY, rect.height);
-        event.currentTarget.setPointerCapture(event.pointerId);
+      onPointerDown={(e: PointerEvent<HTMLDivElement>) => {
+        stateRef.current = 'pending';
+        pointerRef.current = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY };
+        samplesRef.current = [{ time: performance.now(), x: 0, y: e.clientY }];
       }}
-      onPointerMove={(event: PointerEvent<HTMLDivElement>) => {
-        if (!pointerRef.current.active || pointerRef.current.pointerId !== event.pointerId) {
-          return;
+      onPointerMove={(e: PointerEvent<HTMLDivElement>) => {
+        const p = pointerRef.current;
+        if (p.pointerId !== e.pointerId) return;
+
+        if (stateRef.current === 'pending') {
+          const result = shouldLockDismissGesture(e.clientX - p.startX, e.clientY - p.startY);
+          if (result == null) return;
+          if (result) {
+            stateRef.current = 'locked';
+            e.currentTarget.setPointerCapture(e.pointerId);
+            const rect = e.currentTarget.getBoundingClientRect();
+            onDismissStart(p.startY, rect.height);
+          } else {
+            stateRef.current = 'idle';
+            return;
+          }
         }
-        samplesRef.current.push({ time: performance.now(), x: 0, y: event.clientY });
-        if (samplesRef.current.length > 8) {
-          samplesRef.current = samplesRef.current.slice(-8);
-        }
+
+        if (stateRef.current !== 'locked') return;
+        samplesRef.current.push({ time: performance.now(), x: 0, y: e.clientY });
+        if (samplesRef.current.length > 8) samplesRef.current = samplesRef.current.slice(-8);
         const { vy } = computeVelocity(samplesRef.current);
-        onDismissGestureMove(event.clientY, vy, event.clientY - pointerRef.current.startY);
+        onDismissMove(e.clientY - p.startY, e.clientY, vy);
       }}
-      onPointerUp={(event: PointerEvent<HTMLDivElement>) => {
-        if (!pointerRef.current.active || pointerRef.current.pointerId !== event.pointerId) {
-          return;
-        }
-        pointerRef.current.active = false;
-        samplesRef.current.push({ time: performance.now(), x: 0, y: event.clientY });
+      onPointerUp={(e: PointerEvent<HTMLDivElement>) => {
+        const p = pointerRef.current;
+        if (p.pointerId !== e.pointerId) return;
+        const wasLocked = stateRef.current === 'locked';
+        stateRef.current = 'idle';
+        if (!wasLocked) return;
+        samplesRef.current.push({ time: performance.now(), x: 0, y: e.clientY });
         const { vy } = computeVelocity(samplesRef.current);
-        onDismissGestureEnd(event.clientY, vy, event.clientY - pointerRef.current.startY);
+        onDismissEnd(e.clientY, vy);
       }}
       onPointerCancel={() => {
-        pointerRef.current.active = false;
-        onDismissGestureCancel();
+        const wasLocked = stateRef.current === 'locked';
+        stateRef.current = 'idle';
+        if (wasLocked) onDismissCancel();
       }}
       onLostPointerCapture={() => {
-        pointerRef.current.active = false;
-        onDismissGestureCancel();
+        const wasLocked = stateRef.current === 'locked';
+        stateRef.current = 'idle';
+        if (wasLocked) onDismissCancel();
       }}
       data-testid={`switcher-card-surface-${appId}`}
     >
