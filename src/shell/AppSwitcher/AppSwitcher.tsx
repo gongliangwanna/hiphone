@@ -86,6 +86,10 @@ export function AppSwitcher() {
   }, [visible, selectedId]);
 
   const handleScroll = useCallback(() => {
+    // Skip scroll-based focus changes while a card is being dismissed;
+    // the collapse animation shifts content which fires spurious scroll events.
+    if (flyingAwayId) return;
+
     const scroller = scrollRef.current;
     if (!scroller) return;
     const cards = Array.from(scroller.querySelectorAll<HTMLElement>('[data-switcher-card="true"]'));
@@ -109,11 +113,13 @@ export function AppSwitcher() {
     if (nearestId && nearestId !== useAppRuntimeStore.getState().switcherAppId) {
       focusAppInSwitcher(nearestId);
     }
-  }, [focusAppInSwitcher]);
+  }, [focusAppInSwitcher, flyingAwayId]);
 
   const handleDismissComplete = useCallback((appId: string) => {
     useAppRuntimeStore.getState().removeApp(appId);
-    setFlyingAwayId(null);
+    // Re-enable scroll-snap after browser processes the DOM removal,
+    // otherwise snap fires on stale layout and causes a visual jump.
+    requestAnimationFrame(() => setFlyingAwayId(null));
   }, []);
 
   if (!visible || recentApps.length === 0) return null;
@@ -134,7 +140,7 @@ export function AppSwitcher() {
         className="h-full overflow-x-auto overflow-y-hidden"
         data-testid="app-switcher-strip"
         style={{
-          scrollSnapType: 'x mandatory',
+          scrollSnapType: flyingAwayId ? 'none' : 'x mandatory',
           WebkitOverflowScrolling: 'touch',
         }}
         onScroll={handleScroll}
@@ -225,13 +231,53 @@ function SwitcherCard({
   // Scale feedback: only active during drag, not during fly-away.
   const scaleFromDrag = useTransform(dragY, [-300, 0], [0.92, 1], { clamp: true });
 
-  useEffect(() => () => { animationRef.current?.stop(); }, []);
+  // Motion values for smooth gap-collapse after fly-away
+  const wrapperWidth = useMotionValue(cardWidth);
+  const wrapperMargin = useMotionValue(marginLeft);
+  const collapseAnimsRef = useRef<Array<ReturnType<typeof animate>>>([]);
+
+  useEffect(() => () => {
+    animationRef.current?.stop();
+    for (const a of collapseAnimsRef.current) a.stop();
+  }, []);
+
+  // Keep wrapper dimensions in sync when not flying away
+  useEffect(() => {
+    if (!isFlyingAway) {
+      wrapperWidth.jump(cardWidth);
+      wrapperMargin.jump(marginLeft);
+    }
+  }, [cardWidth, marginLeft, isFlyingAway, wrapperWidth, wrapperMargin]);
+
+  // After fly-away starts, smoothly collapse the gap so neighboring cards slide
+  // together instead of snapping when the card is removed from DOM.
+  // Uses criticalDamped spring (no overshoot) and easeOut to prevent the
+  // remaining cards from sliding past their target and snapping back.
+  useEffect(() => {
+    if (!isFlyingAway) return;
+    // Short delay so the card visually clears before the gap starts closing
+    const marginTarget = Math.max(0, marginLeft - CARD_GAP);
+    const timer = setTimeout(() => {
+      collapseAnimsRef.current = [
+        animate(wrapperWidth, 0, {
+          duration: 0.3,
+          ease: [0.32, 0.72, 0, 1],
+          onComplete: () => onDismissComplete(appId),
+        }),
+        animate(wrapperMargin, marginTarget, {
+          duration: 0.3,
+          ease: [0.32, 0.72, 0, 1],
+        }),
+      ];
+    }, 120);
+    return () => {
+      clearTimeout(timer);
+      for (const a of collapseAnimsRef.current) a.stop();
+      collapseAnimsRef.current = [];
+    };
+  }, [isFlyingAway, appId, onDismissComplete, wrapperWidth, wrapperMargin]);
 
   const cardBodyRadius = deviceCornerRadius * (cardWidth / 390);
-
-  // No width/margin collapse during fly-away — that caused diagonal movement.
-  // The card is removed from the DOM when the fly-away animation completes;
-  // scroll-snap repositions the remaining cards automatically.
 
   // --- Touch-based dismiss gesture ---
   // We use native touch events (not pointer events) because:
@@ -249,7 +295,11 @@ function SwitcherCard({
     animationRef.current = null;
   }, []);
 
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+  // Attach touchmove as a native listener with { passive: false } so that
+  // preventDefault() actually works. React registers touch handlers as passive
+  // by default, which causes "Unable to preventDefault inside passive event
+  // listener" warnings and lets the scroll container hijack the dismiss gesture.
+  const handleTouchMove = useCallback((e: TouchEvent) => {
     if (e.touches.length !== 1) return;
     const t = e.touches[0]!;
     const d = dismissRef.current;
@@ -268,7 +318,7 @@ function SwitcherCard({
         d.phase = 'locked';
         e.preventDefault();
         dragY.set(0);
-        const rect = e.currentTarget.getBoundingClientRect();
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
         startCardDismiss(appId, d.startY, Math.max(rect.height, 200));
       } else {
         d.phase = 'idle'; // horizontal — let scroll handle it
@@ -290,6 +340,13 @@ function SwitcherCard({
     const { vy } = computeVelocity(d.samples);
     updateCardDismiss(t.clientY, vy);
   }, [appId, dragY, startCardDismiss, updateCardDismiss]);
+
+  useEffect(() => {
+    const el = cardBodyRef.current;
+    if (!el) return;
+    el.addEventListener('touchmove', handleTouchMove, { passive: false });
+    return () => el.removeEventListener('touchmove', handleTouchMove);
+  }, [handleTouchMove]);
 
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
     const d = dismissRef.current;
@@ -316,7 +373,9 @@ function SwitcherCard({
         velocity: result.velocity * 1000,
         restDelta: 100,
         restSpeed: 200,
-        onComplete: () => onDismissComplete(appId),
+        // DOM removal is handled by the gap-collapse effect (onDismissComplete),
+        // not the fly-away animation. This ensures neighboring cards slide
+        // smoothly instead of snapping when the card is removed.
       });
     } else {
       animationRef.current = animate(dragY, 0, {
@@ -339,14 +398,16 @@ function SwitcherCard({
     <motion.div
       style={{
         flexShrink: 0,
-        width: cardWidth,
-        marginLeft,
+        width: wrapperWidth,
+        marginLeft: wrapperMargin,
         scrollSnapAlign: isFlyingAway ? undefined : 'center',
         visibility: isActivating ? 'hidden' : 'visible',
         y: dragY,
         // Only apply scale during active drag, not during fly-away.
         scale: isFlyingAway ? 1 : scaleFromDrag,
         opacity: isActivating || isActivatingOther ? 0 : 1,
+        // Prevent overflowing content during gap collapse
+        overflow: isFlyingAway ? 'hidden' : undefined,
       }}
       transition={{ duration: isActivatingOther ? 0.16 : 0 }}
     >
@@ -389,7 +450,6 @@ function SwitcherCard({
             boxShadow: '0 18px 50px rgba(0,0,0,0.35), 0 4px 14px rgba(0,0,0,0.18)',
           }}
           onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
           onTouchCancel={handleTouchCancel}
         >

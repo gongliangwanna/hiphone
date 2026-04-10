@@ -196,7 +196,7 @@ export const useAppRuntimeStore = create<AppRuntimeState>()((set, get) => ({
     const exitingId = state.activeAppId;
     set({
       activeAppId: null,
-      appOrigin: null,
+      // Keep appOrigin so the exit animation can morph back to the icon
       switcherCardOrigin: null,
       switcherCardViewport: null,
       presentationMode: 'foreground',
@@ -216,7 +216,10 @@ export const useAppRuntimeStore = create<AppRuntimeState>()((set, get) => ({
       };
     }),
 
-  removeApp: (id) =>
+  removeApp: (id) => {
+    // Track that this app was killed (swiped away in switcher), so it
+    // resets internal state on next open instead of resuming.
+    _killedApps.add(id);
     set((state) => {
       const removedIndex = state.recentApps.findIndex((task) => task.id === id);
       const nextRecentApps = state.recentApps.filter((task) => task.id !== id);
@@ -242,7 +245,8 @@ export const useAppRuntimeStore = create<AppRuntimeState>()((set, get) => ({
         dismissedAppId: null,
         dismissReason: null,
       };
-    }),
+    });
+  },
 
   focusAppInSwitcher: (id) =>
     set({
@@ -316,8 +320,28 @@ export const useAppRuntimeStore = create<AppRuntimeState>()((set, get) => ({
     set({
       dismissedAppId: null,
       dismissReason: null,
+      appOrigin: null,
     }),
 }));
+
+// ---------------------------------------------------------------------------
+// Killed-app tracking (module-level, not in Zustand)
+// ---------------------------------------------------------------------------
+// When an app is swiped away in the app switcher, its ID is recorded here.
+// Apps check this on mount to decide whether to reset internal state.
+// This lives outside Zustand to avoid equality-check issues with Set.
+
+const _killedApps = new Set<string>();
+
+/** Was this app killed (swiped away) in the app switcher? */
+export function wasAppKilled(id: string): boolean {
+  return _killedApps.has(id);
+}
+
+/** Clear the killed flag after the app has reset itself. */
+export function clearAppKilled(id: string): void {
+  _killedApps.delete(id);
+}
 
 /**
  * Derived gesture intent — simplified after removing home gesture mode.

@@ -1,9 +1,7 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppIcon } from './AppIcon';
-import { useAppRuntimeStore } from '@/platform/stores/appRuntimeStore';
-import { usePerfDebugStore } from '@/platform/stores/perfDebugStore';
 import type { AppInfo } from './apps.data';
 
 const settingsApp: AppInfo = {
@@ -21,51 +19,51 @@ const otherApp: AppInfo = {
 };
 
 describe('AppIcon', () => {
-  beforeEach(() => {
-    useAppRuntimeStore.setState({
-      activeAppId: null,
-      appOrigin: null,
-      recentApps: [],
-      switcherAppId: null,
-      transitionSource: 'icon',
-    });
-    usePerfDebugStore.setState({ hideIconImages: false });
-  });
-
   it('renders icon image and label', () => {
-    render(<AppIcon app={settingsApp} />);
+    render(<AppIcon app={settingsApp} onOpen={vi.fn()} />);
     expect(screen.getByTestId('app-icon-settings')).toBeTruthy();
     expect(screen.getByAltText('设置')).toBeTruthy();
     expect(screen.getByText('设置')).toBeTruthy();
   });
 
   it('hides label when hideLabel is true', () => {
-    render(<AppIcon app={settingsApp} hideLabel />);
+    render(<AppIcon app={settingsApp} hideLabel onOpen={vi.fn()} />);
     expect(screen.queryByText('设置')).toBeNull();
   });
 
   it('renders a solid placeholder instead of the image when icon isolation is enabled', () => {
-    usePerfDebugStore.setState({ hideIconImages: true });
-    render(<AppIcon app={settingsApp} />);
+    render(<AppIcon app={settingsApp} hideIconImages onOpen={vi.fn()} />);
 
     expect(screen.getByTestId('app-icon-placeholder-settings')).toBeInTheDocument();
     expect(screen.queryByAltText('设置')).toBeNull();
   });
 
-  it('opens settings app on click', async () => {
-    render(<AppIcon app={settingsApp} />);
+  it('calls onOpen with app id and origin rect on click', async () => {
+    const onOpen = vi.fn();
+    render(
+      <div data-testid="device-root">
+        <AppIcon app={settingsApp} onOpen={onOpen} />
+      </div>,
+    );
     await userEvent.click(screen.getByTestId('app-icon-settings'));
 
-    const state = useAppRuntimeStore.getState();
-    expect(state.activeAppId).toBe('settings');
-    expect(state.appOrigin).not.toBeNull();
+    expect(onOpen).toHaveBeenCalledWith('settings', expect.objectContaining({
+      x: expect.any(Number),
+      y: expect.any(Number),
+      width: expect.any(Number),
+      height: expect.any(Number),
+    }));
   });
 
-  it('opens a demo app for non-settings icons', async () => {
-    render(<AppIcon app={otherApp} />);
+  it('calls onOpen for non-settings icons', async () => {
+    const onOpen = vi.fn();
+    render(
+      <div data-testid="device-root">
+        <AppIcon app={otherApp} onOpen={onOpen} />
+      </div>,
+    );
     await userEvent.click(screen.getByTestId('app-icon-wechat'));
 
-    expect(useAppRuntimeStore.getState().activeAppId).toBe('wechat');
-    expect(useAppRuntimeStore.getState().recentApps.map((task) => task.id)).toEqual(['wechat']);
+    expect(onOpen).toHaveBeenCalledWith('wechat', expect.any(Object));
   });
 });

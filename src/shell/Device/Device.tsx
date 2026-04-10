@@ -54,6 +54,29 @@ export function Device() {
   const hideIconImages = usePerfDebugStore((s) => s.hideIconImages);
   const hydratePerfDebug = usePerfDebugStore((s) => s.hydrate);
   const desktopRef = useRef<HTMLDivElement>(null);
+
+  // Prevent iOS Safari from scrolling the document when the keyboard opens.
+  useEffect(() => {
+    const isTouch = window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+    if (!isTouch) return;
+    const html = document.documentElement;
+    const body = document.body;
+    html.style.position = 'fixed';
+    html.style.width = '100%';
+    html.style.height = '100%';
+    body.style.position = 'fixed';
+    body.style.width = '100%';
+    body.style.height = '100%';
+    return () => {
+      html.style.position = '';
+      html.style.width = '';
+      html.style.height = '';
+      body.style.position = '';
+      body.style.width = '';
+      body.style.height = '';
+    };
+  }, []);
+
   const viewportProfile = useViewportProfile();
   const metrics = getSpringboardMetrics(viewportProfile.sizeTier);
   const perfSnapshot = usePerformanceMonitor(perfEnabled);
@@ -62,6 +85,7 @@ export function Device() {
   const openOverlay = useUIStateStore((s) => s.openOverlay);
   const closeOverlay = useUIStateStore((s) => s.closeOverlay);
   const activeAppId = useAppRuntimeStore((s) => s.activeAppId);
+  const dismissedAppId = useAppRuntimeStore((s) => s.dismissedAppId);
   const recentApps = useAppRuntimeStore((s) => s.recentApps);
   const presentationMode = useAppRuntimeStore((s) => s.presentationMode);
 
@@ -98,12 +122,21 @@ export function Device() {
       el.style.filter = 'none';
       return;
     }
+    // Show Springboard when user starts dragging the lock screen up
+    if (progress > 0) {
+      el.style.visibility = 'visible';
+    }
     const eased = easeOutQuad(progress);
     const blur = MAX_BLUR * (1 - eased);
     const brightness = 1 + 0.08 * eased;
     el.style.transition = 'none';
     el.style.filter = `blur(${blur.toFixed(1)}px) brightness(${brightness.toFixed(3)})`;
   }, [disableDesktopFilter]);
+
+  // App is fully covering the screen — Springboard should be scaled down + dimmed
+  const appCoversScreen = !!activeAppId && presentationMode === 'foreground';
+  // App is being dismissed — Springboard should animate back to normal
+  const appDismissing = !!dismissedAppId && !activeAppId;
 
   useEffect(() => {
     const el = desktopRef.current;
@@ -112,21 +145,47 @@ export function Device() {
     if (disableDesktopFilter) {
       el.style.transition = 'none';
       el.style.filter = 'none';
+      el.style.transform = '';
+      el.style.opacity = '';
+      el.style.visibility = 'visible';
       return;
     }
 
     if (isLocked) {
       el.style.transition = 'none';
       el.style.filter = `blur(${MAX_BLUR}px) brightness(1)`;
+      el.style.transform = '';
+      el.style.opacity = '';
+      el.style.visibility = 'hidden';
     } else if (presentationMode === 'switcher') {
       // Blur + dim the springboard when app switcher is visible
-      el.style.transition = 'filter 250ms ease-out';
+      el.style.transition = 'filter 250ms ease-out, transform 250ms ease-out, opacity 250ms ease-out';
       el.style.filter = 'blur(18px) brightness(0.6)';
-    } else {
-      el.style.transition = 'filter 300ms ease-out';
+      el.style.transform = '';
+      el.style.opacity = '';
+      el.style.visibility = 'hidden';
+    } else if (appCoversScreen) {
+      // App is opening / fully open — scale down + dim Springboard behind it
+      el.style.visibility = 'visible';
+      el.style.transition = 'filter 450ms ease-out, transform 450ms ease-out, opacity 450ms ease-out';
       el.style.filter = 'none';
+      el.style.transform = 'scale(0.96)';
+      el.style.opacity = '0.7';
+    } else if (appDismissing) {
+      // App is closing — animate Springboard back to normal
+      el.style.visibility = 'visible';
+      el.style.transition = 'filter 350ms ease-out, transform 350ms ease-out, opacity 350ms ease-out';
+      el.style.filter = 'none';
+      el.style.transform = 'scale(1)';
+      el.style.opacity = '1';
+    } else {
+      el.style.transition = 'filter 300ms ease-out, transform 300ms ease-out, opacity 300ms ease-out';
+      el.style.filter = 'none';
+      el.style.transform = 'scale(1)';
+      el.style.opacity = '1';
+      el.style.visibility = 'visible';
     }
-  }, [disableDesktopFilter, isLocked, presentationMode]);
+  }, [disableDesktopFilter, isLocked, presentationMode, appCoversScreen, appDismissing]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

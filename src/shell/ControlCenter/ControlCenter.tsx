@@ -376,13 +376,12 @@ export function ControlCenter({ visible, onClose }: ControlCenterProps) {
       }}
     >
       {/* Backdrop */}
-      <div
+      <Material
+        variant="thin"
         style={{
           position: 'absolute',
           inset: 0,
           backgroundColor: 'rgba(0, 0, 0, 0.4)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
         }}
         onClick={onClose}
         data-testid="cc-backdrop"

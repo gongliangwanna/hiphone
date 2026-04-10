@@ -1,6 +1,7 @@
 import { useRef, useEffect, useCallback, type PointerEvent } from 'react';
 import { AnimatePresence, motion, animate, useMotionValue } from 'motion/react';
 import { spring } from '@/platform/design-tokens/motion';
+import { Material } from '@/system/Material';
 import { useAssistiveTouchStore } from '@/platform/stores/assistiveTouchStore';
 import { useAppRuntimeStore } from '@/platform/stores/appRuntimeStore';
 import { useSystemStore } from '@/platform/stores/systemStore';
@@ -9,7 +10,7 @@ const BALL_SIZE = 56;
 const EDGE_MARGIN = 8;
 const TAP_THRESHOLD = 8;
 const IDLE_TIMEOUT = 3000;
-const IDLE_OPACITY = 0.5;
+const IDLE_OPACITY = 0.4;
 const ACTIVE_OPACITY = 1;
 const MENU_SIZE = 180;
 const MENU_ITEM_SIZE = 72;
@@ -33,6 +34,7 @@ export function AssistiveTouch() {
   const ballX = useMotionValue(0);
   const ballY = useMotionValue(0);
   const ballOpacity = useMotionValue(ACTIVE_OPACITY);
+  const ballScale = useMotionValue(1);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const snapAnimRef = useRef<Array<ReturnType<typeof animate>>>([]);
   // Guard: when true, the effect that syncs position from store is suppressed.
@@ -138,6 +140,7 @@ export function AssistiveTouch() {
       totalDisplacement: 0,
     };
     e.currentTarget.setPointerCapture(e.pointerId);
+    animate(ballScale, 0.88, { type: 'spring', ...spring.snappy });
     resetIdleTimer();
   };
 
@@ -166,6 +169,8 @@ export function AssistiveTouch() {
     if (!p.active || p.pointerId !== e.pointerId) return;
     p.active = false;
 
+    animate(ballScale, 1, { type: 'spring', ...spring.snappy });
+
     if (p.totalDisplacement < TAP_THRESHOLD) {
       toggleMenu();
     } else {
@@ -177,6 +182,7 @@ export function AssistiveTouch() {
 
   const handlePointerCancel = () => {
     pointerRef.current.active = false;
+    animate(ballScale, 1, { type: 'spring', ...spring.snappy });
     snapToEdge(ballX.get(), ballY.get());
   };
 
@@ -238,14 +244,16 @@ export function AssistiveTouch() {
             transition={{ type: 'spring', ...spring.snappy }}
             data-testid="assistive-touch-menu"
           >
-            <div
+            <Material
+              variant="thinDark"
               className="flex flex-wrap items-center justify-center gap-3 p-4"
               style={{
                 width: MENU_SIZE,
                 height: MENU_SIZE,
                 borderRadius: 22,
-                backgroundColor: 'rgba(36, 36, 38, 0.88)',
+                backgroundColor: 'rgba(36, 36, 38, 0.85)',
                 boxShadow: '0 8px 40px rgba(0, 0, 0, 0.45), inset 0 0 0 0.5px rgba(255, 255, 255, 0.08)',
+                overflow: 'hidden',
               }}
             >
               <MenuButton
@@ -260,7 +268,7 @@ export function AssistiveTouch() {
                 onClick={handleSwitcherAction}
                 testId="at-action-switcher"
               />
-            </div>
+            </Material>
           </motion.div>
         )}
       </AnimatePresence>
@@ -273,6 +281,7 @@ export function AssistiveTouch() {
           x: ballX,
           y: ballY,
           opacity: ballOpacity,
+          scale: ballScale,
         }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -281,34 +290,36 @@ export function AssistiveTouch() {
         onLostPointerCapture={handlePointerCancel}
         data-testid="assistive-touch-ball"
       >
-        <div
+        <Material
+          variant="thinDark"
           className="flex h-full w-full items-center justify-center"
           style={{
             borderRadius: '50%',
-            backgroundColor: 'rgba(0, 0, 0, 0.6)',
-            boxShadow: '0 2px 10px rgba(0, 0, 0, 0.35), inset 0 0 0 0.5px rgba(255, 255, 255, 0.15)',
+            overflow: 'hidden',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3), inset 0 0 0 0.5px rgba(255, 255, 255, 0.2)',
           }}
         >
           <AssistiveTouchIcon />
-        </div>
+        </Material>
       </motion.div>
     </div>
   );
 }
 
-/** iOS AssistiveTouch icon — a circle with 4 directional arrows pointing inward */
+/** iOS AssistiveTouch icon — outer ring, center dot, 4 triangular arrowheads */
 function AssistiveTouchIcon() {
+  const c = 'rgba(255,255,255,0.9)';
   return (
     <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-      {/* Outer circle */}
-      <circle cx="14" cy="14" r="12" stroke="rgba(255,255,255,0.7)" strokeWidth="1.5" fill="none" />
+      {/* Outer ring */}
+      <circle cx="14" cy="14" r="11" stroke={c} strokeWidth="1.2" fill="none" />
       {/* Center dot */}
-      <circle cx="14" cy="14" r="3.5" fill="rgba(255,255,255,0.85)" />
-      {/* 4 directional ticks — top, right, bottom, left */}
-      <line x1="14" y1="5" x2="14" y2="8.5" stroke="rgba(255,255,255,0.7)" strokeWidth="1.5" strokeLinecap="round" />
-      <line x1="23" y1="14" x2="19.5" y2="14" stroke="rgba(255,255,255,0.7)" strokeWidth="1.5" strokeLinecap="round" />
-      <line x1="14" y1="23" x2="14" y2="19.5" stroke="rgba(255,255,255,0.7)" strokeWidth="1.5" strokeLinecap="round" />
-      <line x1="5" y1="14" x2="8.5" y2="14" stroke="rgba(255,255,255,0.7)" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="14" cy="14" r="2.5" fill={c} />
+      {/* Triangular arrowheads pointing inward at cardinal positions */}
+      <path d="M14 7.5L12 4h4z" fill={c} />{/* top → down */}
+      <path d="M20.5 14L24 12v4z" fill={c} />{/* right → left */}
+      <path d="M14 20.5L16 24h-4z" fill={c} />{/* bottom → up */}
+      <path d="M7.5 14L4 16v-4z" fill={c} />{/* left → right */}
     </svg>
   );
 }
@@ -345,14 +356,14 @@ function MenuButton({ icon, label, onClick, testId }: MenuButtonProps) {
   );
 }
 
-/** SF Symbol style home icon — rounded house outline */
+/** SF Symbol "house" — roof + body with rounded door cutout */
 function HomeIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
       <path
-        d="M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1V10.5z"
+        d="M12 3L3 10.5V20a1 1 0 001 1h4.5v-5.5a1.5 1.5 0 011.5-1.5h4a1.5 1.5 0 011.5 1.5V21H20a1 1 0 001-1V10.5L12 3z"
         stroke="white"
-        strokeWidth="1.8"
+        strokeWidth="1.6"
         strokeLinecap="round"
         strokeLinejoin="round"
         fill="none"
@@ -361,12 +372,12 @@ function HomeIcon() {
   );
 }
 
-/** SF Symbol style switcher icon — two overlapping rectangles */
+/** SF Symbol "square.on.square" — overlapping offset cards */
 function SwitcherIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <rect x="2" y="4" width="9" height="16" rx="2" stroke="white" strokeWidth="1.8" fill="none" />
-      <rect x="13" y="4" width="9" height="16" rx="2" stroke="white" strokeWidth="1.8" fill="none" />
+      <rect x="3" y="2" width="13" height="17" rx="2.5" stroke="white" strokeWidth="1.6" fill="none" />
+      <rect x="8" y="5" width="13" height="17" rx="2.5" stroke="white" strokeWidth="1.6" fill="none" />
     </svg>
   );
 }

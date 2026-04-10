@@ -25,6 +25,12 @@ export const materials = {
     saturate: 200,
     background: 'rgba(242, 242, 247, 0.95)',
   },
+  /** Dark semi-transparent material — for overlays like AssistiveTouch */
+  thinDark: {
+    blur: 20,
+    saturate: 180,
+    background: 'rgba(40, 40, 45, 0.45)',
+  },
 } as const;
 
 export type MaterialVariant = keyof typeof materials;

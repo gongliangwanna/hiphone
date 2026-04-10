@@ -1,15 +1,19 @@
+import { memo } from 'react';
 import type { AppInfo } from './apps.data';
 import { AppIcon } from './AppIcon';
 import { Material } from '@/system/Material';
 import type { SpringboardMetrics } from '../Device/viewportProfile';
+import type { AppOrigin } from '@/platform/stores/appRuntimeStore';
 
 interface DockProps {
   apps: AppInfo[];
   metrics: SpringboardMetrics;
   reduceTransparency?: boolean;
+  hideIconImages?: boolean;
+  onOpen: (id: string, origin: AppOrigin) => void;
 }
 
-export function Dock({ apps, metrics, reduceTransparency = false }: DockProps) {
+export const Dock = memo(function Dock({ apps, metrics, reduceTransparency = false, hideIconImages, onOpen }: DockProps) {
   return (
     <div
       style={{
@@ -26,9 +30,9 @@ export function Dock({ apps, metrics, reduceTransparency = false }: DockProps) {
         data-testid="dock-material"
       >
         {apps.map((app) => (
-          <AppIcon key={app.id} app={app} hideLabel metrics={metrics} />
+          <AppIcon key={app.id} app={app} hideLabel metrics={metrics} hideIconImages={hideIconImages} onOpen={onOpen} />
         ))}
       </Material>
     </div>
   );
-}
+});

@@ -1,15 +1,16 @@
-import { useRef } from 'react';
-import { motion } from 'motion/react';
+import { useRef, useEffect, memo } from 'react';
+import { motion, useAnimationControls } from 'motion/react';
 import type { AppInfo } from './apps.data';
 import { getSpringboardMetrics, type SpringboardMetrics } from '../Device/viewportProfile';
-import { useAppRuntimeStore } from '@/platform/stores/appRuntimeStore';
-import { usePerfDebugStore } from '@/platform/stores/perfDebugStore';
 import { spring } from '@/platform/design-tokens/motion';
+import { useAppRuntimeStore, type AppOrigin } from '@/platform/stores/appRuntimeStore';
 
 interface AppIconProps {
   app: AppInfo;
   hideLabel?: boolean;
   metrics?: SpringboardMetrics;
+  hideIconImages?: boolean;
+  onOpen: (id: string, origin: AppOrigin) => void;
 }
 
 function getPlaceholderColor(seed: string) {
@@ -22,16 +23,42 @@ function getPlaceholderColor(seed: string) {
   return `hsl(${Math.abs(hash) % 360} 62% 56%)`;
 }
 
-export function AppIcon({ app, hideLabel, metrics = getSpringboardMetrics('regular') }: AppIconProps) {
+export const AppIcon = memo(function AppIcon({ app, hideLabel, metrics = getSpringboardMetrics('regular'), hideIconImages, onOpen }: AppIconProps) {
   const iconRef = useRef<HTMLDivElement>(null);
-  const openApp = useAppRuntimeStore((s) => s.openApp);
-  const hideIconImages = usePerfDebugStore((s) => s.hideIconImages);
+  const iconControls = useAnimationControls();
+  const dismissedAppId = useAppRuntimeStore((s) => s.dismissedAppId);
+  const dismissReason = useAppRuntimeStore((s) => s.dismissReason);
+  const isLandingTarget = dismissedAppId === app.id && dismissReason === 'home';
+
+  useEffect(() => {
+    if (isLandingTarget) {
+      // Delay until the morph visually arrives at the icon, then:
+      // instant upward displacement (impact), spring back to rest.
+      const timer = setTimeout(() => {
+        iconControls.set({ y: -3.5, scaleX: 1.03, scaleY: 0.97 });
+        iconControls.start({
+          y: 0,
+          scaleX: 1,
+          scaleY: 1,
+          transition: { type: 'spring', stiffness: 300, damping: 10, mass: 0.8 },
+        });
+      }, 180);
+      return () => clearTimeout(timer);
+    }
+  }, [isLandingTarget, iconControls]);
 
   const handleClick = () => {
     const el = iconRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    openApp(app.id, { x: rect.left, y: rect.top, width: rect.width, height: rect.height });
+    const deviceRoot = el.closest('[data-testid="device-root"]') as HTMLElement | null;
+    const deviceRect = deviceRoot?.getBoundingClientRect();
+    onOpen(app.id, {
+      x: rect.left - (deviceRect?.left ?? 0),
+      y: rect.top - (deviceRect?.top ?? 0),
+      width: rect.width,
+      height: rect.height,
+    });
   };
 
   return (
@@ -48,9 +75,10 @@ export function AppIcon({ app, hideLabel, metrics = getSpringboardMetrics('regul
       data-testid={`app-icon-${app.id}`}
     >
       {/* Icon image with iOS mask */}
-      <div
+      <motion.div
         ref={iconRef}
         className="overflow-hidden"
+        animate={iconControls}
         style={{
           width: `${metrics.iconSize}px`,
           height: `${metrics.iconSize}px`,
@@ -72,7 +100,7 @@ export function AppIcon({ app, hideLabel, metrics = getSpringboardMetrics('regul
             draggable={false}
           />
         )}
-      </div>
+      </motion.div>
 
       {/* Label — hidden when hideLabel is true (used in Dock) */}
       {!hideLabel && (
@@ -90,4 +118,4 @@ export function AppIcon({ app, hideLabel, metrics = getSpringboardMetrics('regul
       )}
     </motion.button>
   );
-}
+});

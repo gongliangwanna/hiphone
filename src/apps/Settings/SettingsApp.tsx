@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useSettingsNavStore } from './settingsNavStore';
-import { useAppRuntimeStore } from '@/platform/stores/appRuntimeStore';
+import { useAppRuntimeStore, wasAppKilled, clearAppKilled } from '@/platform/stores/appRuntimeStore';
 import { SettingsHome } from './SettingsHome';
 import { AboutPage } from './AboutPage';
 import { WallpaperPage } from './WallpaperPage';
@@ -29,6 +29,15 @@ export function SettingsApp() {
   const reset = useSettingsNavStore((s) => s.reset);
   const goHome = useAppRuntimeStore((s) => s.goHome);
   const prevLengthRef = useRef(stack.length);
+
+  // Only reset navigation if the app was killed (swiped away in switcher).
+  // Going home just backgrounds the app — it should resume on next open.
+  useEffect(() => {
+    if (wasAppKilled('settings')) {
+      reset();
+      clearAppKilled('settings');
+    }
+  }, [reset]);
 
   const currentPage = stack[stack.length - 1] ?? 'home';
   const title = PAGE_TITLES[currentPage] ?? '设置';

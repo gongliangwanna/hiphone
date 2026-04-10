@@ -11,6 +11,8 @@
  * - **smooth**:       sheet/page transitions that should still feel lively
  * - **bouncy**:       lock screen / playful reveals where overshoot is the point
  * - **interactive**:  finger-following snap-back (user just released a drag)
+ * - **appLaunch**:    icon-to-app morph — smooth, no bounce, ~0.25s perceptual
+ * - **appClose**:     app-to-icon morph — slight bounce at landing, ~0.4s
  * - **criticalDamped**: "leaving scene" animations where overshoot is wrong —
  *   card fly-away, app exit, any time the destination is off-screen and the
  *   user should see a single decisive motion with no wobble. Dampingfraction
@@ -37,6 +39,19 @@ export const spring = {
   bouncy: { stiffness: 220, damping: 18, mass: 1 },
   /** Finger-following snap-back (interactive drag release) */
   interactive: { stiffness: 400, damping: 40, mass: 1 },
+  /**
+   * App launch from icon — fast, non-bouncy spring (~0.25s perceptual).
+   * iOS uses a non-bouncy spring for app launches. Stiffer than the
+   * original to deliver a snappy, responsive feel.
+   */
+  appLaunch: { stiffness: 500, damping: 45, mass: 1 },
+  /**
+   * App close morph back to icon — slight bounce at landing.
+   * iOS shows a subtle overshoot when the shrinking app screenshot
+   * settles at the icon position. Damping ratio ≈ 0.77 gives a visible
+   * but restrained bounce (2–3 px overshoot, 1 cycle).
+   */
+  appClose: { stiffness: 340, damping: 28, mass: 1 },
   /**
    * Critically-damped spring for "leaving scene" animations. Damping ratio
    * ≈ 1.0 means it converges to the target without overshoot, which is

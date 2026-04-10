@@ -1,12 +1,21 @@
+import type { ReactNode } from 'react';
 import { Material } from '@/system/Material';
 
 type NavBarVariant = 'inline' | 'largeTitle';
+
+interface NavBarButton {
+  icon: ReactNode;
+  onClick: () => void;
+  testId?: string;
+}
 
 interface NavBarProps {
   title: string;
   onBack?: () => void;
   showBack?: boolean;
+  backLabel?: string;
   variant?: NavBarVariant;
+  rightButtons?: NavBarButton[];
 }
 
 const INLINE_HEIGHT = 44;
@@ -16,7 +25,9 @@ export function NavBar({
   title,
   onBack,
   showBack = false,
+  backLabel = '返回',
   variant = 'inline',
+  rightButtons,
 }: NavBarProps) {
   if (variant === 'largeTitle') {
     return (
@@ -85,7 +96,7 @@ export function NavBar({
               strokeLinejoin="round"
             />
           </svg>
-          <span>返回</span>
+          <span>{backLabel}</span>
         </button>
       )}
       <span
@@ -98,6 +109,25 @@ export function NavBar({
       >
         {title}
       </span>
+      {rightButtons && rightButtons.length > 0 && (
+        <div className="absolute right-2 flex items-center gap-0.5">
+          {rightButtons.map((btn, i) => (
+            <button
+              key={btn.testId ?? i}
+              onClick={btn.onClick}
+              className="flex items-center justify-center"
+              style={{
+                minWidth: 44,
+                minHeight: 44,
+                color: 'var(--color-systemBlue)',
+              }}
+              data-testid={btn.testId}
+            >
+              {btn.icon}
+            </button>
+          ))}
+        </div>
+      )}
     </Material>
   );
 }

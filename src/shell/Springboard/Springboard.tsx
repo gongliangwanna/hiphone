@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { motion } from 'motion/react';
 import { apps, dock } from './apps.data';
 import { IconGrid } from './IconGrid';
@@ -5,6 +6,8 @@ import { Dock } from './Dock';
 import { PageIndicator } from './PageIndicator';
 import { getSpringboardMetrics, type SizeTier } from '../Device/viewportProfile';
 import { usePageSwipe } from './usePageSwipe';
+import { useAppRuntimeStore, type AppOrigin } from '@/platform/stores/appRuntimeStore';
+import { usePerfDebugStore } from '@/platform/stores/perfDebugStore';
 
 const COLS = 4;
 const ROWS = 5;
@@ -28,6 +31,12 @@ interface SpringboardProps {
 
 export function Springboard({ sizeTier, viewportWidth }: SpringboardProps) {
   const metrics = getSpringboardMetrics(sizeTier);
+  const openApp = useAppRuntimeStore((s) => s.openApp);
+  const hideIconImages = usePerfDebugStore((s) => s.hideIconImages);
+  const handleOpenApp = useCallback(
+    (id: string, origin: AppOrigin) => openApp(id, origin),
+    [openApp],
+  );
   const {
     currentPage,
     isDragging,
@@ -68,14 +77,14 @@ export function Springboard({ sizeTier, viewportWidth }: SpringboardProps) {
               className="w-full flex-shrink-0"
               style={{ paddingInline: 'var(--shell-side-padding)' }}
             >
-              <IconGrid apps={pageApps} metrics={metrics} />
+              <IconGrid apps={pageApps} metrics={metrics} hideIconImages={hideIconImages} onOpen={handleOpenApp} />
             </div>
           ))}
         </motion.div>
       </div>
 
       <PageIndicator totalPages={TOTAL_PAGES} currentPage={currentPage} />
-      <Dock apps={dock} metrics={metrics} reduceTransparency={isDragging} />
+      <Dock apps={dock} metrics={metrics} reduceTransparency={isDragging} hideIconImages={hideIconImages} onOpen={handleOpenApp} />
     </div>
   );
 }
