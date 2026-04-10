@@ -6,3 +6,6 @@ export { Toast } from './Toast/Toast';
 export { useToastStore } from './Toast/toastStore';
 export { WheelPicker, type WheelPickerItem } from './Picker/WheelPicker';
 export { DateTimePicker } from './Picker/DateTimePicker';
+export { Toggle } from './Toggle/Toggle';
+export { Slider } from './Slider/Slider';
+export { TextArea } from './TextArea/TextArea';

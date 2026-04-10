@@ -1,5 +1,6 @@
 import { useMusicDataStore, useCurrentSong } from './musicDataStore';
 import { useMusicNavStore } from './musicStore';
+import { Play, Pause, SkipForward } from 'lucide-react';
 
 export function MiniPlayer() {
   const currentSong = useCurrentSong();
@@ -25,13 +26,16 @@ export function MiniPlayer() {
       onClick={openNowPlaying}
     >
       {/* Album art */}
-      <div
+      <img
+        src={currentSong.artworkUrl}
+        alt={currentSong.album}
         style={{
           width: 40,
           height: 40,
           borderRadius: 6,
-          background: currentSong.cover,
           flexShrink: 0,
+          objectFit: 'cover',
+          backgroundColor: '#1c1c1e',
         }}
       />
 
@@ -62,7 +66,11 @@ export function MiniPlayer() {
           onClick={togglePlay}
           data-testid="mini-play-pause"
         >
-          {isPlaying ? <PauseIcon /> : <PlayIcon />}
+          {isPlaying ? (
+            <Pause size={22} fill="#fff" color="#fff" />
+          ) : (
+            <Play size={22} fill="#fff" color="#fff" />
+          )}
         </button>
         <button
           className="flex items-center justify-center"
@@ -70,37 +78,9 @@ export function MiniPlayer() {
           onClick={skipNext}
           data-testid="mini-skip-next"
         >
-          <SkipNextIcon />
+          <SkipForward size={20} fill="#fff" color="#fff" />
         </button>
       </div>
     </button>
-  );
-}
-
-/* ── SF Symbol style icons ── */
-
-function PlayIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <path d="M6 4l14 8-14 8V4z" fill="#fff" />
-    </svg>
-  );
-}
-
-function PauseIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <rect x="5" y="4" width="4.5" height="16" rx="1" fill="#fff" />
-      <rect x="14.5" y="4" width="4.5" height="16" rx="1" fill="#fff" />
-    </svg>
-  );
-}
-
-function SkipNextIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-      <path d="M4 4l12 8-12 8V4z" fill="#fff" />
-      <rect x="18" y="4" width="3" height="16" rx="1" fill="#fff" />
-    </svg>
   );
 }

@@ -1,4 +1,27 @@
+import { MapPin } from 'lucide-react';
 import type { PlaceResult } from './mapsStore';
+
+// ---------------------------------------------------------------------------
+// Category color mapping for search results
+// ---------------------------------------------------------------------------
+
+function getCategoryColor(category?: string, type?: string): string {
+  const t = type?.toLowerCase() || '';
+  const c = category?.toLowerCase() || '';
+
+  if (['restaurant', 'fast_food', 'food_court', 'bbq'].includes(t) || c === 'restaurant')
+    return '#FF9500';
+  if (['cafe', 'coffee'].includes(t)) return '#A2845E';
+  if (['fuel', 'charging_station'].includes(t)) return '#34C759';
+  if (['parking', 'bicycle_parking'].includes(t)) return '#007AFF';
+  if (c === 'shop' || ['mall', 'marketplace', 'supermarket'].includes(t)) return '#007AFF';
+  if (['hotel', 'hostel', 'motel', 'guest_house'].includes(t) || c === 'tourism') return '#5856D6';
+  if (['hospital', 'clinic', 'doctors'].includes(t)) return '#FF3B30';
+  if (['pharmacy', 'chemist'].includes(t)) return '#34C759';
+  if (['school', 'university', 'college', 'library'].includes(t)) return '#5856D6';
+
+  return '#FF3B30';
+}
 
 // ---------------------------------------------------------------------------
 // SearchResults — list of matching places
@@ -74,20 +97,11 @@ export function SearchResults({ results, searching, query, onSelect }: SearchRes
                 width: 36,
                 height: 36,
                 borderRadius: 8,
-                backgroundColor: 'var(--color-systemRed)',
+                backgroundColor: getCategoryColor(place.category, place.type),
                 flexShrink: 0,
               }}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M12 2C7.6 2 4 5.6 4 10c0 6 8 12 8 12s8-6 8-12c0-4.4-3.6-8-8-8z"
-                  stroke="white"
-                  strokeWidth="2"
-                  strokeLinejoin="round"
-                  fill="none"
-                />
-                <circle cx="12" cy="10" r="3" stroke="white" strokeWidth="2" />
-              </svg>
+              <MapPin size={18} strokeWidth={2} color="white" />
             </div>
             <div className="flex min-w-0 flex-1 flex-col">
               <span

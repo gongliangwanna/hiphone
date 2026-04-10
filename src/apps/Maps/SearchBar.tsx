@@ -1,32 +1,6 @@
 import { useRef } from 'react';
+import { Search, X } from 'lucide-react';
 import { Material } from '@/system';
-
-// ---------------------------------------------------------------------------
-// SF Symbol search icon
-// ---------------------------------------------------------------------------
-
-function IconSearch() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-      <circle cx="10.5" cy="10.5" r="7" stroke="currentColor" strokeWidth="2" />
-      <path d="M15.5 15.5L21 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function IconClear({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className="flex items-center justify-center"
-      style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--color-tertiaryFill)', border: 'none', cursor: 'pointer', flexShrink: 0 }}
-    >
-      <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
-        <path d="M2 2L10 10M10 2L2 10" stroke="var(--color-secondaryLabel)" strokeWidth="2" strokeLinecap="round" />
-      </svg>
-    </button>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // SearchBar
@@ -73,8 +47,8 @@ export function SearchBar({ value, onChange, onFocus, onCancel, isFocused }: Sea
           backgroundColor: 'var(--color-tertiarySystemFill)',
         }}
       >
-        <span style={{ color: 'var(--color-tertiaryLabel)', flexShrink: 0 }}>
-          <IconSearch />
+        <span style={{ color: 'var(--color-tertiaryLabel)', flexShrink: 0, display: 'flex' }}>
+          <Search size={16} strokeWidth={2} />
         </span>
         <input
           ref={inputRef}
@@ -95,7 +69,24 @@ export function SearchBar({ value, onChange, onFocus, onCancel, isFocused }: Sea
             minWidth: 0,
           }}
         />
-        {value.length > 0 && <IconClear onClick={handleClear} />}
+        {value.length > 0 && (
+          <button
+            onClick={handleClear}
+            className="flex items-center justify-center"
+            style={{
+              width: 18,
+              height: 18,
+              borderRadius: '50%',
+              border: 'none',
+              backgroundColor: 'var(--color-tertiaryLabel)',
+              cursor: 'pointer',
+              padding: 0,
+              flexShrink: 0,
+            }}
+          >
+            <X size={10} strokeWidth={3} color="var(--color-systemBackground)" />
+          </button>
+        )}
       </Material>
 
       {isFocused && (

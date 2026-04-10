@@ -1,17 +1,37 @@
+import { useCallback, useMemo } from 'react';
 import { stations } from '../data';
 import { useMusicDataStore } from '../musicDataStore';
-import { songs } from '../data';
 
 export function RadioTab() {
   const playSong = useMusicDataStore((s) => s.playSong);
+  const featuredIds = useMusicDataStore((s) => s.featuredIds);
+  const songMap = useMusicDataStore((s) => s.songMap);
+  const searchFn = useMusicDataStore((s) => s.search);
 
-  const playRandomSong = () => {
-    if (songs.length === 0) return;
-    const randomSong = songs[Math.floor(Math.random() * songs.length)]!;
-    playSong(randomSong.id);
-  };
+  const playStation = useCallback(
+    async (searchTerm: string) => {
+      // Search for genre-specific songs and play the first result
+      await searchFn(searchTerm);
+      const { searchResultIds } = useMusicDataStore.getState();
+      if (searchResultIds.length > 0) {
+        playSong(searchResultIds[0]!, searchResultIds);
+      }
+    },
+    [searchFn, playSong],
+  );
+
+  const playRandomFeatured = useCallback(() => {
+    if (featuredIds.length === 0) return;
+    const randomId = featuredIds[Math.floor(Math.random() * featuredIds.length)]!;
+    playSong(randomId, featuredIds);
+  }, [featuredIds, playSong]);
 
   const featuredStation = stations[0];
+
+  // Show featured songs with artwork for station backgrounds
+  const stationPreviewSongs = useMemo(() => {
+    return featuredIds.slice(0, stations.length).map((id) => songMap[id]);
+  }, [featuredIds, songMap]);
 
   return (
     <div className="h-full overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
@@ -30,11 +50,11 @@ export function RadioTab() {
             style={{
               borderRadius: 12,
               overflow: 'hidden',
-              background: `linear-gradient(135deg, ${featuredStation.color}, ${featuredStation.color}88)`,
+              background: featuredStation.gradient,
               position: 'relative',
               height: 200,
             }}
-            onClick={playRandomSong}
+            onClick={playRandomFeatured}
           >
             <div
               style={{
@@ -77,51 +97,69 @@ export function RadioTab() {
           电台
         </h2>
         <div className="flex flex-col gap-3">
-          {stations.slice(1).map((station) => (
-            <button
-              key={station.id}
-              className="flex items-center text-left"
-              style={{
-                height: 80,
-                borderRadius: 12,
-                backgroundColor: 'rgba(28, 28, 30, 0.8)',
-                overflow: 'hidden',
-              }}
-              onClick={playRandomSong}
-            >
-              <div
+          {stations.slice(1).map((station, i) => {
+            const previewSong = stationPreviewSongs[i + 1];
+            return (
+              <button
+                key={station.id}
+                className="flex items-center text-left"
                 style={{
-                  width: 80,
                   height: 80,
-                  background: station.cover,
-                  flexShrink: 0,
+                  borderRadius: 12,
+                  backgroundColor: 'rgba(28, 28, 30, 0.8)',
+                  overflow: 'hidden',
                 }}
-              />
-              <div style={{ padding: '0 16px', flex: 1, minWidth: 0 }}>
+                onClick={() => playStation(station.searchTerm)}
+              >
                 <div
                   style={{
-                    fontSize: 17,
-                    fontWeight: 600,
-                    color: '#fff',
+                    width: 80,
+                    height: 80,
+                    background: station.gradient,
+                    flexShrink: 0,
+                    position: 'relative',
                     overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
                   }}
                 >
-                  {station.name}
+                  {previewSong?.artworkUrl && (
+                    <img
+                      src={previewSong.artworkUrl}
+                      alt=""
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        opacity: 0.6,
+                      }}
+                    />
+                  )}
                 </div>
-                <div
-                  style={{
-                    fontSize: 13,
-                    color: 'rgba(235, 235, 245, 0.6)',
-                    marginTop: 2,
-                  }}
-                >
-                  {station.description}
+                <div style={{ padding: '0 16px', flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: 17,
+                      fontWeight: 600,
+                      color: '#fff',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {station.name}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color: 'rgba(235, 235, 245, 0.6)',
+                      marginTop: 2,
+                    }}
+                  >
+                    {station.description}
+                  </div>
                 </div>
-              </div>
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>

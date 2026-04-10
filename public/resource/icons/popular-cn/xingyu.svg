@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 180 180">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF9A9E"/>
+      <stop offset="50%" stop-color="#FBC2EB"/>
+      <stop offset="100%" stop-color="#A18CD1"/>
+    </linearGradient>
+  </defs>
+  <rect width="180" height="180" rx="40" fill="url(#bg)"/>
+  <!-- Star -->
+  <path d="M90 35l14 28 31 5-22 22 5 31-28-15-28 15 5-31-22-22 31-5z" fill="rgba(255,255,255,0.9)"/>
+  <!-- Chat bubble -->
+  <ellipse cx="90" cy="120" rx="32" ry="24" fill="rgba(255,255,255,0.85)"/>
+  <circle cx="78" cy="118" r="3.5" fill="#FF9A9E"/>
+  <circle cx="90" cy="118" r="3.5" fill="#A18CD1"/>
+  <circle cx="102" cy="118" r="3.5" fill="#89F7FE"/>
+  <path d="M75 138 q-5 10 5 10 q5-3 8-10z" fill="rgba(255,255,255,0.85)"/>
+</svg>

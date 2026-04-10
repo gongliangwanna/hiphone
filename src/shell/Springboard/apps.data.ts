@@ -42,7 +42,6 @@ const systemApps: AppInfo[] = [
 
 /** Chinese popular apps — page 1 */
 const cnApps: AppInfo[] = [
-  { id: 'wechat', name: '微信', icon: `${CN_ICON_BASE}/wechat.jpg`, page: 1 },
   { id: 'alipay', name: '支付宝', icon: `${CN_ICON_BASE}/alipay.jpg`, page: 1 },
   { id: 'douyin', name: '抖音', icon: `${CN_ICON_BASE}/douyin.jpg`, page: 1 },
   { id: 'taobao', name: '淘宝', icon: `${CN_ICON_BASE}/taobao.jpg`, page: 1 },
@@ -69,6 +68,8 @@ const cnApps: AppInfo[] = [
   { id: 'soul', name: 'Soul', icon: `${CN_ICON_BASE}/soul.jpg`, page: 1 },
   { id: 'qqmail', name: 'QQ邮箱', icon: `${CN_ICON_BASE}/qqmail.jpg`, page: 1 },
   { id: 'quark', name: '夸克', icon: `${CN_ICON_BASE}/quark.jpg`, page: 1 },
+  { id: 'snapchat', name: 'Snapchat', icon: `${CN_ICON_BASE}/snapchat.svg`, page: 1 },
+  { id: 'xingyu', name: '星语', icon: `${CN_ICON_BASE}/xingyu.svg`, page: 1 },
 ];
 
 /** Dock apps — fixed 4 slots */

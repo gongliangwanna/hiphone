@@ -28,7 +28,6 @@ interface MapsState {
   mapCenter: [number, number];
   /** Map zoom level */
   mapZoom: number;
-
   setQuery: (q: string) => void;
   setResults: (results: PlaceResult[]) => void;
   setSearching: (v: boolean) => void;

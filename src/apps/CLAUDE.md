@@ -18,5 +18,9 @@
 | `notes` | `Notes/NotesApp` | 备忘录，内部导航栈 + localStorage 持久化 |
 | `calendar` | `Calendar/CalendarApp` | 日历，月视图 + 事件 CRUD + localStorage 持久化 |
 | `maps` | `Maps/MapsApp` | 地图，Leaflet + OSM + Nominatim 搜索 + 底部面板 |
-| `wechat` | `WeChat/WeChatApp` | 微信，Tab导航 + 聊天列表/通讯录/发现/我 + 聊天详情 |
 | `music` | `Music/MusicApp` | 音乐，4 Tab(现在就听/浏览/广播/资料库) + MiniPlayer + NowPlaying全屏播放器 + 专辑详情 |
+| `camera` | `Camera/CameraApp` | 相机，全屏取景器 + 实时摄像头(带降级) + 6模式选择器 + 闪光灯/翻转 + 快门动画 |
+| `photos` | `Photos/PhotosApp` | 照片，4 Tab(图库/为你推荐/相簿/搜索) + 月份分组网格 + 全屏PhotoViewer + picsum.photos模拟数据 |
+| `safari` | `Safari/SafariApp` | 浏览器，底部URL栏 + iframe WebView + 标签页网格 + 起始页收藏夹 + DuckDuckGo搜索 |
+| `snapchat` | `Snapchat/SnapchatApp` | Snapchat，5 Tab(Map/Chat/Camera/Community/Spotlight) + Friends聊天列表 + 聊天详情 + 全屏SnapViewer + localStorage持久化 |
+| `xingyu` | `XingYu/XingYuApp` | 星语，原创可爱虚拟偶像聊天App，4 Tab(消息/通讯录/动态/我的) + 粉彩渐变主题 + bouncy动画 + 偶像卡片 + 朋友圈 + localStorage持久化 |

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -18,11 +18,11 @@ import { useMapsStore, type PlaceResult } from './mapsStore';
 
 const PIN_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="42" viewBox="0 0 30 42">
   <defs>
-    <filter id="ds" x="-20%" y="-10%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="rgba(0,0,0,0.25)"/>
+    <filter id="ds" x="-30%" y="-20%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="rgba(0,0,0,0.3)"/>
     </filter>
   </defs>
-  <path d="M15 0C6.716 0 0 6.716 0 15c0 10.5 15 27 15 27s15-16.5 15-27C30 6.716 23.284 0 15 0z" fill="#007AFF" filter="url(#ds)"/>
+  <path d="M15 0C6.716 0 0 6.716 0 15c0 10.5 15 27 15 27s15-16.5 15-27C30 6.716 23.284 0 15 0z" fill="#FF3B30" filter="url(#ds)"/>
   <circle cx="15" cy="14" r="6" fill="white"/>
 </svg>`;
 
@@ -35,16 +35,22 @@ const markerIcon = L.divIcon({
 });
 
 // Blue dot for current location
-const LOCATION_DOT_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">
-  <circle cx="11" cy="11" r="11" fill="rgba(0,122,255,0.15)"/>
-  <circle cx="11" cy="11" r="6" fill="#007AFF" stroke="white" stroke-width="2.5"/>
+const LOCATION_DOT_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 60 60" style="overflow: visible;">
+  <style>
+    @keyframes pulse-ring {
+      0% { transform: scale(0.3); opacity: 0.8; }
+      80%, 100% { transform: scale(2); opacity: 0; }
+    }
+  </style>
+  <circle cx="30" cy="30" r="16" fill="#007AFF" opacity="0.4" style="transform-origin: 30px 30px; animation: pulse-ring 2.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;"/>
+  <circle cx="30" cy="30" r="9" fill="#007AFF" stroke="white" stroke-width="3.5" filter="drop-shadow(0 2px 4px rgba(0,0,0,0.2))" />
 </svg>`;
 
 const locationIcon = L.divIcon({
   html: LOCATION_DOT_SVG,
   className: '',
-  iconSize: [22, 22],
-  iconAnchor: [11, 11],
+  iconSize: [60, 60],
+  iconAnchor: [30, 30],
 });
 
 // ---------------------------------------------------------------------------
@@ -66,19 +72,103 @@ function MapEventHandler() {
 }
 
 // ---------------------------------------------------------------------------
-// FlyTo — animated view transition
+// TileLoadingBar — thin iOS-style progress bar while tiles load
 // ---------------------------------------------------------------------------
 
-function FlyTo({ center, zoom }: { center: [number, number]; zoom: number }) {
+function TileLoadingBar() {
   const map = useMap();
-  const prevCenter = useRef(center);
+  const [loading, setLoading] = useState(true);
+  const pendingRef = useRef(0);
 
   useEffect(() => {
-    if (prevCenter.current[0] !== center[0] || prevCenter.current[1] !== center[1]) {
+    const onLoading = () => {
+      pendingRef.current += 1;
+      setLoading(true);
+    };
+    const onLoad = () => {
+      pendingRef.current = Math.max(0, pendingRef.current - 1);
+      if (pendingRef.current === 0) setLoading(false);
+    };
+    const onTileLoadStart = () => {
+      pendingRef.current += 1;
+      setLoading(true);
+    };
+    const onTileLoad = () => {
+      pendingRef.current = Math.max(0, pendingRef.current - 1);
+      if (pendingRef.current === 0) setLoading(false);
+    };
+
+    map.on('loading', onLoading);
+    map.on('load', onLoad);
+    map.on('tileloadstart', onTileLoadStart);
+    map.on('tileload', onTileLoad);
+    map.on('tileerror', onTileLoad);
+
+    // Clear initial loading after short delay if no tile events
+    const initTimer = setTimeout(() => {
+      if (pendingRef.current === 0) setLoading(false);
+    }, 2000);
+
+    return () => {
+      clearTimeout(initTimer);
+      map.off('loading', onLoading);
+      map.off('load', onLoad);
+      map.off('tileloadstart', onTileLoadStart);
+      map.off('tileload', onTileLoad);
+      map.off('tileerror', onTileLoad);
+    };
+  }, [map]);
+
+  if (!loading) return null;
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: 3,
+        zIndex: 1000,
+        overflow: 'hidden',
+        pointerEvents: 'none',
+      }}
+    >
+      <div
+        style={{
+          width: '40%',
+          height: '100%',
+          backgroundColor: '#007AFF',
+          borderRadius: 2,
+          animation: 'maps-tile-load 1.2s ease-in-out infinite',
+        }}
+      />
+      <style>{`
+        @keyframes maps-tile-load {
+          0% { transform: translateX(-100%); }
+          50% { transform: translateX(150%); }
+          100% { transform: translateX(350%); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// FlyTo — animated view transition. Uses `key` to handle re-selection
+// of the same location (same coordinates but new key = new fly).
+// ---------------------------------------------------------------------------
+
+function FlyTo({ center, zoom, triggerKey }: { center: [number, number]; zoom: number; triggerKey: number }) {
+  const map = useMap();
+  const prevKey = useRef(-1);
+
+  useEffect(() => {
+    if (prevKey.current !== triggerKey) {
       map.flyTo(center, zoom, { duration: 1.2 });
-      prevCenter.current = center;
+      prevKey.current = triggerKey;
     }
-  }, [center, zoom, map]);
+  }, [center, zoom, triggerKey, map]);
 
   return null;
 }
@@ -91,7 +181,7 @@ interface MapViewProps {
   selectedPlace: PlaceResult | null;
   searchResults: PlaceResult[];
   userLocation: [number, number] | null;
-  flyTarget: { center: [number, number]; zoom: number } | null;
+  flyTarget: { center: [number, number]; zoom: number; key: number } | null;
 }
 
 export function MapView({ selectedPlace, searchResults, userLocation, flyTarget }: MapViewProps) {
@@ -114,8 +204,9 @@ export function MapView({ selectedPlace, searchResults, userLocation, flyTarget 
     >
       <TileLayer url={TILE_URL} attribution={TILE_ATTRIBUTION} />
       <MapEventHandler />
+      <TileLoadingBar />
 
-      {flyTarget && <FlyTo center={flyTarget.center} zoom={flyTarget.zoom} />}
+      {flyTarget && <FlyTo center={flyTarget.center} zoom={flyTarget.zoom} triggerKey={flyTarget.key} />}
 
       {/* User location blue dot */}
       {userLocation && (

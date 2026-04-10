@@ -1,23 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { motion, useMotionValue, useTransform, animate, type PanInfo } from 'motion/react';
+import { motion, useMotionValue, animate, useDragControls, type PanInfo } from 'motion/react';
 import { AppScreen, Material } from '@/system';
+import { spring } from '@/platform/design-tokens/motion';
 import { wasAppKilled, clearAppKilled } from '@/platform/stores/appRuntimeStore';
 import { useMapsStore } from './mapsStore';
 import { MapView } from './MapView';
 import { MapControls } from './MapControls';
 import { SearchBar } from './SearchBar';
-import { ExploreCategories, FavoritesList } from './ExploreCategories';
+import { ExploreCategories } from './ExploreCategories';
 import { SearchResults } from './SearchResults';
 import { PlaceDetail } from './PlaceDetail';
 import { searchPlaces } from './searchService';
+import { SHEET_PEEK, SHEET_EXPANDED, SHEET_MINI } from './mapConfig';
 import type { ExploreCategory } from './mapConfig';
-
-// ---------------------------------------------------------------------------
-// Sheet snap heights (px from bottom of the screen).
-// We compute real px values in the component based on container height.
-// ---------------------------------------------------------------------------
-
-const SHEET_HANDLE_HEIGHT = 20;
 
 export function MapsApp() {
   const reset = useMapsStore((s) => s.reset);
@@ -43,8 +38,9 @@ export function MapsApp() {
 function MapsContent() {
   const containerRef = useRef<HTMLDivElement>(null);
   const sheetContentRef = useRef<HTMLDivElement>(null);
+  const dragControls = useDragControls();
 
-  // Store state
+  // Store state (Zustand setters are stable across renders)
   const query = useMapsStore((s) => s.query);
   const setQuery = useMapsStore((s) => s.setQuery);
   const results = useMapsStore((s) => s.results);
@@ -60,17 +56,24 @@ function MapsContent() {
   const [searchFocused, setSearchFocused] = useState(false);
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [isLocating, setIsLocating] = useState(false);
-  const [flyTarget, setFlyTarget] = useState<{ center: [number, number]; zoom: number } | null>(null);
+  const [flyTarget, setFlyTarget] = useState<{ center: [number, number]; zoom: number; key: number } | null>(null);
+  const flyKeyRef = useRef(0);
+
+  // Ref to skip search effect when category search is in progress
+  const skipSearchEffectRef = useRef(false);
 
   // Sheet snap points (px from top of container)
   const [containerHeight, setContainerHeight] = useState(700);
-  const snapPeek = containerHeight * 0.62; // collapsed — bottom 38%
-  const snapExpanded = containerHeight * 0.12; // expanded — near top
-  const snapMini = containerHeight * 0.88; // mini — just handle
+  const snapPeek = containerHeight * (1 - SHEET_PEEK);
+  const snapExpanded = containerHeight * (1 - SHEET_EXPANDED);
+  const snapMini = containerHeight * (1 - SHEET_MINI);
+
+  // Keep snap values in ref for use in callbacks without stale closures
+  const snapsRef = useRef({ snapPeek, snapExpanded, snapMini });
+  snapsRef.current = { snapPeek, snapExpanded, snapMini };
 
   // Motion value for sheet Y (from top)
   const sheetY = useMotionValue(snapPeek);
-  const sheetRadius = useTransform(sheetY, [snapExpanded, snapPeek], [16, 16]);
 
   // Measure container
   useEffect(() => {
@@ -94,59 +97,90 @@ function MapsContent() {
     (target: number) => {
       animate(sheetY, target, {
         type: 'spring',
-        stiffness: 400,
-        damping: 40,
-        mass: 0.8,
+        ...spring.interactive,
       });
     },
     [sheetY],
   );
 
-  // Search
+  // -----------------------------------------------------------------------
+  // Search effect — debounce managed here via setTimeout + cleanup.
+  // Only depends on `query`. sheetMode is NOT a dependency to avoid
+  // re-triggering searches when mode changes.
+  // -----------------------------------------------------------------------
   useEffect(() => {
-    if (!query.trim()) {
-      if (sheetMode === 'search') {
-        setResults([]);
-      }
+    // Category search sets this flag — skip the effect so it doesn't
+    // override the category's direct API call with the display label.
+    if (skipSearchEffectRef.current) {
+      skipSearchEffectRef.current = false;
       return;
     }
+
+    const trimmed = query.trim();
+    if (!trimmed) {
+      // Always reset searching when query is empty
+      setSearching(false);
+      return;
+    }
+
     setSearching(true);
-    searchPlaces(query)
-      .then((r) => {
-        setResults(r);
-        setSheetMode('search');
-        snapTo(snapExpanded);
-      })
-      .catch(() => setResults([]));
-  }, [query, setResults, setSearching, setSheetMode, snapTo, snapExpanded, sheetMode]);
+    setSheetMode('search');
+    snapTo(snapsRef.current.snapExpanded);
+
+    // Debounce: wait 350ms after last keystroke before hitting API
+    const timer = setTimeout(() => {
+      const center = useMapsStore.getState().mapCenter;
+      searchPlaces(trimmed, center)
+        .then((r) => {
+          setResults(r);
+        })
+        .catch(() => {
+          setResults([]);
+          setSearching(false);
+        });
+    }, 350);
+
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
 
   // Handle search focus
   const handleSearchFocus = () => {
     setSearchFocused(true);
-    setSheetMode('search');
-    snapTo(snapExpanded);
+    // If there are existing results, show them again
+    if (results.length > 0 && query.trim()) {
+      setSheetMode('search');
+      snapTo(snapExpanded);
+    }
   };
 
   const handleSearchCancel = () => {
     setSearchFocused(false);
     setQuery('');
     setResults([]);
+    setSearching(false);
     setSheetMode('explore');
     snapTo(snapPeek);
   };
 
-  // Category tap
+  // Category tap — uses direct API call, skips the search effect.
+  // Immediately switch to search mode so the loading spinner is visible.
   const handleCategorySelect = (cat: ExploreCategory) => {
-    setQuery(cat.label);
+    skipSearchEffectRef.current = true;
+    setQuery(cat.label); // display only
     setSearchFocused(true);
     setSearching(true);
-    searchPlaces(cat.query)
+    setSheetMode('search');
+    snapTo(snapExpanded);
+    const center = useMapsStore.getState().mapCenter;
+    searchPlaces(cat.query, center)
       .then((r) => {
         setResults(r);
-        setSheetMode('search');
-        snapTo(snapExpanded);
       })
-      .catch(() => setResults([]));
+      .catch(() => {
+        setResults([]);
+        setSearching(false);
+      });
   };
 
   // Select a place from search results
@@ -154,7 +188,8 @@ function MapsContent() {
     selectPlace(place);
     setSearchFocused(false);
     if (place) {
-      setFlyTarget({ center: [place.lat, place.lon], zoom: 16 });
+      flyKeyRef.current += 1;
+      setFlyTarget({ center: [place.lat, place.lon], zoom: 16, key: flyKeyRef.current });
       snapTo(snapPeek);
     }
   };
@@ -162,42 +197,49 @@ function MapsContent() {
   const handleCloseDetail = () => {
     selectPlace(null);
     setSheetMode('explore');
+    setQuery('');
+    setResults([]);
     snapTo(snapPeek);
   };
 
-  // Locate user
-  const handleLocate = () => {
+  // Locate user (shared logic)
+  const locateUser = useCallback(() => {
     if (!navigator.geolocation) return;
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const loc: [number, number] = [pos.coords.latitude, pos.coords.longitude];
         setUserLocation(loc);
-        setFlyTarget({ center: loc, zoom: 15 });
+        flyKeyRef.current += 1;
+        setFlyTarget({ center: loc, zoom: 15, key: flyKeyRef.current });
         setIsLocating(false);
       },
       () => setIsLocating(false),
       { enableHighAccuracy: true, timeout: 8000 },
     );
-  };
+  }, []);
 
-  // Sheet drag
+  // Auto-locate on mount
+  useEffect(() => {
+    locateUser();
+  }, [locateUser]);
+
+  const handleLocate = locateUser;
+
+  // Sheet drag — velocity-biased snap to nearest point
   const handleDragEnd = (_: unknown, info: PanInfo) => {
     const currentY = sheetY.get();
     const velocity = info.velocity.y;
+    const { snapExpanded: exp, snapPeek: peek, snapMini: mini } = snapsRef.current;
 
-    // Determine nearest snap point, biased by velocity
-    const snaps = [snapExpanded, snapPeek, snapMini];
-    let target = snapPeek;
+    const snaps = [exp, peek, mini];
+    let target = peek;
 
     if (velocity < -400) {
-      // Fast upward fling → expand
-      target = snapExpanded;
+      target = exp;
     } else if (velocity > 400) {
-      // Fast downward fling → mini
-      target = snapMini;
+      target = mini;
     } else {
-      // Snap to closest
       target = snaps.reduce((prev, snap) =>
         Math.abs(snap - currentY) < Math.abs(prev - currentY) ? snap : prev,
       );
@@ -227,20 +269,23 @@ function MapsContent() {
       <motion.div
         style={{
           y: sheetY,
-          borderTopLeftRadius: sheetRadius,
-          borderTopRightRadius: sheetRadius,
           position: 'absolute',
           left: 0,
           right: 0,
           bottom: 0,
           top: 0,
           zIndex: 30,
-          pointerEvents: 'auto',
+          pointerEvents: 'none',
           willChange: 'transform',
           overflow: 'hidden',
-          boxShadow: '0 -2px 20px rgba(0,0,0,0.08)',
+          borderTopLeftRadius: 24,
+          borderTopRightRadius: 24,
+          boxShadow: '0 -4px 24px rgba(0,0,0,0.12)',
+          borderTop: '0.5px solid rgba(255,255,255,0.3)',
         }}
         drag="y"
+        dragControls={dragControls}
+        dragListener={false}
         dragConstraints={{ top: snapExpanded, bottom: snapMini }}
         dragElastic={0.1}
         dragMomentum={false}
@@ -253,24 +298,27 @@ function MapsContent() {
             borderTopLeftRadius: 'inherit',
             borderTopRightRadius: 'inherit',
             backgroundColor: 'var(--color-systemBackground)',
+            pointerEvents: 'auto',
           }}
         >
-          {/* Drag handle */}
+          {/* Drag handle — ONLY this area initiates sheet drag */}
           <div
             className="flex items-center justify-center"
             style={{
-              height: SHEET_HANDLE_HEIGHT,
+              height: 28,
               paddingTop: 8,
               cursor: 'grab',
               flexShrink: 0,
+              touchAction: 'none',
             }}
+            onPointerDown={(e) => dragControls.start(e)}
           >
             <div
               style={{
                 width: 36,
                 height: 5,
                 borderRadius: 3,
-                backgroundColor: 'var(--color-separator)',
+                backgroundColor: 'var(--color-tertiaryLabel)',
               }}
             />
           </div>
@@ -296,12 +344,6 @@ function MapsContent() {
               overscrollBehavior: 'contain',
               paddingBottom: 'var(--app-safe-bottom, 20px)',
             }}
-            onPointerDownCapture={(e) => {
-              // Prevent sheet drag when scrolling content
-              if (sheetContentRef.current && sheetContentRef.current.scrollTop > 0) {
-                e.stopPropagation();
-              }
-            }}
           >
             {sheetMode === 'detail' && selectedPlace ? (
               <PlaceDetail place={selectedPlace} onClose={handleCloseDetail} />
@@ -313,10 +355,7 @@ function MapsContent() {
                 onSelect={handleSelectPlace}
               />
             ) : (
-              <>
-                <ExploreCategories onSelect={handleCategorySelect} />
-                <FavoritesList />
-              </>
+              <ExploreCategories onSelect={handleCategorySelect} />
             )}
           </div>
         </Material>

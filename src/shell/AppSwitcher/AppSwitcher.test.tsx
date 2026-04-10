@@ -34,7 +34,7 @@ describe('AppSwitcher', () => {
       switcherCardViewport: null,
       recentApps: [
         { id: 'settings', origin: { x: 10, y: 20, width: 60, height: 60 } },
-        { id: 'wechat', origin: { x: 80, y: 20, width: 60, height: 60 } },
+        { id: 'alipay', origin: { x: 80, y: 20, width: 60, height: 60 } },
       ],
       switcherAppId: 'settings',
       transitionSource: 'icon',
@@ -55,7 +55,7 @@ describe('AppSwitcher', () => {
   it('renders recent app cards', () => {
     render(<AppSwitcher />);
     expect(screen.getByTestId('switcher-card-settings')).toBeInTheDocument();
-    expect(screen.getByTestId('switcher-card-wechat')).toBeInTheDocument();
+    expect(screen.getByTestId('switcher-card-alipay')).toBeInTheDocument();
   });
 
   it('activates an app when its card is clicked', () => {
@@ -64,9 +64,9 @@ describe('AppSwitcher', () => {
         <AppSwitcher />
       </div>,
     );
-    fireEvent.click(screen.getByTestId('switcher-card-wechat'));
+    fireEvent.click(screen.getByTestId('switcher-card-alipay'));
 
-    expect(useAppRuntimeStore.getState().activeAppId).toBe('wechat');
+    expect(useAppRuntimeStore.getState().activeAppId).toBe('alipay');
     expect(useAppRuntimeStore.getState().presentationMode).toBe('foreground');
   });
 
@@ -76,7 +76,7 @@ describe('AppSwitcher', () => {
         <AppSwitcher />
       </div>,
     );
-    fireEvent.click(screen.getByTestId('switcher-card-wechat'));
+    fireEvent.click(screen.getByTestId('switcher-card-alipay'));
 
     const s = useAppRuntimeStore.getState();
     expect(s.switcherCardOrigin).not.toBeNull();
@@ -87,9 +87,9 @@ describe('AppSwitcher', () => {
   it('commits a card dismiss via store (touch gesture tested manually)', () => {
     // The actual dismiss gesture uses native touch events which jsdom
     // cannot simulate realistically. We test the store path directly.
-    useAppRuntimeStore.getState().openApp('wechat', { x: 0, y: 0, width: 60, height: 60 });
-    useAppRuntimeStore.setState({ presentationMode: 'switcher', switcherAppId: 'wechat' });
-    useAppRuntimeStore.getState().startCardDismiss('wechat', 400, 600);
+    useAppRuntimeStore.getState().openApp('alipay', { x: 0, y: 0, width: 60, height: 60 });
+    useAppRuntimeStore.setState({ presentationMode: 'switcher', switcherAppId: 'alipay' });
+    useAppRuntimeStore.getState().startCardDismiss('alipay', 400, 600);
     useAppRuntimeStore.getState().updateCardDismiss(200, -1.0);
     const result = useAppRuntimeStore.getState().finishCardDismiss();
 
@@ -109,7 +109,7 @@ describe('AppSwitcher', () => {
 
     expect(useAppRuntimeStore.getState().recentApps.map((task) => task.id)).toEqual([
       'settings',
-      'wechat',
+      'alipay',
     ]);
   });
 

@@ -12,6 +12,7 @@ import { RadioTab } from './tabs/RadioTab';
 import { LibraryTab } from './tabs/LibraryTab';
 import { AlbumDetail } from './pages/AlbumDetail';
 import { useMusicDataStore } from './musicDataStore';
+import { usePlaybackEngine } from './usePlaybackEngine';
 
 const SLIDE_MS = 350;
 const SLIDE_EASE = [0.32, 0.72, 0, 1] as const;
@@ -23,6 +24,8 @@ export function MusicApp() {
   const setTab = useMusicNavStore((s) => s.setTab);
   const reset = useMusicNavStore((s) => s.reset);
   const currentSongId = useMusicDataStore((s) => s.currentSongId);
+
+  usePlaybackEngine();
 
   const prevPageRef = useRef(page);
 

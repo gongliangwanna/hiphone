@@ -12,9 +12,9 @@ const settingsApp: AppInfo = {
 };
 
 const otherApp: AppInfo = {
-  id: 'wechat',
-  name: '微信',
-  icon: '/resource/icons/popular-cn/wechat.jpg',
+  id: 'alipay',
+  name: '支付宝',
+  icon: '/resource/icons/popular-cn/alipay.jpg',
   page: 1,
 };
 
@@ -62,8 +62,8 @@ describe('AppIcon', () => {
         <AppIcon app={otherApp} onOpen={onOpen} />
       </div>,
     );
-    await userEvent.click(screen.getByTestId('app-icon-wechat'));
+    await userEvent.click(screen.getByTestId('app-icon-alipay'));
 
-    expect(onOpen).toHaveBeenCalledWith('wechat', expect.any(Object));
+    expect(onOpen).toHaveBeenCalledWith('alipay', expect.any(Object));
   });
 });

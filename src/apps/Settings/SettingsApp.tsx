@@ -5,18 +5,43 @@ import { useAppRuntimeStore, wasAppKilled, clearAppKilled } from '@/platform/sto
 import { SettingsHome } from './SettingsHome';
 import { AboutPage } from './AboutPage';
 import { WallpaperPage } from './WallpaperPage';
+import { AIServicePage } from './pages/AIServicePage';
+import { PersonaPage } from './pages/PersonaPage';
+import { ChatSettingsPage } from './pages/ChatSettingsPage';
+import { SystemPromptEditPage, PostHistoryEditPage } from './pages/PromptEditPage';
+import { DisplayPage } from './pages/DisplayPage';
+import { CharactersPage } from './pages/CharactersPage';
+import { CharacterEditPage } from './pages/CharacterEditPage';
 import { AppScreen, NavBar } from '@/system';
 
 const PAGE_TITLES: Record<string, string> = {
   home: '设置',
+  // Device
   about: '关于本机',
   wallpaper: '壁纸',
+  display: '显示与亮度',
+  // AI
+  persona: '我的身份',
+  aiService: 'AI 服务',
+  characters: '角色管理',
+  characterEdit: '编辑角色',
+  chatSettings: '对话设置',
+  systemPromptEdit: '系统提示词',
+  postHistoryEdit: '历史后置指令',
 };
 
 const PAGE_COMPONENTS: Record<string, React.ComponentType> = {
   home: SettingsHome,
   about: AboutPage,
   wallpaper: WallpaperPage,
+  display: DisplayPage,
+  persona: PersonaPage,
+  aiService: AIServicePage,
+  characters: CharactersPage,
+  characterEdit: CharacterEditPage,
+  chatSettings: ChatSettingsPage,
+  systemPromptEdit: SystemPromptEditPage,
+  postHistoryEdit: PostHistoryEditPage,
 };
 
 /** iOS push/pop slide — 350ms, ease-out */

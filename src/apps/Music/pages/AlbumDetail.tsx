@@ -1,7 +1,10 @@
-import { getAlbumById, getAlbumSongs, formatDuration } from '../data';
+import { useEffect, useMemo } from 'react';
+import type { Song } from '../data';
 import { useMusicNavStore } from '../musicStore';
 import { useMusicDataStore } from '../musicDataStore';
+import { formatDuration } from '../data';
 import { NavBar } from '@/system';
+import { Play, Shuffle, Loader2 } from 'lucide-react';
 
 const MUSIC_RED = '#FC3C44';
 
@@ -9,13 +12,36 @@ export function AlbumDetail() {
   const albumId = useMusicNavStore((s) => s.activeAlbumId);
   const popPage = useMusicNavStore((s) => s.popPage);
   const playSong = useMusicDataStore((s) => s.playSong);
+  const fetchAlbum = useMusicDataStore((s) => s.fetchAlbum);
+  const albumMap = useMusicDataStore((s) => s.albumMap);
+  const albumSongIds = useMusicDataStore((s) => s.albumSongIds);
+  const songMap = useMusicDataStore((s) => s.songMap);
 
-  const album = albumId ? getAlbumById(albumId) : undefined;
-  const albumSongs = albumId ? getAlbumSongs(albumId) : [];
+  useEffect(() => {
+    if (albumId) fetchAlbum(albumId);
+  }, [albumId, fetchAlbum]);
 
-  if (!album) return null;
+  const album = albumId ? albumMap[albumId] : undefined;
+  const songIds = albumId ? albumSongIds[albumId] : undefined;
 
-  const songIds = albumSongs.map((s) => s.id);
+  const albumSongs = useMemo(
+    () => (songIds ?? []).map((id) => songMap[id]).filter((s): s is Song => !!s),
+    [songIds, songMap],
+  );
+
+  // If album isn't fetched yet, try to get info from the first song that matches
+  const fallbackSong = useMemo(() => {
+    if (album || !albumId) return null;
+    return Object.values(songMap).find((s) => s.albumId === albumId) ?? null;
+  }, [album, albumId, songMap]);
+
+  const displayTitle = album?.title ?? fallbackSong?.album ?? '';
+  const displayArtist = album?.artist ?? fallbackSong?.artist ?? '';
+  const displayArtwork = album?.artworkUrl ?? fallbackSong?.artworkUrl ?? '';
+  const displayYear = album?.year;
+  const displaySongIds = songIds ?? [];
+
+  const isLoading = albumId != null && !songIds;
 
   return (
     <div className="flex h-full flex-col" style={{ backgroundColor: '#000' }}>
@@ -24,16 +50,31 @@ export function AlbumDetail() {
       <div className="min-h-0 flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
         {/* Album header */}
         <div className="flex flex-col items-center" style={{ padding: '12px 24px 20px' }}>
-          <div
-            style={{
-              width: 200,
-              height: 200,
-              borderRadius: 8,
-              background: album.cover,
-              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
-              marginBottom: 16,
-            }}
-          />
+          {displayArtwork ? (
+            <img
+              src={displayArtwork}
+              alt={displayTitle}
+              style={{
+                width: 200,
+                height: 200,
+                borderRadius: 8,
+                objectFit: 'cover',
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
+                marginBottom: 16,
+                backgroundColor: '#1c1c1e',
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                width: 200,
+                height: 200,
+                borderRadius: 8,
+                backgroundColor: '#1c1c1e',
+                marginBottom: 16,
+              }}
+            />
+          )}
           <div
             style={{
               fontSize: 22,
@@ -42,7 +83,7 @@ export function AlbumDetail() {
               textAlign: 'center',
             }}
           >
-            {album.title}
+            {displayTitle}
           </div>
           <div
             style={{
@@ -52,17 +93,19 @@ export function AlbumDetail() {
               marginTop: 2,
             }}
           >
-            {album.artist}
+            {displayArtist}
           </div>
-          <div
-            style={{
-              fontSize: 13,
-              color: 'rgba(235, 235, 245, 0.3)',
-              marginTop: 4,
-            }}
-          >
-            专辑 · {album.year}
-          </div>
+          {displayYear && (
+            <div
+              style={{
+                fontSize: 13,
+                color: 'rgba(235, 235, 245, 0.3)',
+                marginTop: 4,
+              }}
+            >
+              专辑 · {displayYear}
+            </div>
+          )}
         </div>
 
         {/* Play / Shuffle buttons */}
@@ -78,10 +121,10 @@ export function AlbumDetail() {
               fontSize: 16,
             }}
             onClick={() => {
-              if (songIds[0]) playSong(songIds[0], songIds);
+              if (displaySongIds[0]) playSong(displaySongIds[0], displaySongIds);
             }}
           >
-            <PlaySmallIcon />
+            <Play size={16} fill="currentColor" />
             播放
           </button>
           <button
@@ -95,85 +138,75 @@ export function AlbumDetail() {
               fontSize: 16,
             }}
             onClick={() => {
-              const shuffled = [...songIds].sort(() => Math.random() - 0.5);
+              const shuffled = [...displaySongIds].sort(() => Math.random() - 0.5);
               if (shuffled[0]) playSong(shuffled[0], shuffled);
             }}
           >
-            <ShuffleSmallIcon />
+            <Shuffle size={16} />
             随机播放
           </button>
         </div>
 
         {/* Song list */}
         <div style={{ paddingInline: 20, paddingBottom: 120 }}>
-          {albumSongs.map((song, i) => (
-            <button
-              key={song.id}
-              className="flex w-full items-center"
-              style={{
-                height: 52,
-                borderBottom:
-                  i < albumSongs.length - 1
-                    ? '0.5px solid rgba(84, 84, 88, 0.65)'
-                    : 'none',
-              }}
-              onClick={() => playSong(song.id, songIds)}
-            >
-              <span
+          {isLoading ? (
+            <div className="flex items-center justify-center" style={{ paddingTop: 30 }}>
+              <Loader2 size={24} className="animate-spin" color="rgba(235,235,245,0.6)" />
+            </div>
+          ) : (
+            albumSongs.map((song, i) => (
+              <button
+                key={song.id}
+                className="flex w-full items-center"
                 style={{
-                  width: 24,
-                  fontSize: 15,
-                  color: 'rgba(235, 235, 245, 0.4)',
-                  textAlign: 'right',
-                  flexShrink: 0,
-                  marginRight: 12,
+                  height: 52,
+                  borderBottom:
+                    i < albumSongs.length - 1
+                      ? '0.5px solid rgba(84, 84, 88, 0.65)'
+                      : 'none',
                 }}
+                onClick={() => playSong(song.id, displaySongIds)}
               >
-                {i + 1}
-              </span>
-              <div className="flex-1 text-left" style={{ minWidth: 0 }}>
-                <div
+                <span
                   style={{
-                    fontSize: 16,
-                    color: '#fff',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
+                    width: 24,
+                    fontSize: 15,
+                    color: 'rgba(235, 235, 245, 0.4)',
+                    textAlign: 'right',
+                    flexShrink: 0,
+                    marginRight: 12,
                   }}
                 >
-                  {song.title}
+                  {i + 1}
+                </span>
+                <div className="flex-1 text-left" style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: 16,
+                      color: '#fff',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {song.title}
+                  </div>
                 </div>
-              </div>
-              <span
-                style={{
-                  fontSize: 13,
-                  color: 'rgba(235, 235, 245, 0.4)',
-                  marginLeft: 8,
-                  flexShrink: 0,
-                }}
-              >
-                {formatDuration(song.duration)}
-              </span>
-            </button>
-          ))}
+                <span
+                  style={{
+                    fontSize: 13,
+                    color: 'rgba(235, 235, 245, 0.4)',
+                    marginLeft: 8,
+                    flexShrink: 0,
+                  }}
+                >
+                  {formatDuration(song.duration)}
+                </span>
+              </button>
+            ))
+          )}
         </div>
       </div>
     </div>
-  );
-}
-
-function PlaySmallIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-      <path d="M6 4l14 8-14 8V4z" fill="currentColor" />
-    </svg>
-  );
-}
-
-function ShuffleSmallIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-      <path d="M16 3h5v5M4 20l17-17M21 16v5h-5M15 15l6 6M4 4l5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
   );
 }

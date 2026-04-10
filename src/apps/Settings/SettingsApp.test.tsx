@@ -21,16 +21,12 @@ describe('SettingsApp', () => {
     );
   });
 
-  it('renders search bar', () => {
+  it('renders persona card and main groups', () => {
     render(<SettingsApp />);
-    expect(screen.getByTestId('settings-search')).toBeTruthy();
-  });
-
-  it('renders connectivity and general groups', () => {
-    render(<SettingsApp />);
-    expect(screen.getByTestId('settings-row-无线局域网')).toBeTruthy();
-    expect(screen.getByTestId('settings-row-蓝牙')).toBeTruthy();
-    expect(screen.getByTestId('settings-row-通用')).toBeTruthy();
+    expect(screen.getByTestId('settings-persona-card')).toBeTruthy();
+    expect(screen.getByTestId('settings-row-虚拟恋人')).toBeTruthy();
+    expect(screen.getByTestId('settings-row-聊天偏好')).toBeTruthy();
+    expect(screen.getByTestId('settings-row-连接设置')).toBeTruthy();
     expect(screen.getByTestId('settings-row-壁纸')).toBeTruthy();
     expect(screen.getByTestId('settings-row-关于本机')).toBeTruthy();
   });

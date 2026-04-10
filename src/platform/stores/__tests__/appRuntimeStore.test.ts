@@ -113,37 +113,37 @@ describe('appRuntimeStore', () => {
     const origin1 = { x: 10, y: 20, width: 60, height: 60 };
     const origin2 = { x: 100, y: 200, width: 60, height: 60 };
     useAppRuntimeStore.getState().openApp('settings', origin1);
-    useAppRuntimeStore.getState().openApp('wechat', origin2);
+    useAppRuntimeStore.getState().openApp('alipay', origin2);
     useAppRuntimeStore.setState({
       presentationMode: 'switcher',
-      switcherAppId: 'wechat',
+      switcherAppId: 'alipay',
     });
 
-    useAppRuntimeStore.getState().startCardDismiss('wechat', 400, 600);
+    useAppRuntimeStore.getState().startCardDismiss('alipay', 400, 600);
     useAppRuntimeStore.getState().updateCardDismiss(240, -1.2);
     const result = useAppRuntimeStore.getState().finishCardDismiss();
 
     expect(result.committed).toBe(true);
     // App is NOT yet removed — UI will call removeApp after fly-away animation
-    expect(useAppRuntimeStore.getState().recentApps.map((task) => task.id)).toEqual(['wechat', 'settings']);
+    expect(useAppRuntimeStore.getState().recentApps.map((task) => task.id)).toEqual(['alipay', 'settings']);
     expect(useAppRuntimeStore.getState().dismissReason).toBe('card');
 
     // Simulate UI calling removeApp after animation completes
-    useAppRuntimeStore.getState().removeApp('wechat');
+    useAppRuntimeStore.getState().removeApp('alipay');
     expect(useAppRuntimeStore.getState().recentApps.map((task) => task.id)).toEqual(['settings']);
     expect(useAppRuntimeStore.getState().switcherAppId).toBe('settings');
   });
 
   it('finishCardDismiss returns committed, velocity, appId and sets dismissReason="card"', () => {
     useAppRuntimeStore.getState().openApp('settings', { x: 0, y: 0, width: 60, height: 60 });
-    useAppRuntimeStore.getState().openApp('wechat', { x: 60, y: 0, width: 60, height: 60 });
-    useAppRuntimeStore.setState({ presentationMode: 'switcher', switcherAppId: 'wechat' });
-    useAppRuntimeStore.getState().startCardDismiss('wechat', 400, 600);
+    useAppRuntimeStore.getState().openApp('alipay', { x: 60, y: 0, width: 60, height: 60 });
+    useAppRuntimeStore.setState({ presentationMode: 'switcher', switcherAppId: 'alipay' });
+    useAppRuntimeStore.getState().startCardDismiss('alipay', 400, 600);
     useAppRuntimeStore.getState().updateCardDismiss(240, -1.2);
 
     const result = useAppRuntimeStore.getState().finishCardDismiss();
 
-    expect(result).toEqual({ committed: true, velocity: -1.2, appId: 'wechat' });
+    expect(result).toEqual({ committed: true, velocity: -1.2, appId: 'alipay' });
     expect(useAppRuntimeStore.getState().dismissReason).toBe('card');
   });
 
@@ -165,15 +165,15 @@ describe('appRuntimeStore', () => {
 
   it('activateAppFromCard stores card rect + viewport and activates the app', () => {
     useAppRuntimeStore.getState().openApp('settings', { x: 0, y: 0, width: 60, height: 60 });
-    useAppRuntimeStore.getState().openApp('wechat', { x: 60, y: 0, width: 60, height: 60 });
-    useAppRuntimeStore.setState({ presentationMode: 'switcher', switcherAppId: 'wechat' });
+    useAppRuntimeStore.getState().openApp('alipay', { x: 60, y: 0, width: 60, height: 60 });
+    useAppRuntimeStore.setState({ presentationMode: 'switcher', switcherAppId: 'alipay' });
 
     const cardRect = { x: 40, y: 120, width: 300, height: 640 };
     const viewport = { width: 390, height: 844 };
-    useAppRuntimeStore.getState().activateAppFromCard('wechat', cardRect, viewport);
+    useAppRuntimeStore.getState().activateAppFromCard('alipay', cardRect, viewport);
 
     const s = useAppRuntimeStore.getState();
-    expect(s.activeAppId).toBe('wechat');
+    expect(s.activeAppId).toBe('alipay');
     expect(s.switcherCardOrigin).toEqual(cardRect);
     expect(s.switcherCardViewport).toEqual(viewport);
     expect(s.transitionSource).toBe('switcher');

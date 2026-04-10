@@ -1,14 +1,50 @@
-import { albums, playlists, songs } from '../data';
+import { useEffect, useMemo } from 'react';
+import type { Song } from '../data';
 import { useMusicNavStore } from '../musicStore';
 import { useMusicDataStore } from '../musicDataStore';
+import { Loader2 } from 'lucide-react';
 
 const MUSIC_RED = '#FC3C44';
 
 export function HomeTab() {
   const pushPage = useMusicNavStore((s) => s.pushPage);
   const playSong = useMusicDataStore((s) => s.playSong);
+  const featuredIds = useMusicDataStore((s) => s.featuredIds);
+  const songMap = useMusicDataStore((s) => s.songMap);
+  const isLoading = useMusicDataStore((s) => s.isLoadingFeatured);
+  const fetchFeatured = useMusicDataStore((s) => s.fetchFeatured);
 
-  const heroAlbum = albums[0];
+  useEffect(() => {
+    fetchFeatured();
+  }, [fetchFeatured]);
+
+  const songs = useMemo(
+    () => featuredIds.map((id) => songMap[id]).filter((s): s is Song => !!s),
+    [featuredIds, songMap],
+  );
+
+  // Split songs into sections
+  const heroSong = songs[0];
+  const recentSongs = useMemo(() => songs.slice(0, 6), [songs]);
+  const forYouSongs = useMemo(() => songs.slice(6, 16), [songs]);
+  const newSongs = useMemo(() => songs.slice(16, 30), [songs]);
+
+  if (isLoading && songs.length === 0) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center" style={{ color: 'rgba(235,235,245,0.6)' }}>
+        <Loader2 size={32} className="animate-spin" style={{ marginBottom: 12 }} />
+        <span style={{ fontSize: 15 }}>正在加载音乐...</span>
+      </div>
+    );
+  }
+
+  if (!isLoading && songs.length === 0) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center" style={{ color: 'rgba(235,235,245,0.6)' }}>
+        <span style={{ fontSize: 15 }}>无法加载音乐，请稍后再试</span>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
@@ -20,19 +56,26 @@ export function HomeTab() {
       </div>
 
       {/* Hero Banner */}
-      {heroAlbum && (
+      {heroSong && (
         <div style={{ paddingInline: 20, marginBottom: 24 }}>
           <button
             className="w-full text-left"
-            onClick={() => pushPage('album-detail', { albumId: heroAlbum.id })}
+            onClick={() => {
+              if (heroSong.albumId) pushPage('album-detail', { albumId: heroSong.albumId });
+              else playSong(heroSong.id, featuredIds);
+            }}
             style={{
               borderRadius: 12,
               overflow: 'hidden',
-              background: heroAlbum.cover,
               aspectRatio: '16/9',
               position: 'relative',
             }}
           >
+            <img
+              src={heroSong.artworkUrl}
+              alt={heroSong.album}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
             <div
               style={{
                 position: 'absolute',
@@ -44,13 +87,13 @@ export function HomeTab() {
               }}
             >
               <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: 0.5 }}>
-                精选专辑
+                精选推荐
               </div>
               <div style={{ fontSize: 22, fontWeight: 700, color: '#fff' }}>
-                {heroAlbum.title}
+                {heroSong.title}
               </div>
               <div style={{ fontSize: 15, color: 'rgba(255,255,255,0.7)' }}>
-                {heroAlbum.artist}
+                {heroSong.artist}
               </div>
             </div>
           </button>
@@ -58,90 +101,96 @@ export function HomeTab() {
       )}
 
       {/* Recently Played */}
-      <Section title="最近播放">
-        <HorizontalScroll>
-          {albums.slice(0, 5).map((album) => (
-            <AlbumCard
-              key={album.id}
-              title={album.title}
-              subtitle={album.artist}
-              cover={album.cover}
-              onClick={() => pushPage('album-detail', { albumId: album.id })}
-            />
-          ))}
-        </HorizontalScroll>
-      </Section>
+      {recentSongs.length > 0 && (
+        <Section title="最近播放">
+          <HorizontalScroll>
+            {recentSongs.map((song) => (
+              <SongCard
+                key={song.id}
+                title={song.title}
+                subtitle={song.artist}
+                artworkUrl={song.artworkUrl}
+                onClick={() => playSong(song.id, featuredIds)}
+              />
+            ))}
+          </HorizontalScroll>
+        </Section>
+      )}
 
-      {/* For You Mixes */}
-      <Section title="专属推荐">
-        <HorizontalScroll>
-          {playlists.map((pl) => (
-            <AlbumCard
-              key={pl.id}
-              title={pl.title}
-              subtitle={pl.description}
-              cover={pl.cover}
-              onClick={() => {
-                if (pl.songs[0]) playSong(pl.songs[0], pl.songs);
-              }}
-            />
-          ))}
-        </HorizontalScroll>
-      </Section>
+      {/* For You */}
+      {forYouSongs.length > 0 && (
+        <Section title="专属推荐">
+          <HorizontalScroll>
+            {forYouSongs.map((song) => (
+              <SongCard
+                key={song.id}
+                title={song.title}
+                subtitle={song.artist}
+                artworkUrl={song.artworkUrl}
+                onClick={() => playSong(song.id, featuredIds)}
+              />
+            ))}
+          </HorizontalScroll>
+        </Section>
+      )}
 
       {/* New Releases */}
-      <Section title="新歌速递">
-        <div style={{ paddingInline: 20, paddingBottom: 120 }}>
-          {songs.slice(0, 8).map((song, i) => (
-            <button
-              key={song.id}
-              className="flex w-full items-center"
-              style={{
-                height: 56,
-                borderBottom: i < 7 ? '0.5px solid rgba(84, 84, 88, 0.65)' : 'none',
-              }}
-              onClick={() => playSong(song.id)}
-            >
-              <div
+      {newSongs.length > 0 && (
+        <Section title="新歌速递">
+          <div style={{ paddingInline: 20, paddingBottom: 120 }}>
+            {newSongs.map((song, i) => (
+              <button
+                key={song.id}
+                className="flex w-full items-center"
                 style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: 6,
-                  background: song.cover,
-                  flexShrink: 0,
-                  marginRight: 12,
+                  height: 56,
+                  borderBottom: i < newSongs.length - 1 ? '0.5px solid rgba(84, 84, 88, 0.65)' : 'none',
                 }}
-              />
-              <div className="flex-1 text-left" style={{ minWidth: 0 }}>
-                <div
+                onClick={() => playSong(song.id, featuredIds)}
+              >
+                <img
+                  src={song.artworkUrl}
+                  alt={song.album}
                   style={{
-                    fontSize: 16,
-                    fontWeight: 500,
-                    color: '#fff',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
+                    width: 44,
+                    height: 44,
+                    borderRadius: 6,
+                    flexShrink: 0,
+                    marginRight: 12,
+                    objectFit: 'cover',
+                    backgroundColor: '#1c1c1e',
                   }}
-                >
-                  {song.title}
+                />
+                <div className="flex-1 text-left" style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: 16,
+                      fontWeight: 500,
+                      color: '#fff',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {song.title}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 13,
+                      color: 'rgba(235, 235, 245, 0.6)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {song.artist}
+                  </div>
                 </div>
-                <div
-                  style={{
-                    fontSize: 13,
-                    color: 'rgba(235, 235, 245, 0.6)',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {song.artist}
-                </div>
-              </div>
-              <MoreIcon />
-            </button>
-          ))}
-        </div>
-      </Section>
+              </button>
+            ))}
+          </div>
+        </Section>
+      )}
     </div>
   );
 }
@@ -178,15 +227,15 @@ function HorizontalScroll({ children }: { children: React.ReactNode }) {
   );
 }
 
-function AlbumCard({
+function SongCard({
   title,
   subtitle,
-  cover,
+  artworkUrl,
   onClick,
 }: {
   title: string;
   subtitle: string;
-  cover: string;
+  artworkUrl: string;
   onClick: () => void;
 }) {
   return (
@@ -195,12 +244,15 @@ function AlbumCard({
       style={{ width: 170, scrollSnapAlign: 'start' }}
       onClick={onClick}
     >
-      <div
+      <img
+        src={artworkUrl}
+        alt={title}
         style={{
           width: 170,
           height: 170,
           borderRadius: 8,
-          background: cover,
+          objectFit: 'cover',
+          backgroundColor: '#1c1c1e',
         }}
       />
       <div
@@ -228,15 +280,5 @@ function AlbumCard({
         {subtitle}
       </div>
     </button>
-  );
-}
-
-function MoreIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, marginLeft: 8 }}>
-      <circle cx="12" cy="5" r="1.5" fill="rgba(235,235,245,0.3)" />
-      <circle cx="12" cy="12" r="1.5" fill="rgba(235,235,245,0.3)" />
-      <circle cx="12" cy="19" r="1.5" fill="rgba(235,235,245,0.3)" />
-    </svg>
   );
 }

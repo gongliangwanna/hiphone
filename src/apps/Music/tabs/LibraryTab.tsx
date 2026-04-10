@@ -1,5 +1,7 @@
-import { albums } from '../data';
-import { useMusicNavStore } from '../musicStore';
+import { useMemo } from 'react';
+import type { Song } from '../data';
+import { useMusicDataStore } from '../musicDataStore';
+import { ListMusic, User, Disc3, Music, Download, ChevronRight } from 'lucide-react';
 
 const MUSIC_RED = '#FC3C44';
 
@@ -10,15 +12,32 @@ interface CategoryItem {
 }
 
 const libraryCategories: CategoryItem[] = [
-  { id: 'playlists', label: '播放列表', icon: <PlaylistIcon /> },
-  { id: 'artists', label: '艺人', icon: <ArtistIcon /> },
-  { id: 'albums', label: '专辑', icon: <AlbumIcon /> },
-  { id: 'songs', label: '歌曲', icon: <SongIcon /> },
-  { id: 'downloaded', label: '已下载', icon: <DownloadIcon /> },
+  { id: 'playlists', label: '播放列表', icon: <ListMusic size={22} color={MUSIC_RED} /> },
+  { id: 'artists', label: '艺人', icon: <User size={22} color={MUSIC_RED} /> },
+  { id: 'albums', label: '专辑', icon: <Disc3 size={22} color={MUSIC_RED} /> },
+  { id: 'songs', label: '歌曲', icon: <Music size={22} color={MUSIC_RED} /> },
+  { id: 'downloaded', label: '已下载', icon: <Download size={22} color={MUSIC_RED} /> },
 ];
 
 export function LibraryTab() {
-  const pushPage = useMusicNavStore((s) => s.pushPage);
+  const featuredIds = useMusicDataStore((s) => s.featuredIds);
+  const songMap = useMusicDataStore((s) => s.songMap);
+  const playSong = useMusicDataStore((s) => s.playSong);
+
+  // Show unique albums from featured content
+  const albumSongs = useMemo(() => {
+    const seen = new Set<string>();
+    return featuredIds
+      .map((id) => songMap[id])
+      .filter((s): s is Song => !!s)
+      .filter((s) => {
+        if (!s.albumId || seen.has(s.albumId)) return false;
+        seen.add(s.albumId);
+        return true;
+      })
+      .slice(0, 12);
+  }, [featuredIds, songMap]);
+
   return (
     <div className="h-full overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
       {/* Large Title */}
@@ -43,11 +62,11 @@ export function LibraryTab() {
             }}
             onClick={() => {}}
           >
-            <span style={{ color: MUSIC_RED, marginRight: 12 }}>{cat.icon}</span>
+            <span style={{ marginRight: 12 }}>{cat.icon}</span>
             <span style={{ fontSize: 20, color: '#fff', flex: 1, textAlign: 'left' }}>
               {cat.label}
             </span>
-            <ChevronRight />
+            <ChevronRight size={14} color="rgba(235,235,245,0.3)" />
           </button>
         ))}
       </div>
@@ -70,18 +89,21 @@ export function LibraryTab() {
             paddingBottom: 120,
           }}
         >
-          {albums.map((album) => (
+          {albumSongs.map((song) => (
             <button
-              key={album.id}
+              key={song.albumId}
               className="text-left"
-              onClick={() => pushPage('album-detail', { albumId: album.id })}
+              onClick={() => playSong(song.id, featuredIds)}
             >
-              <div
+              <img
+                src={song.artworkUrl}
+                alt={song.album}
                 style={{
                   width: '100%',
                   aspectRatio: '1',
                   borderRadius: 8,
-                  background: album.cover,
+                  objectFit: 'cover',
+                  backgroundColor: '#1c1c1e',
                 }}
               />
               <div
@@ -95,7 +117,7 @@ export function LibraryTab() {
                   whiteSpace: 'nowrap',
                 }}
               >
-                {album.title}
+                {song.album}
               </div>
               <div
                 style={{
@@ -106,69 +128,12 @@ export function LibraryTab() {
                   whiteSpace: 'nowrap',
                 }}
               >
-                {album.artist}
+                {song.artist}
               </div>
             </button>
           ))}
         </div>
       </div>
     </div>
-  );
-}
-
-/* ── Category Icons (SF Symbol stroke style, ~22px) ── */
-
-function PlaylistIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <path d="M4 6h12M4 10h12M4 14h8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      <circle cx="18" cy="16" r="3" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M21 16V6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function ArtistIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M4 21c0-3.9 3.6-7 8-7s8 3.1 8 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function AlbumIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.6" />
-      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.6" />
-    </svg>
-  );
-}
-
-function SongIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <path d="M9 18V5l12-2v13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="6" cy="18" r="3" stroke="currentColor" strokeWidth="1.6" />
-      <circle cx="18" cy="16" r="3" stroke="currentColor" strokeWidth="1.6" />
-    </svg>
-  );
-}
-
-function DownloadIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <path d="M12 3v12M12 15l-4-4M12 15l4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function ChevronRight() {
-  return (
-    <svg width="8" height="14" viewBox="0 0 8 14" fill="none">
-      <path d="M1 1l6 6-6 6" stroke="rgba(235,235,245,0.3)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
   );
 }
