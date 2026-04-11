@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { motion } from 'motion/react';
 import { T } from '../theme';
 
@@ -7,84 +6,67 @@ interface AvatarProps {
   size?: number;
   ringIndex?: number;
   online?: boolean;
-  unread?: number;
 }
 
-export function Avatar({ src, size = 48, ringIndex = 0, online, unread }: AvatarProps) {
-  const [loaded, setLoaded] = useState(false);
-  const ringGrad = T.rings[ringIndex % T.rings.length];
-  const ring = 2;
-  const gap = 1.5;
-  const outer = size + (ring + gap) * 2;
+// 柔和马卡龙渐变色环
+const RINGS = [
+  'linear-gradient(135deg, #FFAEC9, #FFC1CC)', // 樱花粉
+  'linear-gradient(135deg, #B4E4D9, #8DE8B1)', // 薄荷青
+  'linear-gradient(135deg, #BFE4FF, #A1C4FD)', // 晴空蓝
+  'linear-gradient(135deg, #FFD700, #FFF0BA)', // 闪亮金
+  'linear-gradient(135deg, #E0C5E5, #D4A0A0)', // 薰衣草
+  'linear-gradient(135deg, #FFBFA3, #FFD1DC)', // 珊瑚粉
+];
+
+export function Avatar({ src, size = 48, ringIndex = -1, online }: AvatarProps) {
+  const hasRing = ringIndex >= 0 && ringIndex < RINGS.length;
+  const padding = hasRing ? Math.max(2, size * 0.05) : 0;
 
   return (
-    <div className="relative shrink-0" style={{ width: outer, height: outer }}>
-      {/* Gradient ring */}
+    <div className="relative inline-block" style={{ width: size, height: size }}>
+      {/* 渐变色环 */}
+      {hasRing && (
+        <div
+          className="absolute inset-0 rounded-full"
+          style={{ background: RINGS[ringIndex] }}
+        />
+      )}
+
+      {/* 头像本体 */}
       <div
-        className="absolute inset-0 rounded-full"
-        style={{ background: ringGrad }}
-      />
-      {/* White gap */}
-      <div
-        className="absolute rounded-full"
-        style={{ inset: ring, backgroundColor: T.card }}
-      />
-      {/* Photo */}
-      <div
-        className="absolute overflow-hidden rounded-full"
-        style={{ inset: ring + gap }}
+        className="absolute rounded-full bg-white overflow-hidden flex items-center justify-center"
+        style={{
+          inset: padding,
+          boxShadow: hasRing ? 'none' : 'inset 0 0 0 1px rgba(0,0,0,0.04)',
+        }}
       >
         <img
           src={src}
           alt=""
           className="h-full w-full object-cover"
-          style={{ opacity: loaded ? 1 : 0, transition: 'opacity 0.25s' }}
-          loading="lazy"
-          onLoad={() => setLoaded(true)}
+          style={{
+            borderRadius: '50%',
+            border: hasRing ? '2px solid #fff' : 'none',
+          }}
         />
-        {/* Fallback bg while loading */}
-        {!loaded && (
-          <div className="absolute inset-0" style={{ background: T.accentGrad, opacity: 0.2 }} />
-        )}
       </div>
 
-      {/* Online indicator */}
+      {/* 在线状态 */}
       {online && (
         <motion.div
           className="absolute rounded-full"
           style={{
-            width: Math.max(10, size * 0.2),
-            height: Math.max(10, size * 0.2),
+            width: size * 0.28,
+            height: size * 0.28,
             bottom: 0,
             right: 0,
             backgroundColor: T.online,
             border: `2px solid ${T.card}`,
-          }}
-          animate={{ scale: [1, 1.15, 1] }}
-          transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-        />
-      )}
-
-      {/* Unread badge */}
-      {unread != null && unread > 0 && (
-        <motion.div
-          className="absolute flex items-center justify-center rounded-full"
-          style={{
-            minWidth: 18,
-            height: 18,
-            top: -2,
-            right: -2,
-            background: T.accentGrad,
-            padding: '0 5px',
+            zIndex: 10,
           }}
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
-          transition={{ type: 'spring', stiffness: 400, damping: 18 }}
-        >
-          <span style={{ fontSize: 10, fontWeight: 700, color: T.textOnAccent }}>
-            {unread > 99 ? '99+' : unread}
-          </span>
-        </motion.div>
+        />
       )}
     </div>
   );

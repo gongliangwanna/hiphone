@@ -6,6 +6,7 @@ import { AppScreen } from '@/system';
 import { XYTabBar } from './TabBar';
 import { T } from './theme';
 import { ChatListTab } from './tabs/ChatListTab';
+import { ContactsTab } from './tabs/ContactsTab';
 import { MomentsTab } from './tabs/MomentsTab';
 import { ProfileTab } from './tabs/ProfileTab';
 import { ChatDetail } from './pages/ChatDetail';
@@ -53,6 +54,7 @@ export function XingYuApp() {
             >
               <div className="min-h-0 flex-1 overflow-hidden">
                 {activeTab === 'chat' && <ChatListTab />}
+                {activeTab === 'contacts' && <ContactsTab />}
                 {activeTab === 'moments' && <MomentsTab />}
                 {activeTab === 'profile' && <ProfileTab />}
               </div>

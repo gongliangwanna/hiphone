@@ -101,6 +101,80 @@ const siliconflow: ProviderAdapter = {
   },
 };
 
+// ── Chat Completion (shared — all providers are OpenAI-compatible) ──
+
+interface ChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+/**
+ * Send a chat completion request and stream tokens back via callback.
+ * Works for any OpenAI-compatible provider.
+ */
+export async function streamChat(
+  {
+    endpoint,
+    apiKey,
+    model,
+    providerId,
+  }: { endpoint: string; apiKey: string; model: string; providerId: string },
+  messages: ChatMessage[],
+  onToken: (token: string) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${apiKey}`,
+  };
+  if (providerId === 'openrouter') {
+    headers['HTTP-Referer'] = 'https://hiphone.app';
+    headers['X-Title'] = 'hiPhone';
+  }
+
+  const res = await fetch(`${endpoint}/chat/completions`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ model, messages, stream: true, max_tokens: 256 }),
+    signal,
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`${res.status}: ${body}`);
+  }
+
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error('无法读取响应流');
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split('\n');
+    // Keep the last (potentially incomplete) line in the buffer
+    buffer = lines.pop() ?? '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || !trimmed.startsWith('data:')) continue;
+      const data = trimmed.slice(5).trim();
+      if (data === '[DONE]') return;
+      try {
+        const json = JSON.parse(data);
+        const delta = json.choices?.[0]?.delta?.content;
+        if (delta) onToken(delta);
+      } catch {
+        // skip malformed chunks
+      }
+    }
+  }
+}
+
 // ── Registry ───────────────────────────────────────────
 
 export const PROVIDER_ADAPTERS: Record<string, ProviderAdapter> = {

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Heart, MessageCircle } from 'lucide-react';
-import { getIdol, formatTime, ME } from '../data';
+import { getIdol, formatTime, ME, DEFAULT_AVATAR } from '../data';
 import type { Moment } from '../data';
 import { useXYData } from '../xingYuDataStore';
 import { useXYNav } from '../xingYuNavStore';
@@ -13,9 +13,10 @@ interface MomentCardProps {
   moment: Moment;
   /** Hide avatar navigation when already on an idol profile */
   disableAvatarNav?: boolean;
+  onImageClick?: (imageUrl: string) => void;
 }
 
-export function MomentCard({ moment, disableAvatarNav }: MomentCardProps) {
+export function MomentCard({ moment, disableAvatarNav, onImageClick }: MomentCardProps) {
   const toggleLike = useXYData((s) => s.toggleLike);
   const addComment = useXYData((s) => s.addComment);
   const openIdol = useXYNav((s) => s.openIdol);
@@ -24,9 +25,11 @@ export function MomentCard({ moment, disableAvatarNav }: MomentCardProps) {
   const [showCommentInput, setShowCommentInput] = useState(false);
   const [showAllComments, setShowAllComments] = useState(false);
 
+  const userSettings = useXYData((s) => s.userSettings);
+
   const isMe = moment.idolId === 'me';
   const author = isMe
-    ? { name: ME.name, avatar: ME.avatar, ringIndex: 0 }
+    ? { name: userSettings.nickname || ME.name, avatar: userSettings.avatarUrl || DEFAULT_AVATAR, ringIndex: 0 }
     : (() => {
         const idol = getIdol(moment.idolId);
         return idol
@@ -75,7 +78,12 @@ export function MomentCard({ moment, disableAvatarNav }: MomentCardProps) {
       {/* Image */}
       {moment.imageUrl && (
         <div className="px-4 pb-3">
-          <div style={{ borderRadius: T.r.md, overflow: 'hidden', backgroundColor: `${T.accent}08` }}>
+          <motion.button 
+            className="block w-full"
+            style={{ borderRadius: T.r.md, overflow: 'hidden', backgroundColor: `${T.accent}08` }}
+            onClick={() => onImageClick?.(moment.imageUrl!)}
+            whileTap={{ opacity: 0.8 }}
+          >
             <img
               src={moment.imageUrl}
               alt=""
@@ -89,7 +97,7 @@ export function MomentCard({ moment, disableAvatarNav }: MomentCardProps) {
               loading="lazy"
               onLoad={() => setImgLoaded(true)}
             />
-          </div>
+          </motion.button>
         </div>
       )}
 
@@ -143,7 +151,7 @@ export function MomentCard({ moment, disableAvatarNav }: MomentCardProps) {
         >
           {visibleComments.map((c, i) => {
             const isCommentFromMe = c.userId === 'me';
-            const commenter = isCommentFromMe ? ME : getIdol(c.userId);
+            const commenter = isCommentFromMe ? { name: userSettings.nickname } : getIdol(c.userId);
             return (
               <p key={i} style={{ fontSize: 12, color: T.textSecondary, marginBottom: 3, lineHeight: 1.5 }}>
                 <span style={{ fontWeight: 600, color: T.accent }}>{commenter?.name ?? '???'}</span>

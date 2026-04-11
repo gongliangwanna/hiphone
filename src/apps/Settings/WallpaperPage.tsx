@@ -1,27 +1,18 @@
 import { useSystemStore } from '@/platform/stores/systemStore';
 import { wallpapers } from '@/shell/Springboard/apps.data';
+import { List, ListSection } from '@/system';
 
 export function WallpaperPage() {
   const wallpaperId = useSystemStore((s) => s.wallpaperId);
   const setWallpaper = useSystemStore((s) => s.setWallpaper);
 
   return (
-    <div
-      className="h-full overflow-auto"
-      style={{ backgroundColor: 'var(--color-secondarySystemBackground)' }}
-      data-testid="wallpaper-page"
-    >
-      <div style={{ padding: 'var(--spacing-6) var(--spacing-4) 0' }}>
-        <div
-          className="overflow-hidden"
-          style={{
-            backgroundColor: 'var(--color-tertiarySystemBackground)',
-            borderRadius: 'var(--radius-group)',
-            padding: 'var(--spacing-3)',
-          }}
-        >
+    <div data-testid="wallpaper-page" className="h-full">
+      <List>
+        <ListSection title="选取新壁纸">
           <div
             style={{
+              padding: 'var(--spacing-3)',
               display: 'grid',
               gridTemplateColumns: 'repeat(3, 1fr)',
               gap: 'var(--spacing-3)',
@@ -76,8 +67,8 @@ export function WallpaperPage() {
               );
             })}
           </div>
-        </div>
-      </div>
+        </ListSection>
+      </List>
     </div>
   );
 }

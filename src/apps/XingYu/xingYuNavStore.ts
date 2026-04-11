@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type XYTab = 'chat' | 'moments' | 'profile';
+export type XYTab = 'chat' | 'contacts' | 'moments' | 'profile';
 
 interface XingYuNavState {
   activeTab: XYTab;

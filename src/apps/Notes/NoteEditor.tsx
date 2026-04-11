@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNotesDataStore } from './notesDataStore';
 import { useNotesNavStore } from './notesNavStore';
+import { Material } from '@/system';
+import { format } from 'date-fns';
 
 const AUTO_SAVE_DELAY = 500;
 
@@ -69,6 +71,16 @@ export function NoteEditor() {
         className="flex flex-1 flex-col overflow-auto"
         style={{ padding: 'var(--spacing-4)' }}
       >
+        <div
+          className="w-full text-center"
+          style={{
+            fontSize: 'var(--font-size-caption1)',
+            color: 'var(--color-secondaryLabel)',
+            marginBottom: 16,
+          }}
+        >
+          {existingNote?.updatedAt ? format(existingNote.updatedAt, 'yyyy年M月d日 HH:mm') : format(Date.now(), 'yyyy年M月d日 HH:mm')}
+        </div>
         <input
           ref={titleRef}
           type="text"
@@ -77,10 +89,11 @@ export function NoteEditor() {
           onChange={(e) => setLocalTitle(e.target.value)}
           className="w-full bg-transparent outline-none"
           style={{
-            fontSize: 'var(--font-size-title2)',
+            fontSize: '28px',
             fontWeight: 'var(--font-weight-bold)',
             color: 'var(--color-label)',
-            marginBottom: 8,
+            marginBottom: 0,
+            lineHeight: 1.2,
           }}
           data-testid="note-title-input"
         />
@@ -94,19 +107,20 @@ export function NoteEditor() {
             color: 'var(--color-label)',
             lineHeight: 1.5,
             minHeight: 200,
+            paddingTop: 8,
           }}
           data-testid="note-body-input"
         />
       </div>
 
       {/* Bottom toolbar */}
-      <div
-        className="flex items-center justify-around"
+      <Material
+        variant="chrome"
+        className="flex items-center justify-around shrink-0 relative"
         style={{
-          height: 44,
+          height: 49,
+          paddingBottom: 'var(--app-safe-bottom, 0px)',
           borderTop: '0.5px solid var(--color-separator)',
-          backgroundColor: 'var(--color-secondarySystemBackground)',
-          flexShrink: 0,
         }}
       >
         <ToolbarButton icon={<TableIcon />} />
@@ -114,7 +128,7 @@ export function NoteEditor() {
         <ToolbarButton icon={<ChecklistIcon />} />
         <ToolbarButton icon={<AttachIcon />} />
         <ToolbarButton icon={<MarkupIcon />} />
-      </div>
+      </Material>
     </div>
   );
 }
@@ -140,11 +154,9 @@ function ToolbarButton({ icon }: { icon: React.ReactNode }) {
 /** SF Symbol: tablecells */
 function TableIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
-      <rect x="2" y="2" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="1.6" />
-      <line x1="2" y1="8" x2="20" y2="8" stroke="currentColor" strokeWidth="1.2" />
-      <line x1="2" y1="14" x2="20" y2="14" stroke="currentColor" strokeWidth="1.2" />
-      <line x1="11" y1="2" x2="11" y2="20" stroke="currentColor" strokeWidth="1.2" />
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M3 12h18M12 5v14" />
     </svg>
   );
 }
@@ -152,35 +164,31 @@ function TableIcon() {
 /** SF Symbol: textformat (Aa) */
 function FormatIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
-      <path d="M3 18L8.5 4h5L19 18" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      <line x1="5.5" y1="13" x2="16.5" y2="13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 19L8.5 7h1.5L14.5 19" />
+      <path d="M6 15h7" />
+      <circle cx="18" cy="16.5" r="2.5" />
+      <path d="M20.5 14v5" />
     </svg>
   );
 }
 
-/** SF Symbol: checklist */
+/** SF Symbol: checkmark.circle */
 function ChecklistIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
-      <path d="M3 5l2 2 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      <line x1="12" y1="6" x2="19" y2="6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M3 12l2 2 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      <line x1="12" y1="13" x2="19" y2="13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8 12l3 3 5-6" />
     </svg>
   );
 }
 
-/** SF Symbol: paperclip */
+/** SF Symbol: camera */
 function AttachIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
-      <path
-        d="M10 5v10a3 3 0 006 0V6a5 5 0 00-10 0v10a7 7 0 0014 0V5"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h4l2 3h4a2 2 0 0 1 2 2z" />
+      <circle cx="12" cy="13" r="4" />
     </svg>
   );
 }
@@ -188,9 +196,11 @@ function AttachIcon() {
 /** SF Symbol: pencil.tip.crop.circle */
 function MarkupIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
-      <circle cx="11" cy="11" r="9" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M11 5v8M8 10l3 3 3-3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 4l-3 7v6h6v-6z" />
+      <path d="M12 4v13" />
+      <path d="M9 11h6" />
     </svg>
   );
 }

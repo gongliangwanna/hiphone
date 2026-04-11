@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useMusicNavStore } from './musicStore';
-import { wasAppKilled, clearAppKilled } from '@/platform/stores/appRuntimeStore';
+import { wasAppKilled, clearAppKilled, useAppRuntimeStore } from '@/platform/stores/appRuntimeStore';
 import { AppScreen } from '@/system';
 import { MusicTabBar } from './TabBar';
 import { MiniPlayer } from './MiniPlayer';
@@ -12,7 +12,7 @@ import { RadioTab } from './tabs/RadioTab';
 import { LibraryTab } from './tabs/LibraryTab';
 import { AlbumDetail } from './pages/AlbumDetail';
 import { useMusicDataStore } from './musicDataStore';
-import { usePlaybackEngine } from './usePlaybackEngine';
+import { FailedSongToast } from './FailedSongToast';
 
 const SLIDE_MS = 350;
 const SLIDE_EASE = [0.32, 0.72, 0, 1] as const;
@@ -25,7 +25,17 @@ export function MusicApp() {
   const reset = useMusicNavStore((s) => s.reset);
   const currentSongId = useMusicDataStore((s) => s.currentSongId);
 
-  usePlaybackEngine();
+  // NOTE: the playback engine is mounted globally in `App.tsx` via
+  // `<MusicPlaybackHost />` so widget controls keep working with the app
+  // closed. Do NOT re-mount `usePlaybackEngine()` here or the engine will
+  // get double-subscribed and issue duplicate play/pause calls.
+  const setStatusBarStyle = useAppRuntimeStore((s) => s.setStatusBarStyle);
+
+  // Music app has dark background — needs white status bar text
+  useEffect(() => {
+    setStatusBarStyle('light');
+    return () => setStatusBarStyle('dark');
+  }, [setStatusBarStyle]);
 
   const prevPageRef = useRef(page);
 
@@ -67,8 +77,12 @@ export function MusicApp() {
               </div>
 
               {/* Mini Player + TabBar */}
-              <div className="shrink-0" style={{ backgroundColor: 'rgba(28, 28, 30, 0.85)' }}>
-                {currentSongId && <MiniPlayer />}
+              <div className="absolute bottom-0 left-0 right-0 z-10 flex flex-col justify-end">
+                {currentSongId && (
+                  <div style={{ paddingBottom: 8 }}>
+                    <MiniPlayer />
+                  </div>
+                )}
                 <MusicTabBar activeTab={activeTab} onTabChange={setTab} />
               </div>
             </motion.div>
@@ -91,6 +105,9 @@ export function MusicApp() {
         <AnimatePresence>
           {showNowPlaying && <NowPlaying />}
         </AnimatePresence>
+
+        {/* Toast for failed songs (visible when NowPlaying is closed) */}
+        {!showNowPlaying && <FailedSongToast />}
       </div>
     </AppScreen>
   );

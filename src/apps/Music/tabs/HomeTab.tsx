@@ -2,7 +2,9 @@ import { useEffect, useMemo } from 'react';
 import type { Song } from '../data';
 import { useMusicNavStore } from '../musicStore';
 import { useMusicDataStore } from '../musicDataStore';
+import { MusicArtwork } from '../MusicArtwork';
 import { Loader2 } from 'lucide-react';
+import { motion } from 'motion/react';
 
 const MUSIC_RED = '#FC3C44';
 
@@ -15,7 +17,21 @@ export function HomeTab() {
   const fetchFeatured = useMusicDataStore((s) => s.fetchFeatured);
 
   useEffect(() => {
-    fetchFeatured();
+    // Defer the network call until after the app-launch spring animation
+    // has had time to settle. `fetchFeatured` is async, but the store
+    // update it eventually fires triggers a re-render of the full song
+    // grid (hero banner + 3 horizontal carousels of ~30 MusicArtwork
+    // cards). That commit is expensive enough to fight the widget→app
+    // morph spring for the main thread and shows up as "laggy" launches.
+    // A ~200ms delay lets the spring run to its perceived end point
+    // before we start rendering content — the user sees a smooth morph
+    // followed by content populating, instead of a stutter mid-animation.
+    if (typeof window === 'undefined') {
+      fetchFeatured();
+      return;
+    }
+    const id = window.setTimeout(() => fetchFeatured(), 200);
+    return () => window.clearTimeout(id);
   }, [fetchFeatured]);
 
   const songs = useMemo(
@@ -58,7 +74,8 @@ export function HomeTab() {
       {/* Hero Banner */}
       {heroSong && (
         <div style={{ paddingInline: 20, marginBottom: 24 }}>
-          <button
+          <motion.button
+            whileTap={{ scale: 0.96 }}
             className="w-full text-left"
             onClick={() => {
               if (heroSong.albumId) pushPage('album-detail', { albumId: heroSong.albumId });
@@ -69,11 +86,13 @@ export function HomeTab() {
               overflow: 'hidden',
               aspectRatio: '16/9',
               position: 'relative',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
             }}
           >
-            <img
+            <MusicArtwork
               src={heroSong.artworkUrl}
-              alt={heroSong.album}
+              alt={heroSong.title}
+              iconSize={48}
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
             <div
@@ -96,7 +115,7 @@ export function HomeTab() {
                 {heroSong.artist}
               </div>
             </div>
-          </button>
+          </motion.button>
         </div>
       )}
 
@@ -139,18 +158,23 @@ export function HomeTab() {
         <Section title="新歌速递">
           <div style={{ paddingInline: 20, paddingBottom: 120 }}>
             {newSongs.map((song, i) => (
-              <button
+              <motion.button
+                whileTap={{ scale: 0.98, backgroundColor: 'rgba(255,255,255,0.05)' }}
                 key={song.id}
                 className="flex w-full items-center"
                 style={{
                   height: 56,
                   borderBottom: i < newSongs.length - 1 ? '0.5px solid rgba(84, 84, 88, 0.65)' : 'none',
+                  borderRadius: 8,
+                  padding: '0 8px',
+                  margin: '0 -8px',
                 }}
                 onClick={() => playSong(song.id, featuredIds)}
               >
-                <img
+                <MusicArtwork
                   src={song.artworkUrl}
-                  alt={song.album}
+                  alt={song.title}
+                  iconSize={16}
                   style={{
                     width: 44,
                     height: 44,
@@ -158,7 +182,6 @@ export function HomeTab() {
                     flexShrink: 0,
                     marginRight: 12,
                     objectFit: 'cover',
-                    backgroundColor: '#1c1c1e',
                   }}
                 />
                 <div className="flex-1 text-left" style={{ minWidth: 0 }}>
@@ -186,7 +209,7 @@ export function HomeTab() {
                     {song.artist}
                   </div>
                 </div>
-              </button>
+              </motion.button>
             ))}
           </div>
         </Section>
@@ -239,20 +262,22 @@ function SongCard({
   onClick: () => void;
 }) {
   return (
-    <button
+    <motion.button
+      whileTap={{ scale: 0.96 }}
       className="shrink-0 text-left"
       style={{ width: 170, scrollSnapAlign: 'start' }}
       onClick={onClick}
     >
-      <img
+      <MusicArtwork
         src={artworkUrl}
         alt={title}
+        iconSize={36}
         style={{
           width: 170,
           height: 170,
           borderRadius: 8,
           objectFit: 'cover',
-          backgroundColor: '#1c1c1e',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
         }}
       />
       <div
@@ -279,6 +304,6 @@ function SongCard({
       >
         {subtitle}
       </div>
-    </button>
+    </motion.button>
   );
 }

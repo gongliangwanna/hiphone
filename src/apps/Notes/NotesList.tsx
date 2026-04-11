@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useNotesDataStore } from './notesDataStore';
 import { useNotesNavStore } from './notesNavStore';
 import { format, isToday, isThisYear } from 'date-fns';
+import { Material } from '@/system';
 
 function formatNoteDate(timestamp: number): string {
   const date = new Date(timestamp);
@@ -72,14 +73,10 @@ export function NotesList() {
               <button
                 key={note.id}
                 type="button"
-                className="flex w-full flex-col justify-center text-left"
+                className="flex w-full flex-col justify-center text-left relative"
                 style={{
                   minHeight: 64,
                   padding: '10px 16px',
-                  borderBottom:
-                    i < notes.length - 1
-                      ? '0.5px solid var(--color-separator)'
-                      : 'none',
                 }}
                 onClick={() => push('editor', note.id)}
                 data-testid={`note-cell-${note.id}`}
@@ -96,7 +93,7 @@ export function NotesList() {
                   {note.title || '新建备忘录'}
                 </span>
                 <span
-                  className="truncate"
+                  className="truncate flex gap-2"
                   style={{
                     fontSize: 'var(--font-size-subhead)',
                     color: 'var(--color-secondaryLabel)',
@@ -104,34 +101,61 @@ export function NotesList() {
                     marginTop: 2,
                   }}
                 >
-                  {formatNoteDate(note.updatedAt)}
-                  {'  '}
-                  {note.body.slice(0, 50) || '无其他文本'}
+                  <span>{formatNoteDate(note.updatedAt)}</span>
+                  <span style={{ opacity: 0.6 }}>{note.body.slice(0, 50) || '无附加文本'}</span>
                 </span>
+                {i < notes.length - 1 && (
+                  <div
+                    className="absolute bottom-0 right-0"
+                    style={{
+                      left: 16,
+                      height: 0.5,
+                      backgroundColor: 'var(--color-separator)',
+                    }}
+                  />
+                )}
               </button>
             ))}
           </div>
         )}
       </div>
 
-      {/* Compose FAB */}
-      <button
-        type="button"
-        className="absolute flex items-center justify-center"
+      {/* Bottom toolbar */}
+      <Material
+        variant="chrome"
+        className="flex items-center justify-between px-4 shrink-0 relative"
         style={{
-          bottom: 20,
-          right: 20,
-          width: 50,
-          height: 50,
-          borderRadius: 'var(--radius-button)',
-          backgroundColor: 'var(--color-systemYellow)',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          height: 49,
+          paddingBottom: 'var(--app-safe-bottom, 0px)',
+          borderTop: '0.5px solid var(--color-separator)',
         }}
-        onClick={() => push('editor', null)}
-        data-testid="notes-compose"
       >
-        <ComposeIcon />
-      </button>
+        {/* Placeholder left button to balance the center text */}
+        <div style={{ width: 44 }} />
+        
+        <span
+          style={{
+            fontSize: 'var(--font-size-caption1)',
+            color: 'var(--color-label)',
+          }}
+        >
+          {notes.length} 个备忘录
+        </span>
+
+        <button
+          type="button"
+          className="flex items-center justify-center"
+          style={{
+            minWidth: 44,
+            minHeight: 44,
+            color: 'var(--color-systemYellow)',
+          }}
+          onClick={() => push('editor', null)}
+          data-testid="notes-compose"
+        >
+          <ComposeIcon />
+        </button>
+      </Material>
     </div>
   );
 }
@@ -139,23 +163,9 @@ export function NotesList() {
 /** SF Symbol: magnifyingglass */
 function SearchIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
-      <circle
-        cx="8.5"
-        cy="8.5"
-        r="6"
-        stroke="var(--color-secondaryLabel)"
-        strokeWidth="1.8"
-      />
-      <line
-        x1="13"
-        y1="13"
-        x2="18"
-        y2="18"
-        stroke="var(--color-secondaryLabel)"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-secondaryLabel)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8" />
+      <path d="M21 21l-4.35-4.35" />
     </svg>
   );
 }
@@ -163,23 +173,9 @@ function SearchIcon() {
 /** SF Symbol: square.and.pencil */
 function ComposeIcon() {
   return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-      <rect
-        x="3"
-        y="5"
-        width="15"
-        height="16"
-        rx="2"
-        stroke="white"
-        strokeWidth="1.8"
-      />
-      <path
-        d="M14 3l4 4-9 9H5v-4l9-9z"
-        stroke="white"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
     </svg>
   );
 }

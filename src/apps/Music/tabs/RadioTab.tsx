@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { stations } from '../data';
 import { useMusicDataStore } from '../musicDataStore';
+import { MusicArtwork } from '../MusicArtwork';
 
 export function RadioTab() {
   const playSong = useMusicDataStore((s) => s.playSong);
@@ -122,9 +123,10 @@ export function RadioTab() {
                   }}
                 >
                   {previewSong?.artworkUrl && (
-                    <img
+                    <MusicArtwork
                       src={previewSong.artworkUrl}
-                      alt=""
+                      alt={previewSong.title ?? ''}
+                      iconSize={24}
                       style={{
                         width: '100%',
                         height: '100%',

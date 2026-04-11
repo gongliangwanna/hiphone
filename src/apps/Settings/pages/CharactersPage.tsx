@@ -1,10 +1,12 @@
-import { Check, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useCharacterStore } from '@/platform/stores/characterStore';
 import { useSettingsNavStore } from '../settingsNavStore';
 
 export function CharactersPage() {
   const characters = useCharacterStore((s) => s.characters);
-  const activeId = useCharacterStore((s) => s.activeCharacterId);
+  // NOTE: setActive stays as an edit-page handoff only — clicking a row does not
+  // visually "select" the character. The activeCharacterId store field is kept
+  // intact per the current scope; its cleanup belongs to the selection refactor.
   const setActive = useCharacterStore((s) => s.setActiveCharacter);
   const addCharacter = useCharacterStore((s) => s.addCharacter);
   const push = useSettingsNavStore((s) => s.push);
@@ -41,7 +43,6 @@ export function CharactersPage() {
         }}
       >
         {characters.map((char, i) => {
-          const selected = char.id === activeId;
           return (
             <div
               key={char.id}
@@ -55,8 +56,9 @@ export function CharactersPage() {
                 cursor: 'pointer',
               }}
               onClick={() => {
+                // Hand off the tapped character id to CharacterEditPage via the
+                // store. No visible "selected" state on this list.
                 setActive(char.id);
-                // Store selected character id for edit page
                 push('characterEdit');
               }}
             >
@@ -66,9 +68,7 @@ export function CharactersPage() {
                 style={{
                   width: 42,
                   height: 42,
-                  backgroundColor: selected
-                    ? 'var(--color-systemBlue)'
-                    : 'var(--color-systemGray5)',
+                  backgroundColor: 'var(--color-systemGray5)',
                   color: 'white',
                   fontSize: 18,
                   fontWeight: 600,
@@ -80,7 +80,6 @@ export function CharactersPage() {
               {/* Info */}
               <div className="min-w-0 flex-1">
                 <div
-                  className="flex items-center gap-2"
                   style={{
                     fontSize: 'var(--font-size-body)',
                     fontWeight: 500,
@@ -88,17 +87,6 @@ export function CharactersPage() {
                   }}
                 >
                   {char.name}
-                  {selected && (
-                    <span
-                      style={{
-                        fontSize: 'var(--font-size-caption2)',
-                        color: 'var(--color-systemBlue)',
-                        fontWeight: 400,
-                      }}
-                    >
-                      使用中
-                    </span>
-                  )}
                 </div>
                 <div
                   className="truncate"
@@ -111,8 +99,6 @@ export function CharactersPage() {
                   {char.personality || char.description.slice(0, 40) || '无描述'}
                 </div>
               </div>
-
-              {selected && <Check size={20} color="var(--color-systemBlue)" strokeWidth={2.5} />}
             </div>
           );
         })}

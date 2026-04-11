@@ -1,3 +1,4 @@
+import { motion } from 'motion/react';
 import type { MusicTab } from './musicStore';
 
 const MUSIC_RED = '#FC3C44';
@@ -46,13 +47,16 @@ export function MusicTabBar({ activeTab, onTabChange }: MusicTabBarProps) {
       style={{
         height: 50,
         borderTop: '0.5px solid rgba(84, 84, 88, 0.65)',
-        backgroundColor: 'rgba(28, 28, 30, 0.85)',
+        backgroundColor: 'rgba(28, 28, 30, 0.65)',
+        backdropFilter: 'blur(20px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
       }}
     >
       {tabDefs.map((tab) => {
         const isActive = activeTab === tab.key;
         return (
-          <button
+          <motion.button
+            whileTap={{ scale: 0.9 }}
             key={tab.key}
             className="relative flex flex-col items-center justify-center"
             style={{ flex: 1, minHeight: 44, gap: 2 }}
@@ -69,7 +73,7 @@ export function MusicTabBar({ activeTab, onTabChange }: MusicTabBarProps) {
             >
               {tab.label}
             </span>
-          </button>
+          </motion.button>
         );
       })}
     </div>

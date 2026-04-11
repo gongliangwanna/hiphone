@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Song, Album } from './data';
-import { searchTracks, lookupAlbum } from './itunesApi';
+import type { Song, Album, LrcLine } from './data';
+import { searchTracks, fetchFeaturedFromMeting, lookupAlbum, fetchLyrics } from './itunesApi';
 
 interface MusicDataState {
   // ── Playback ──
@@ -11,6 +11,9 @@ interface MusicDataState {
   queue: string[];
   shuffle: boolean;
   repeat: 'off' | 'all' | 'one';
+  isBuffering: boolean;
+  /** Name of song that just failed to load (shown as toast, cleared after timeout) */
+  failedSongName: string | null;
 
   // ── Song / Album cache ──
   songMap: Record<string, Song>;
@@ -23,6 +26,8 @@ interface MusicDataState {
   isLoadingFeatured: boolean;
   isSearching: boolean;
   albumSongIds: Record<string, string[]>; // albumId → song IDs
+  lyricsCache: Record<string, LrcLine[]>; // songId → parsed lyrics
+  isLoadingLyrics: boolean;
 
   // ── Playback actions ──
   playSong: (songId: string, queue?: string[]) => void;
@@ -32,12 +37,15 @@ interface MusicDataState {
   setProgress: (progress: number) => void;
   toggleShuffle: () => void;
   cycleRepeat: () => void;
+  setBuffering: (v: boolean) => void;
+  showFailedToast: (name: string) => void;
 
   // ── Data actions ──
   addSongs: (songs: Song[]) => void;
   fetchFeatured: () => Promise<void>;
   search: (query: string) => Promise<void>;
   fetchAlbum: (albumId: string) => Promise<void>;
+  loadLyrics: (songId: string) => Promise<void>;
 }
 
 export const useMusicDataStore = create<MusicDataState>()(
@@ -50,6 +58,8 @@ export const useMusicDataStore = create<MusicDataState>()(
       queue: [],
       shuffle: false,
       repeat: 'off',
+      isBuffering: false,
+      failedSongName: null,
 
       // Caches
       songMap: {},
@@ -62,6 +72,8 @@ export const useMusicDataStore = create<MusicDataState>()(
       isLoadingFeatured: false,
       isSearching: false,
       albumSongIds: {},
+      lyricsCache: {},
+      isLoadingLyrics: false,
 
       // ── Playback actions ──
 
@@ -112,6 +124,11 @@ export const useMusicDataStore = create<MusicDataState>()(
       },
 
       setProgress: (progress) => set({ progress }),
+      setBuffering: (v) => set({ isBuffering: v }),
+      showFailedToast: (name) => {
+        set({ failedSongName: name });
+        setTimeout(() => set({ failedSongName: null }), 2500);
+      },
       toggleShuffle: () => set((s) => ({ shuffle: !s.shuffle })),
       cycleRepeat: () =>
         set((s) => ({
@@ -135,7 +152,8 @@ export const useMusicDataStore = create<MusicDataState>()(
 
         set({ isLoadingFeatured: true });
         try {
-          const songs = await searchTracks('top hits 2024', 50);
+          // Load from NetEase playlists via Meting (client-side, has CORS)
+          const songs = await fetchFeaturedFromMeting(50);
           if (songs.length === 0) return;
 
           const songMap: Record<string, Song> = { ...get().songMap };
@@ -183,7 +201,16 @@ export const useMusicDataStore = create<MusicDataState>()(
       fetchAlbum: async (albumId) => {
         if (get().albumSongIds[albumId]) return; // already fetched
 
-        const result = await lookupAlbum(albumId);
+        // Find album name/artist from any cached song with this albumId
+        const cachedSong = Object.values(get().songMap).find(
+          (s) => s.albumId === albumId,
+        );
+
+        const result = await lookupAlbum(
+          albumId,
+          cachedSong?.album,
+          cachedSong?.artist,
+        );
         if (!result) return;
 
         const songMap: Record<string, Song> = {};
@@ -199,9 +226,24 @@ export const useMusicDataStore = create<MusicDataState>()(
           albumSongIds: { ...s.albumSongIds, [albumId]: songIds },
         }));
       },
+
+      loadLyrics: async (songId) => {
+        if (get().lyricsCache[songId]) return; // already loaded
+        set({ isLoadingLyrics: true });
+        try {
+          const song = get().songMap[songId];
+          const lines = await fetchLyrics(songId, song?.lrcUrl);
+          set((s) => ({
+            lyricsCache: { ...s.lyricsCache, [songId]: lines },
+          }));
+        } finally {
+          set({ isLoadingLyrics: false });
+        }
+      },
     }),
     {
       name: 'hiPhone-music',
+      version: 4, // bump to invalidate stale artwork URLs
       partialize: (s) => ({
         currentSongId: s.currentSongId,
         queue: s.queue,
@@ -212,6 +254,7 @@ export const useMusicDataStore = create<MusicDataState>()(
         featuredIds: s.featuredIds,
         albumSongIds: s.albumSongIds,
       }),
+      migrate: () => ({}), // discard old data on version mismatch
     },
   ),
 );

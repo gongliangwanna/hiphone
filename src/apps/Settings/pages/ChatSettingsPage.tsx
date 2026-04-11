@@ -1,7 +1,7 @@
 import { useCallback, useRef } from 'react';
 import { useAIConfigStore } from '@/platform/stores/aiConfigStore';
 import { useSettingsNavStore } from '../settingsNavStore';
-import { ChevronRight } from 'lucide-react';
+import { List, ListSection, ListRow } from '@/system';
 
 /* ── Compact slider row — iOS style: label left, value right, thin track below ── */
 
@@ -61,11 +61,10 @@ function SliderRow({
 
   return (
     <div
-      className="px-4"
+      className="relative px-4"
       style={{
         paddingTop: 10,
         paddingBottom: 10,
-        borderBottom: isLast ? 'none' : '0.5px solid var(--color-separator)',
       }}
     >
       {/* Label + value */}
@@ -107,60 +106,18 @@ function SliderRow({
           }}
         />
       </div>
-    </div>
-  );
-}
 
-function SectionHeader({ title }: { title: string }) {
-  return (
-    <div
-      className="px-4 pb-1 pt-2"
-      style={{
-        fontSize: 'var(--font-size-footnote)',
-        color: 'var(--color-secondaryLabel)',
-        textTransform: 'uppercase',
-      }}
-    >
-      {title}
+      {!isLast && (
+        <div
+          className="absolute bottom-0 right-0"
+          style={{
+            left: 16,
+            height: '0.5px',
+            backgroundColor: 'var(--color-separator)',
+          }}
+        />
+      )}
     </div>
-  );
-}
-
-function NavRow({
-  title,
-  detail,
-  onClick,
-  isLast = false,
-}: {
-  title: string;
-  detail?: string;
-  onClick: () => void;
-  isLast?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="flex w-full items-center justify-between px-4"
-      style={{
-        minHeight: 44,
-        borderBottom: isLast ? 'none' : '0.5px solid var(--color-separator)',
-      }}
-    >
-      <span style={{ fontSize: 'var(--font-size-body)', color: 'var(--color-label)' }}>
-        {title}
-      </span>
-      <div className="flex items-center gap-1">
-        {detail && (
-          <span
-            className="max-w-[160px] truncate"
-            style={{ fontSize: 'var(--font-size-body)', color: 'var(--color-secondaryLabel)' }}
-          >
-            {detail}
-          </span>
-        )}
-        <ChevronRight size={16} color="var(--color-tertiaryLabel)" />
-      </div>
-    </button>
   );
 }
 
@@ -187,80 +144,60 @@ export function ChatSettingsPage() {
   const push = useSettingsNavStore((s) => s.push);
 
   return (
-    <div
-      className="h-full overflow-auto"
-      style={{ backgroundColor: 'var(--color-secondarySystemBackground)' }}
-    >
-      {/* Generation Parameters */}
-      <SectionHeader title="生成参数" />
-      <div
-        className="mx-4 mb-5 overflow-hidden"
-        style={{
-          backgroundColor: 'var(--color-tertiarySystemBackground)',
-          borderRadius: 'var(--radius-group)',
-        }}
-      >
-        <SliderRow label="Temperature" value={temperature} min={0} max={2} step={0.05} onChange={setTemperature} />
-        <SliderRow label="Top P" value={topP} min={0} max={1} step={0.05} onChange={setTopP} />
-        <SliderRow label="最大 Token" value={maxTokens} min={256} max={8192} step={256} onChange={setMaxTokens} />
-        <SliderRow label="频率惩罚" value={frequencyPenalty} min={0} max={2} step={0.05} onChange={setFrequencyPenalty} />
-        <SliderRow label="存在惩罚" value={presencePenalty} min={0} max={2} step={0.05} onChange={setPresencePenalty} isLast />
-      </div>
+    <div className="h-full">
+      <List>
+        {/* Generation Parameters */}
+        <ListSection title="生成参数">
+          <SliderRow label="Temperature" value={temperature} min={0} max={2} step={0.05} onChange={setTemperature} />
+          <SliderRow label="Top P" value={topP} min={0} max={1} step={0.05} onChange={setTopP} />
+          <SliderRow label="最大 Token" value={maxTokens} min={256} max={8192} step={256} onChange={setMaxTokens} />
+          <SliderRow label="频率惩罚" value={frequencyPenalty} min={0} max={2} step={0.05} onChange={setFrequencyPenalty} />
+          <SliderRow label="存在惩罚" value={presencePenalty} min={0} max={2} step={0.05} onChange={setPresencePenalty} isLast />
+        </ListSection>
 
-      {/* Prompts */}
-      <SectionHeader title="提示词" />
-      <div
-        className="mx-4 mb-5 overflow-hidden"
-        style={{
-          backgroundColor: 'var(--color-tertiarySystemBackground)',
-          borderRadius: 'var(--radius-group)',
-        }}
-      >
-        <NavRow
-          title="系统提示词"
-          detail={systemPrompt ? `${systemPrompt.slice(0, 20)}…` : '未设置'}
-          onClick={() => push('systemPromptEdit')}
-        />
-        <NavRow
-          title="历史后置指令"
-          detail={postHistoryInstructions ? `${postHistoryInstructions.slice(0, 20)}…` : '未设置'}
-          onClick={() => push('postHistoryEdit')}
-          isLast
-        />
-      </div>
+        {/* Prompts */}
+        <ListSection title="提示词">
+          <ListRow
+            title="系统提示词"
+            detail={systemPrompt ? `${systemPrompt.slice(0, 20)}…` : '未设置'}
+            onClick={() => push('systemPromptEdit')}
+            chevron
+          />
+          <ListRow
+            title="历史后置指令"
+            detail={postHistoryInstructions ? `${postHistoryInstructions.slice(0, 20)}…` : '未设置'}
+            onClick={() => push('postHistoryEdit')}
+            chevron
+            isLast
+          />
+        </ListSection>
 
-      {/* Memory */}
-      <SectionHeader title="记忆策略" />
-      <div
-        className="mx-4 mb-5 overflow-hidden"
-        style={{
-          backgroundColor: 'var(--color-tertiarySystemBackground)',
-          borderRadius: 'var(--radius-group)',
-        }}
-      >
-        <SliderRow
-          label="保留最近消息"
-          value={keepRecentMessages}
-          min={10} max={200} step={10}
-          format={(v) => `${v} 条`}
-          onChange={setKeepRecentMessages}
-        />
-        <SliderRow
-          label="自动摘要"
-          value={summarizeAfter}
-          min={0} max={100} step={10}
-          format={(v) => (v === 0 ? '关闭' : `每 ${v} 条`)}
-          onChange={setSummarizeAfter}
-        />
-        <SliderRow
-          label="世界信息预算"
-          value={worldInfoBudgetPercent}
-          min={0} max={50} step={5}
-          format={(v) => `${v}%`}
-          onChange={setWorldInfoBudgetPercent}
-          isLast
-        />
-      </div>
+        {/* Memory */}
+        <ListSection title="记忆策略">
+          <SliderRow
+            label="保留最近消息"
+            value={keepRecentMessages}
+            min={10} max={200} step={10}
+            format={(v) => `${v} 条`}
+            onChange={setKeepRecentMessages}
+          />
+          <SliderRow
+            label="自动摘要"
+            value={summarizeAfter}
+            min={0} max={100} step={10}
+            format={(v) => (v === 0 ? '关闭' : `每 ${v} 条`)}
+            onChange={setSummarizeAfter}
+          />
+          <SliderRow
+            label="世界信息预算"
+            value={worldInfoBudgetPercent}
+            min={0} max={50} step={5}
+            format={(v) => `${v}%`}
+            onChange={setWorldInfoBudgetPercent}
+            isLast
+          />
+        </ListSection>
+      </List>
     </div>
   );
 }

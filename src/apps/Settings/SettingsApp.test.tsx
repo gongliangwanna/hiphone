@@ -24,11 +24,11 @@ describe('SettingsApp', () => {
   it('renders persona card and main groups', () => {
     render(<SettingsApp />);
     expect(screen.getByTestId('settings-persona-card')).toBeTruthy();
-    expect(screen.getByTestId('settings-row-虚拟恋人')).toBeTruthy();
-    expect(screen.getByTestId('settings-row-聊天偏好')).toBeTruthy();
-    expect(screen.getByTestId('settings-row-连接设置')).toBeTruthy();
-    expect(screen.getByTestId('settings-row-壁纸')).toBeTruthy();
-    expect(screen.getByTestId('settings-row-关于本机')).toBeTruthy();
+    expect(screen.getByTestId('list-row-角色')).toBeTruthy();
+    expect(screen.getByTestId('list-row-聊天偏好')).toBeTruthy();
+    expect(screen.getByTestId('list-row-连接设置')).toBeTruthy();
+    expect(screen.getByTestId('list-row-壁纸')).toBeTruthy();
+    expect(screen.getByTestId('list-row-关于本机')).toBeTruthy();
   });
 
   it('does not show back button on home page', () => {
@@ -38,7 +38,7 @@ describe('SettingsApp', () => {
 
   it('navigates to about page on click', async () => {
     render(<SettingsApp />);
-    await userEvent.click(screen.getByTestId('settings-row-关于本机'));
+    await userEvent.click(screen.getByTestId('list-row-关于本机'));
 
     await waitFor(() => {
       expect(screen.getByTestId('about-page')).toBeTruthy();
@@ -50,25 +50,25 @@ describe('SettingsApp', () => {
 
   it('shows about page with device info', async () => {
     render(<SettingsApp />);
-    await userEvent.click(screen.getByTestId('settings-row-关于本机'));
+    await userEvent.click(screen.getByTestId('list-row-关于本机'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('settings-row-名称')).toBeTruthy();
+      expect(screen.getByTestId('list-row-名称')).toBeTruthy();
     }, { timeout: 2000 });
-    expect(screen.getByTestId('about-row-iOS 版本')).toBeTruthy();
-    expect(screen.getByTestId('about-row-构建版本')).toBeTruthy();
+    expect(screen.getByTestId('list-row-iOS 版本')).toBeTruthy();
+    expect(screen.getByTestId('list-row-构建版本')).toBeTruthy();
   });
 
   it('goes back to home from about page', async () => {
     render(<SettingsApp />);
-    await userEvent.click(screen.getByTestId('settings-row-关于本机'));
+    await userEvent.click(screen.getByTestId('list-row-关于本机'));
     await waitFor(() => {
       expect(screen.getByTestId('about-page')).toBeTruthy();
     });
 
     await userEvent.click(screen.getByTestId('nav-back'));
     await waitFor(() => {
-      expect(screen.getByTestId('settings-home')).toBeTruthy();
+      expect(screen.getByTestId('list')).toBeTruthy();
     });
     await waitFor(() => {
       expect(screen.queryByTestId('nav-back')).toBeNull();
@@ -77,7 +77,7 @@ describe('SettingsApp', () => {
 
   it('navigates to wallpaper page on click', async () => {
     render(<SettingsApp />);
-    await userEvent.click(screen.getByTestId('settings-row-壁纸'));
+    await userEvent.click(screen.getByTestId('list-row-壁纸'));
 
     await waitFor(() => {
       expect(screen.getByTestId('wallpaper-page')).toBeTruthy();
@@ -89,14 +89,14 @@ describe('SettingsApp', () => {
 
   it('goes back to home from wallpaper page', async () => {
     render(<SettingsApp />);
-    await userEvent.click(screen.getByTestId('settings-row-壁纸'));
+    await userEvent.click(screen.getByTestId('list-row-壁纸'));
     await waitFor(() => {
       expect(screen.getByTestId('wallpaper-page')).toBeTruthy();
     }, { timeout: 2000 });
 
     await userEvent.click(screen.getByTestId('nav-back'));
     await waitFor(() => {
-      expect(screen.getByTestId('settings-home')).toBeTruthy();
+      expect(screen.getByTestId('list')).toBeTruthy();
     });
   });
 });

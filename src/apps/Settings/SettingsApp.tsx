@@ -12,6 +12,10 @@ import { SystemPromptEditPage, PostHistoryEditPage } from './pages/PromptEditPag
 import { DisplayPage } from './pages/DisplayPage';
 import { CharactersPage } from './pages/CharactersPage';
 import { CharacterEditPage } from './pages/CharacterEditPage';
+import { DisclaimerPage } from './pages/DisclaimerPage';
+import { WorldBooksPage } from './pages/WorldBooksPage';
+import { WorldBookEditPage } from './pages/WorldBookEditPage';
+import { WorldBookEntryEditPage } from './pages/WorldBookEntryEditPage';
 import { AppScreen, NavBar } from '@/system';
 
 const PAGE_TITLES: Record<string, string> = {
@@ -28,6 +32,10 @@ const PAGE_TITLES: Record<string, string> = {
   chatSettings: '对话设置',
   systemPromptEdit: '系统提示词',
   postHistoryEdit: '历史后置指令',
+  worldBooks: '世界书',
+  worldBookEdit: '编辑世界书',
+  worldBookEntryEdit: '编辑条目',
+  disclaimer: '免责声明',
 };
 
 const PAGE_COMPONENTS: Record<string, React.ComponentType> = {
@@ -42,6 +50,10 @@ const PAGE_COMPONENTS: Record<string, React.ComponentType> = {
   chatSettings: ChatSettingsPage,
   systemPromptEdit: SystemPromptEditPage,
   postHistoryEdit: PostHistoryEditPage,
+  worldBooks: WorldBooksPage,
+  worldBookEdit: WorldBookEditPage,
+  worldBookEntryEdit: WorldBookEntryEditPage,
+  disclaimer: DisclaimerPage,
 };
 
 /** iOS push/pop slide — 350ms, ease-out */

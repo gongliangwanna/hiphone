@@ -183,10 +183,39 @@ export function usePageSwipe({
 
   useEffect(() => () => stopAnimation(), [stopAnimation]);
 
+  /** Programmatically navigate to a page (used by auto-scroll during icon drag) */
+  const goToPage = useCallback(
+    (page: number) => {
+      const clamped = Math.min(Math.max(page, 0), Math.max(pageCount - 1, 0));
+      if (clamped === currentPageRef.current) return;
+      currentPageRef.current = clamped;
+      setCurrentPage(clamped);
+      animateToPage(clamped, 0, false);
+    },
+    [pageCount, animateToPage],
+  );
+
+  /**
+   * Cancel any in-progress page swipe gesture.
+   * Used when icon drag starts during a long-press (both gestures share
+   * the same pointer, but drag should win).
+   */
+  const cancelSwipe = useCallback(() => {
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
+    setIsDragging(false);
+    pointerIdRef.current = null;
+    samplesRef.current = [];
+    // Snap back to current page
+    animateToPage(currentPageRef.current, 0, true);
+  }, [animateToPage]);
+
   return {
     currentPage,
     isDragging,
     trackX,
+    goToPage,
+    cancelSwipe,
     onPointerDown: handlePointerDown,
     onPointerMove: handlePointerMove,
     onPointerUp: handlePointerUp,

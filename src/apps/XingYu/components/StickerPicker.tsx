@@ -79,23 +79,29 @@ export function StickerPicker({ visible, onSendSticker }: StickerPickerProps) {
 
               {/* Stickers grid */}
               {activePack && (
-                <div className="scrollbar-hide grid grid-cols-5 gap-1 overflow-y-auto px-3 py-2" style={{ maxHeight: 200 }}>
-                  {activePack.stickers.map((sticker, i) => (
-                    <motion.button
+                <div
+                  className="scrollbar-hide grid grid-cols-5 gap-1 overflow-y-auto px-3 pt-2"
+                  style={{
+                    maxHeight: 210,
+                    paddingBottom: 'max(8px, calc(var(--safe-bottom, 0px) + 8px))',
+                  }}
+                >
+                  {activePack.stickers.map((sticker) => (
+                    <button
                       key={sticker.id}
-                      className="flex flex-col items-center justify-center rounded-xl"
-                      style={{ height: 56 }}
-                      onClick={() => onSendSticker(sticker.emoji)}
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ delay: i * 0.02, ...springs.gentle }}
-                      whileTap={{ scale: 0.85 }}
+                      type="button"
+                      className="flex flex-col items-center justify-center rounded-xl transition-transform active:scale-90"
+                      style={{ height: 56, touchAction: 'manipulation' }}
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        onSendSticker(sticker.emoji);
+                      }}
                     >
                       <span style={{ fontSize: 28 }}>{sticker.emoji}</span>
                       <span style={{ fontSize: 9, color: T.textMuted, marginTop: 1 }}>
                         {sticker.label}
                       </span>
-                    </motion.button>
+                    </button>
                   ))}
                 </div>
               )}

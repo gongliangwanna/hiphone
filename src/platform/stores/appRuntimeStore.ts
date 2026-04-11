@@ -15,6 +15,8 @@ export interface RuntimeAppTask {
 
 export type AppTransitionSource = 'icon' | 'switcher';
 export type AppPresentationMode = 'foreground' | 'switcher';
+/** Status bar text style: 'light' = white text (for dark backgrounds), 'dark' = system default */
+export type StatusBarStyle = 'light' | 'dark';
 /** Why an app is currently in "dismissed" state. Drives the exit animation
  *  shape in `AppHost`: 'card' flies out the top, 'home' drops down the bottom. */
 export type DismissReason = 'home' | 'card' | null;
@@ -66,6 +68,8 @@ export interface AppRuntimeState {
   /** Why the current dismissed app is being dismissed. Set by callers of
    *  `removeApp` (finishCardDismiss → 'card', exitAppToHome → 'home'). */
   dismissReason: DismissReason;
+  statusBarStyle: StatusBarStyle;
+  setStatusBarStyle: (style: StatusBarStyle) => void;
   openApp: (id: string, origin: AppOrigin) => void;
   activateApp: (id: string, source?: AppTransitionSource) => void;
   activateAppFromCard: (
@@ -127,6 +131,8 @@ export const useAppRuntimeStore = create<AppRuntimeState>()((set, get) => ({
   presentationMode: 'foreground',
   dismissedAppId: null,
   dismissReason: null,
+  statusBarStyle: 'dark',
+  setStatusBarStyle: (style) => set({ statusBarStyle: style }),
   cardDismiss: {
     appId: null,
     startY: 0,

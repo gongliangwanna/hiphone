@@ -3,6 +3,7 @@ import type { Song } from '../data';
 import { useMusicNavStore } from '../musicStore';
 import { useMusicDataStore } from '../musicDataStore';
 import { formatDuration } from '../data';
+import { MusicArtwork } from '../MusicArtwork';
 import { NavBar } from '@/system';
 import { Play, Shuffle, Loader2 } from 'lucide-react';
 
@@ -50,31 +51,19 @@ export function AlbumDetail() {
       <div className="min-h-0 flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
         {/* Album header */}
         <div className="flex flex-col items-center" style={{ padding: '12px 24px 20px' }}>
-          {displayArtwork ? (
-            <img
-              src={displayArtwork}
-              alt={displayTitle}
-              style={{
-                width: 200,
-                height: 200,
-                borderRadius: 8,
-                objectFit: 'cover',
-                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
-                marginBottom: 16,
-                backgroundColor: '#1c1c1e',
-              }}
-            />
-          ) : (
-            <div
-              style={{
-                width: 200,
-                height: 200,
-                borderRadius: 8,
-                backgroundColor: '#1c1c1e',
-                marginBottom: 16,
-              }}
-            />
-          )}
+          <MusicArtwork
+            src={displayArtwork}
+            alt={displayTitle}
+            iconSize={40}
+            style={{
+              width: 200,
+              height: 200,
+              borderRadius: 8,
+              objectFit: 'cover',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
+              marginBottom: 16,
+            }}
+          />
           <div
             style={{
               fontSize: 22,

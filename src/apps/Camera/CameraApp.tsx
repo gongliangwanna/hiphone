@@ -293,8 +293,8 @@ function TopControls() {
     <div
       className="absolute left-0 right-0 top-0 z-10 flex items-center justify-between px-4"
       style={{
-        paddingTop: 8,
-        height: 44,
+        paddingTop: 'var(--app-safe-top)',
+        height: 'calc(var(--app-safe-top) + 44px)',
         backgroundColor: 'rgba(0, 0, 0, 0.3)',
       }}
     >
@@ -511,7 +511,7 @@ export function CameraApp() {
   }, [reset]);
 
   return (
-    <AppScreen backgroundColor="#000">
+    <AppScreen edgeToEdge backgroundColor="#000">
       <div
         className="relative flex min-h-0 flex-1 flex-col"
         data-testid="camera-app"

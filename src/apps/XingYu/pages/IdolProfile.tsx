@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { ChevronLeft, MessageCircle, Settings } from 'lucide-react';
 import { useXYNav } from '../xingYuNavStore';
 import { useXYData } from '../xingYuDataStore';
-import { getIdol, ME } from '../data';
+import { getIdol, DEFAULT_AVATAR } from '../data';
 import { Avatar } from '../components/Avatar';
 import { MomentCard } from '../components/MomentCard';
 import { T, springs } from '../theme';
@@ -22,8 +22,8 @@ export function IdolProfile() {
   const profileData = isMe
     ? {
         name: userSettings.nickname,
-        avatar: ME.avatar,
-        title: '星语用户',
+        avatar: userSettings.avatarUrl || DEFAULT_AVATAR,
+        title: '可爱信用户',
         bio: userSettings.bio,
         ringIndex: 0,
         online: true,

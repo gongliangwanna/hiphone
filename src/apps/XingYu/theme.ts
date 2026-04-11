@@ -1,38 +1,38 @@
-/* ── 星语 Design System v2 ──
- * 设计理念: "Frosted Dream" — 磨砂质感 + 克制用色
- * 渐变只用于最核心的交互元素，其余保持中性优雅
+/* ── 可爱信 Design System ──
+ * 设计理念: "Macaron Dream" — 梦幻马卡龙 + 温暖克制
+ * 渐变只用于最核心的交互元素，其余保持轻盈粉嫩
  */
 
 export const T = {
-  /* ── 核心渐变 (仅用于关键 CTA、头像边框、发送气泡) ── */
-  accentGrad: 'linear-gradient(135deg, #E8A0BF 0%, #BA90C6 100%)',
-  warmGrad: 'linear-gradient(135deg, #EAC4D5 0%, #B8A9C9 100%)',
+  /* ── 核心渐变 ── */
+  accentGrad: 'linear-gradient(135deg, #FFAEC9 0%, #FFC1CC 100%)', // 樱花粉渐变
+  warmGrad: 'linear-gradient(135deg, #FFD1DC 0%, #FFE4E1 100%)',   // 浅粉渐变
 
   /* ── 表面色 ── */
-  bg: '#F8F6F9',                     // 微暖灰，非纯白非纯粉
+  bg: '#FFF8FA',                     // 极淡的奶粉底色
   card: '#FFFFFF',
-  cardHover: '#FDFBFE',
-  surface: 'rgba(255, 255, 255, 0.72)',  // 磨砂玻璃表面
-  overlay: 'rgba(248, 246, 249, 0.92)',
+  cardHover: '#FFFDFE',
+  surface: 'rgba(255, 255, 255, 0.72)',  
+  overlay: 'rgba(255, 248, 250, 0.85)',
 
   /* ── 文字色 ── */
-  textPrimary: '#1A1425',            // 深紫黑，有温度
-  textSecondary: '#6E6278',          // 柔紫灰
-  textMuted: '#A89BB2',             // 淡灰
+  textPrimary: '#4A3B42',            // 暖褐灰，更柔和
+  textSecondary: '#8B7B82',          // 浅褐灰
+  textMuted: '#BBAAB2',             // 淡灰
   textOnAccent: '#FFFFFF',
 
   /* ── 功能色 ── */
-  accent: '#BA90C6',                 // 主题紫（偏灰、不刺眼）
-  accentLight: '#E8D5F0',
-  rose: '#D4A0A0',                   // 柔玫瑰
-  mint: '#9DC5BB',                   // 柔薄荷
-  sky: '#9BB5D0',                    // 柔天蓝
-  gold: '#D4B896',                   // 柔金
-  online: '#8BC5A7',                 // 柔绿
+  accent: '#FFAEC9',                 // 主题粉（明亮可爱）
+  accentLight: '#FFE1EA',
+  rose: '#FFB6C1',                   // 柔玫瑰
+  mint: '#B4E4D9',                   // 薄荷绿
+  sky: '#BFE4FF',                    // 晴空蓝
+  gold: '#FFD700',                   // 闪亮金
+  online: '#8DE8B1',                 // 元气绿
 
   /* ── 分隔 ── */
-  separator: 'rgba(26, 20, 37, 0.06)',
-  border: 'rgba(26, 20, 37, 0.08)',
+  separator: 'rgba(74, 59, 66, 0.05)',
+  border: 'rgba(74, 59, 66, 0.06)',
 
   /* ── 阴影 (中性，不带色彩) ── */
   shadow1: '0 1px 3px rgba(26, 20, 37, 0.06)',         // 微阴影

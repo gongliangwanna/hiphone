@@ -1,0 +1,47 @@
+/*
+ * iOS-style edit-mode jiggle.
+ *
+ * The animation here is intentionally subtle: rotation amplitude ≈ 1° and a
+ * ~0.55s period. Earlier values (±2.5° / 0.35s) felt frantic and unprofessional
+ * — Apple's jiggle is more of a nervous shimmer than a shake.
+ *
+ * Two opposing keyframes (`jiggleA` / `jiggleB`) let us alternate the start
+ * direction across siblings via `nth-child` so the grid doesn't move in
+ * lock-step like a marching band.
+ */
+
+@keyframes springboard-jiggle-a {
+  0%   { transform: rotate(-1deg)  translate(0,    0); }
+  25%  { transform: rotate( 1deg)  translate(0.4px, -0.4px); }
+  50%  { transform: rotate(-1deg)  translate(0,    0); }
+  75%  { transform: rotate( 1deg)  translate(-0.4px, 0.4px); }
+  100% { transform: rotate(-1deg)  translate(0,    0); }
+}
+
+@keyframes springboard-jiggle-b {
+  0%   { transform: rotate( 1deg)  translate(0,    0); }
+  25%  { transform: rotate(-1deg)  translate(-0.4px, 0.4px); }
+  50%  { transform: rotate( 1deg)  translate(0,    0); }
+  75%  { transform: rotate(-1deg)  translate(0.4px, -0.4px); }
+  100% { transform: rotate( 1deg)  translate(0,    0); }
+}
+
+.springboard-jiggle {
+  /* Use will-change so the browser keeps the element on its own composite
+     layer — keeps the jiggle off the main paint path. */
+  will-change: transform;
+  animation: springboard-jiggle-a 0.55s ease-in-out infinite;
+}
+
+/* Alternate phase for visual variety. Apply via :nth-of-type on the parent. */
+.springboard-jiggle-alt {
+  will-change: transform;
+  animation: springboard-jiggle-b 0.55s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .springboard-jiggle,
+  .springboard-jiggle-alt {
+    animation: none;
+  }
+}

@@ -1,7 +1,9 @@
 import { useMemo } from 'react';
 import type { Song } from '../data';
 import { useMusicDataStore } from '../musicDataStore';
+import { MusicArtwork } from '../MusicArtwork';
 import { ListMusic, User, Disc3, Music, Download, ChevronRight } from 'lucide-react';
+import { motion } from 'motion/react';
 
 const MUSIC_RED = '#FC3C44';
 
@@ -49,26 +51,37 @@ export function LibraryTab() {
 
       {/* Category List */}
       <div style={{ paddingInline: 20 }}>
-        {libraryCategories.map((cat, i) => (
-          <button
-            key={cat.id}
-            className="flex w-full items-center"
-            style={{
-              height: 48,
-              borderBottom:
-                i < libraryCategories.length - 1
-                  ? '0.5px solid rgba(84, 84, 88, 0.65)'
-                  : 'none',
-            }}
-            onClick={() => {}}
-          >
-            <span style={{ marginRight: 12 }}>{cat.icon}</span>
-            <span style={{ fontSize: 20, color: '#fff', flex: 1, textAlign: 'left' }}>
-              {cat.label}
-            </span>
-            <ChevronRight size={14} color="rgba(235,235,245,0.3)" />
-          </button>
-        ))}
+        <div style={{ backgroundColor: 'rgba(28, 28, 30, 0.5)', borderRadius: 10, overflow: 'hidden' }}>
+          {libraryCategories.map((cat, i) => (
+            <motion.button
+              whileTap={{ backgroundColor: 'rgba(255,255,255,0.1)' }}
+              key={cat.id}
+              className="flex w-full items-center"
+              style={{
+                height: 48,
+                padding: '0 16px',
+              }}
+              onClick={() => {}}
+            >
+              <span style={{ marginRight: 12 }}>{cat.icon}</span>
+              <span
+                style={{
+                  fontSize: 20,
+                  color: '#fff',
+                  flex: 1,
+                  textAlign: 'left',
+                  borderBottom: i < libraryCategories.length - 1 ? '0.5px solid rgba(84, 84, 88, 0.65)' : 'none',
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
+                {cat.label}
+              </span>
+              <ChevronRight size={14} color="rgba(235,235,245,0.3)" />
+            </motion.button>
+          ))}
+        </div>
       </div>
 
       {/* Recently Added */}
@@ -90,20 +103,22 @@ export function LibraryTab() {
           }}
         >
           {albumSongs.map((song) => (
-            <button
+            <motion.button
+              whileTap={{ scale: 0.96 }}
               key={song.albumId}
               className="text-left"
               onClick={() => playSong(song.id, featuredIds)}
             >
-              <img
+              <MusicArtwork
                 src={song.artworkUrl}
-                alt={song.album}
+                alt={song.title}
+                iconSize={36}
                 style={{
                   width: '100%',
                   aspectRatio: '1',
                   borderRadius: 8,
                   objectFit: 'cover',
-                  backgroundColor: '#1c1c1e',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
                 }}
               />
               <div
@@ -130,7 +145,7 @@ export function LibraryTab() {
               >
                 {song.artist}
               </div>
-            </button>
+            </motion.button>
           ))}
         </div>
       </div>

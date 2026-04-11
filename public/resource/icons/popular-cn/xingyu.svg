@@ -1,18 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 180 180">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FF9A9E"/>
-      <stop offset="50%" stop-color="#FBC2EB"/>
-      <stop offset="100%" stop-color="#A18CD1"/>
+      <stop offset="0%" stop-color="#FFAEC9"/>
+      <stop offset="100%" stop-color="#FFC1CC"/>
     </linearGradient>
   </defs>
   <rect width="180" height="180" rx="40" fill="url(#bg)"/>
-  <!-- Star -->
-  <path d="M90 35l14 28 31 5-22 22 5 31-28-15-28 15 5-31-22-22 31-5z" fill="rgba(255,255,255,0.9)"/>
-  <!-- Chat bubble -->
-  <ellipse cx="90" cy="120" rx="32" ry="24" fill="rgba(255,255,255,0.85)"/>
-  <circle cx="78" cy="118" r="3.5" fill="#FF9A9E"/>
-  <circle cx="90" cy="118" r="3.5" fill="#A18CD1"/>
-  <circle cx="102" cy="118" r="3.5" fill="#89F7FE"/>
-  <path d="M75 138 q-5 10 5 10 q5-3 8-10z" fill="rgba(255,255,255,0.85)"/>
+  
+  <!-- Envelope Body -->
+  <path d="M40 65 Q90 100 140 65 L140 120 Q140 135 125 135 L55 135 Q40 135 40 120 Z" fill="rgba(255,255,255,0.95)"/>
+  
+  <!-- Envelope Flap (Heart shape) -->
+  <path d="M40 65 Q40 50 55 50 L125 50 Q140 50 140 65 L90 100 Z" fill="rgba(255,255,255,0.85)"/>
+  
+  <!-- Cute Heart Seal -->
+  <path d="M90 95 C90 95 78 82 78 72 C78 65 84 60 90 60 C96 60 102 65 102 72 C102 82 90 95 90 95 Z" fill="#FF8BA7"/>
+  
+  <!-- Sparkles -->
+  <path d="M135 45 L138 35 L148 32 L138 29 L135 19 L132 29 L122 32 L132 35 Z" fill="#FFD700" opacity="0.8"/>
+  <path d="M45 35 L47 28 L54 26 L47 24 L45 17 L43 24 L36 26 L43 28 Z" fill="#FFD700" opacity="0.6"/>
 </svg>

@@ -1,8 +1,9 @@
-import { useState, useMemo, useCallback } from 'react';
-import { Check, Eye, EyeOff, RefreshCw, Search } from 'lucide-react';
+import { useState, useMemo, useCallback, useRef } from 'react';
+import { Check, Eye, EyeOff, RefreshCw, Search, Zap } from 'lucide-react';
 import {
   useAIConfigStore,
   PROVIDER_ADAPTERS,
+  streamChat,
   type ProviderId,
   type ModelInfo,
 } from '@/platform/stores/aiConfigStore';
@@ -185,6 +186,11 @@ export function AIServicePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [keyHint, setKeyHint] = useState(false);
 
+  // Test connection state
+  const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
+  const [testOutput, setTestOutput] = useState('');
+  const abortRef = useRef<AbortController | null>(null);
+
   const adapterInfo = PROVIDER_ADAPTERS[provider];
   const providerKeys = Object.keys(PROVIDER_ADAPTERS) as ProviderId[];
 
@@ -202,6 +208,33 @@ export function AIServicePage() {
 
   // Can we fetch? OpenRouter doesn't need key, SiliconFlow does
   const canFetch = !adapterInfo?.requiresKeyForModels || apiKey.trim().length > 0;
+
+  const canTest = apiKey.trim().length > 0 && model.trim().length > 0;
+
+  const handleTest = useCallback(() => {
+    if (!canTest) return;
+    // Abort previous test
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+
+    setTestStatus('loading');
+    setTestOutput('');
+
+    const endpoint = apiEndpoint || adapterInfo?.defaultEndpoint || '';
+    streamChat(
+      { endpoint, apiKey, model, providerId: provider },
+      [{ role: 'user', content: '你好，请用一句话介绍你自己。' }],
+      (token) => setTestOutput((prev) => prev + token),
+      ctrl.signal,
+    )
+      .then(() => setTestStatus('done'))
+      .catch((e) => {
+        if (ctrl.signal.aborted) return;
+        setTestStatus('error');
+        setTestOutput(e instanceof Error ? e.message : String(e));
+      });
+  }, [canTest, apiKey, apiEndpoint, model, provider, adapterInfo]);
 
   const handleFetch = useCallback(() => {
     if (!canFetch) {
@@ -468,6 +501,91 @@ export function AIServicePage() {
           </div>
         </>
       )}
+
+      {/* ── Test Connection ── */}
+      <SectionHeader title="测试连接" />
+      <div className="mx-4 mb-2">
+        <button
+          onClick={handleTest}
+          disabled={testStatus === 'loading'}
+          className="flex w-full items-center justify-center gap-2"
+          style={{
+            minHeight: 44,
+            borderRadius: 'var(--radius-group)',
+            backgroundColor: canTest ? 'var(--color-systemGreen)' : 'var(--color-systemGray4)',
+            color: 'white',
+            fontSize: 'var(--font-size-body)',
+            fontWeight: 600,
+            opacity: testStatus === 'loading' ? 0.6 : 1,
+          }}
+        >
+          <Zap size={16} />
+          {testStatus === 'loading' ? '正在测试…' : '发送测试消息'}
+        </button>
+      </div>
+      {!canTest && (
+        <SectionFooter text="请先填写 API Key 并选择模型" />
+      )}
+
+      {/* Test output */}
+      {(testStatus === 'loading' || testStatus === 'done' || testStatus === 'error') && (
+        <div
+          className="mx-4 mb-5 overflow-hidden"
+          style={{
+            borderRadius: 'var(--radius-group)',
+            backgroundColor: 'var(--color-tertiarySystemBackground)',
+          }}
+        >
+          {/* Status bar */}
+          <div
+            className="flex items-center gap-2 px-4 py-2"
+            style={{
+              borderBottom: '0.5px solid var(--color-separator)',
+              fontSize: 'var(--font-size-caption1)',
+              color:
+                testStatus === 'error'
+                  ? 'var(--color-systemRed)'
+                  : testStatus === 'done'
+                    ? 'var(--color-systemGreen)'
+                    : 'var(--color-secondaryLabel)',
+            }}
+          >
+            <div
+              className="rounded-full"
+              style={{
+                width: 6,
+                height: 6,
+                backgroundColor:
+                  testStatus === 'error'
+                    ? 'var(--color-systemRed)'
+                    : testStatus === 'done'
+                      ? 'var(--color-systemGreen)'
+                      : 'var(--color-systemOrange)',
+              }}
+            />
+            {testStatus === 'loading' && '接收中…'}
+            {testStatus === 'done' && '测试成功'}
+            {testStatus === 'error' && '测试失败'}
+          </div>
+
+          {/* Response text */}
+          <div
+            className="whitespace-pre-wrap px-4 py-3"
+            style={{
+              fontSize: 'var(--font-size-callout)',
+              color: testStatus === 'error' ? 'var(--color-systemRed)' : 'var(--color-label)',
+              maxHeight: 200,
+              overflowY: 'auto',
+              lineHeight: 1.5,
+            }}
+          >
+            {testOutput || (testStatus === 'loading' ? '▍' : '')}
+          </div>
+        </div>
+      )}
+
+      {/* Bottom spacer */}
+      <div style={{ height: 40 }} />
     </div>
   );
 }

@@ -99,7 +99,10 @@ describe('Device', () => {
     expect(root.getAttribute('style')).toContain('height: 844px');
     expect(root.getAttribute('style')).toContain('min-height: 844px');
     expect(root.getAttribute('style')).toContain('max-width: none');
-    expect(root.getAttribute('style')).toContain('max-height: none');
+    // Fullscreen pins max-height to the profile height so the device root
+    // can never exceed its intended dimensions even when iOS Safari briefly
+    // reports a taller layout viewport during keyboard animations.
+    expect(root.getAttribute('style')).toContain('max-height: 844px');
     expect(root.style.borderRadius).toBe('0px');
   });
 

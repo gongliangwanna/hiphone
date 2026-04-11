@@ -1,122 +1,140 @@
 import { motion } from 'motion/react';
-import { MessageCircle, Users as UsersIcon, ChevronRight } from 'lucide-react';
-import { IDOLS } from '../data';
-import type { Idol } from '../data';
+import { Sparkles, ChevronRight } from 'lucide-react';
+import { useCharacterStore, type CharacterCard } from '@/platform/stores/characterStore';
 import { useXYNav } from '../xingYuNavStore';
+import { useXYData } from '../xingYuDataStore';
 import { Avatar } from '../components/Avatar';
 import { T, springs } from '../theme';
 
+/** 角色 avatar 为空时的兜底图,来自 public/resource/avatars/ */
+const FALLBACK_AVATAR = '/resource/avatars/preset-01.jpg';
+
 export function ContactsTab() {
   const openChat = useXYNav((s) => s.openChat);
-  const openIdol = useXYNav((s) => s.openIdol);
+  const characters = useCharacterStore((s) => s.characters);
+  const ensureCharacterConversation = useXYData((s) => s.ensureCharacterConversation);
 
-  const singles = IDOLS.filter((i) => !i.isGroup);
-  const groups = IDOLS.filter((i) => i.isGroup);
+  const handleOpen = (id: string) => {
+    const convId = ensureCharacterConversation(id);
+    openChat(convId);
+  };
 
   return (
     <div className="flex h-full flex-col" style={{ backgroundColor: T.bg }}>
-      <div className="shrink-0 px-5 pt-3 pb-1">
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: T.textPrimary, letterSpacing: -0.5 }}>
-          通讯录
-        </h1>
-      </div>
-
-      <div className="scrollbar-hide mt-3 min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+      <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-2">
         <Section
-          icon={<MessageCircle size={13} strokeWidth={2} color={T.accent} />}
-          title="我的偶像"
+          icon={<Sparkles size={13} strokeWidth={2} color={T.accent} />}
+          title="我的角色"
         />
-        {singles.map((idol, i) => (
-          <motion.div
-            key={idol.id}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.04, ...springs.gentle }}
+        {characters.length === 0 ? (
+          <div
+            className="flex flex-col items-center justify-center py-16"
+            style={{ backgroundColor: T.card, borderRadius: 12 }}
           >
-            <IdolRow idol={idol} onTap={() => openChat(`c-${idol.id}`)} onAvatarTap={() => openIdol(idol.id)} />
-          </motion.div>
-        ))}
-
-        <Section
-          icon={<UsersIcon size={13} strokeWidth={2} color={T.accent} />}
-          title="群聊"
-        />
-        {groups.map((idol, i) => (
-          <motion.div
-            key={idol.id}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: (singles.length + i) * 0.04, ...springs.gentle }}
+            <span style={{ fontSize: 40, marginBottom: 12 }}>✨</span>
+            <span style={{ fontSize: 13, color: T.textMuted, fontWeight: 500 }}>
+              还没有角色,去设置里创建吧
+            </span>
+          </div>
+        ) : (
+          <div
+            style={{ backgroundColor: T.card, borderRadius: 12, overflow: 'hidden' }}
           >
-            <IdolRow idol={idol} onTap={() => openChat(`c-${idol.id}`)} onAvatarTap={() => openIdol(idol.id)} />
-          </motion.div>
-        ))}
+            {characters.map((character, i) => (
+              <motion.div
+                key={character.id}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.04, ...springs.gentle }}
+              >
+                <CharacterRow
+                  character={character}
+                  onTap={() => handleOpen(character.id)}
+                  isLast={i === characters.length - 1}
+                />
+              </motion.div>
+            ))}
+          </div>
+        )}
         <div style={{ height: 16 }} />
       </div>
     </div>
   );
 }
 
-function Section({ icon, title }: { icon: React.ReactNode; title: string }) {
+function Section({ title }: { icon?: React.ReactNode; title: string }) {
   return (
-    <div className="mb-2 mt-4 flex items-center gap-1.5 px-1">
-      {icon}
-      <span style={{ fontSize: 12, fontWeight: 600, color: T.textSecondary, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+    <div className="mb-2 mt-4 flex items-center gap-1.5 px-2">
+      <span
+        style={{
+          fontSize: 12,
+          fontWeight: 600,
+          color: T.textMuted,
+          letterSpacing: 0.5,
+          textTransform: 'uppercase',
+        }}
+      >
         {title}
       </span>
     </div>
   );
 }
 
-function IdolRow({ idol, onTap, onAvatarTap }: { idol: Idol; onTap: () => void; onAvatarTap: () => void }) {
-  return (
-    <motion.div
-      className="flex w-full items-center gap-3"
-      style={{
-        padding: '12px 14px',
-        marginBottom: 4,
-        borderRadius: T.r.lg,
-        backgroundColor: T.card,
-        boxShadow: T.shadow1,
-      }}
-    >
-      <motion.button
-        onClick={(e) => { e.stopPropagation(); onAvatarTap(); }}
-        whileTap={{ scale: 0.9 }}
-      >
-        <Avatar src={idol.avatar} size={42} ringIndex={idol.ringIndex} online={idol.online} />
-      </motion.button>
+function CharacterRow({
+  character,
+  onTap,
+  isLast,
+}: {
+  character: CharacterCard;
+  onTap: () => void;
+  isLast?: boolean;
+}) {
+  const avatar = character.avatar?.trim() || FALLBACK_AVATAR;
+  const subtitle = character.description?.slice(0, 40) || character.personality || '';
 
-      <motion.button
-        className="flex min-w-0 flex-1 items-center gap-3"
-        onClick={onTap}
-        whileTap={{ scale: 0.98 }}
-        transition={springs.press}
-      >
+  return (
+    <motion.button
+      className="flex w-full items-center gap-3 relative"
+      style={{
+        padding: '10px 16px',
+        backgroundColor: 'transparent',
+      }}
+      onClick={onTap}
+      whileTap={{ backgroundColor: 'rgba(0,0,0,0.04)' }}
+      transition={{ duration: 0 }}
+    >
+      <Avatar src={avatar} size={44} ringIndex={0} />
+
+      <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
         <div className="flex min-w-0 flex-1 flex-col items-start gap-0.5">
-          <div className="flex items-center gap-1.5">
-            <span style={{ fontSize: 15, fontWeight: 600, color: T.textPrimary }}>
-              {idol.name}
-            </span>
+          <span
+            style={{ fontSize: 16, fontWeight: 500, color: T.textPrimary }}
+          >
+            {character.name}
+          </span>
+          {subtitle && (
             <span
+              className="truncate"
               style={{
-                fontSize: 10,
-                fontWeight: 500,
-                color: T.accent,
-                backgroundColor: `${T.accent}10`,
-                borderRadius: T.r.xs,
-                padding: '1px 6px',
+                fontSize: 13,
+                color: T.textSecondary,
+                maxWidth: '100%',
+                textAlign: 'left',
               }}
             >
-              {idol.title}
+              {subtitle}
             </span>
-          </div>
-          <span className="truncate" style={{ fontSize: 12, color: T.textMuted, maxWidth: '100%' }}>
-            {idol.bio}
-          </span>
+          )}
         </div>
-        <ChevronRight size={16} strokeWidth={1.5} color={T.textMuted} />
-      </motion.button>
-    </motion.div>
+        <ChevronRight size={16} color={T.textMuted} strokeWidth={1.5} />
+      </div>
+
+      {!isLast && (
+        <div
+          className="absolute bottom-0 right-0"
+          style={{ height: 0.5, backgroundColor: T.separator, left: 68 }}
+        />
+      )}
+    </motion.button>
   );
 }

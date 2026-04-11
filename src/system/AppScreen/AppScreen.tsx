@@ -4,17 +4,28 @@ interface AppScreenProps {
   children: ReactNode;
   backgroundColor?: string;
   style?: CSSProperties;
+  /**
+   * When true, app content extends behind the status bar (edge-to-edge).
+   * The app is responsible for handling safe area insets itself
+   * (e.g. adding paddingTop to its own header/NavBar).
+   * Use `var(--app-safe-top)` CSS variable for the status bar height.
+   */
+  edgeToEdge?: boolean;
 }
 
 /**
  * Shared full-screen app container.
- * Shell-owned safe areas are applied here so individual apps never offset
- * themselves against the status bar.
+ * By default, shell-owned safe areas are applied so individual apps never
+ * offset themselves against the status bar.
+ *
+ * Pass `edgeToEdge` to let the app render content behind the status bar
+ * (useful for maps, cameras, media players, etc.).
  */
 export function AppScreen({
   children,
   backgroundColor = 'var(--color-secondarySystemBackground)',
   style,
+  edgeToEdge = false,
 }: AppScreenProps) {
   return (
     <div
@@ -27,7 +38,7 @@ export function AppScreen({
     >
       <div
         className="relative flex min-h-0 flex-1 flex-col"
-        style={{ paddingTop: 'var(--app-safe-top)' }}
+        style={edgeToEdge ? undefined : { paddingTop: 'var(--app-safe-top)' }}
         data-testid="app-screen-content"
       >
         {children}

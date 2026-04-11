@@ -9,6 +9,13 @@ export interface Song {
   duration: number; // seconds
   artworkUrl: string; // image URL from iTunes
   previewUrl: string; // 30-sec AAC preview URL
+  lrcUrl?: string; // Meting LRC lyrics URL
+}
+
+/** A single line of parsed LRC lyrics */
+export interface LrcLine {
+  time: number; // seconds
+  text: string;
 }
 
 export interface Album {

@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { MessageCircle, Sparkles, User } from 'lucide-react';
+import { MessageCircle, Users, Sparkles, User } from 'lucide-react';
 import type { XYTab } from './xingYuNavStore';
 import { T, springs } from './theme';
 
@@ -10,8 +10,9 @@ interface TabDef {
 }
 
 const tabs: TabDef[] = [
-  { key: 'chat', label: '消息', Icon: MessageCircle },
-  { key: 'moments', label: '动态', Icon: Sparkles },
+  { key: 'chat', label: '信箱', Icon: MessageCircle },
+  { key: 'contacts', label: '通讯录', Icon: Users },
+  { key: 'moments', label: '星球', Icon: Sparkles },
   { key: 'profile', label: '我的', Icon: User },
 ];
 
@@ -25,7 +26,9 @@ export function XYTabBar({ active, onChange }: TabBarProps) {
     <div
       className="flex shrink-0 items-end justify-around"
       style={{
-        height: 54,
+        minHeight: 54,
+        paddingTop: 8,
+        paddingBottom: 'var(--app-safe-bottom, 8px)',
         background: T.overlay,
         borderTop: `0.5px solid ${T.separator}`,
       }}
@@ -36,17 +39,19 @@ export function XYTabBar({ active, onChange }: TabBarProps) {
           <motion.button
             key={tab.key}
             className="relative flex flex-col items-center justify-center"
-            style={{ flex: 1, minHeight: 48, gap: 3, paddingBottom: 2 }}
+            style={{ flex: 1, minHeight: 48, gap: 3 }}
             onClick={() => onChange(tab.key)}
             whileTap={{ scale: 0.88 }}
             transition={springs.press}
             data-testid={`xy-tab-${tab.key}`}
           >
-            <tab.Icon
-              size={20}
-              strokeWidth={isActive ? 2.2 : 1.5}
-              color={isActive ? T.accent : T.textMuted}
-            />
+            <div className="relative flex flex-col items-center">
+              <tab.Icon
+                size={22}
+                strokeWidth={isActive ? 2.2 : 1.8}
+                color={isActive ? T.accent : T.textMuted}
+              />
+            </div>
             <span
               style={{
                 fontSize: 10,

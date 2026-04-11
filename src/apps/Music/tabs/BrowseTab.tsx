@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { Song } from '../data';
 import { categories } from '../data';
 import { useMusicDataStore } from '../musicDataStore';
+import { MusicArtwork } from '../MusicArtwork';
 import { Search, X, Loader2 } from 'lucide-react';
 
 const MUSIC_RED = '#FC3C44';
@@ -153,9 +154,10 @@ export function BrowseTab() {
                 }}
                 onClick={() => playSong(song.id, searchResultIds)}
               >
-                <img
+                <MusicArtwork
                   src={song.artworkUrl}
-                  alt={song.album}
+                  alt={song.title}
+                  iconSize={18}
                   style={{
                     width: 48,
                     height: 48,
@@ -163,7 +165,6 @@ export function BrowseTab() {
                     flexShrink: 0,
                     marginRight: 12,
                     objectFit: 'cover',
-                    backgroundColor: '#1c1c1e',
                   }}
                 />
                 <div className="flex-1 text-left" style={{ minWidth: 0 }}>
@@ -218,15 +219,15 @@ export function BrowseTab() {
                     style={{ width: 160, scrollSnapAlign: 'start' }}
                     onClick={() => playSong(song.id, featuredIds)}
                   >
-                    <img
+                    <MusicArtwork
                       src={song.artworkUrl}
-                      alt={song.album}
+                      alt={song.title}
+                      iconSize={36}
                       style={{
                         width: 160,
                         height: 160,
                         borderRadius: 8,
                         objectFit: 'cover',
-                        backgroundColor: '#1c1c1e',
                       }}
                     />
                     <div

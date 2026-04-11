@@ -38,44 +38,49 @@ export function ChatListTab() {
   }, [sorted, query, allMessages]);
 
   return (
-    <div className="flex h-full flex-col" style={{ backgroundColor: T.bg }}>
+    <div className="flex h-full flex-col bg-white relative">
       {/* Header */}
-      <div className="shrink-0 px-5 pt-3 pb-1">
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: T.textPrimary, letterSpacing: -0.5 }}>
-          消息
-        </h1>
+      <div
+        className="shrink-0 px-4 pt-2 pb-2"
+        style={{
+          backgroundColor: 'rgba(255, 255, 255, 0.85)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          zIndex: 10,
+          borderBottom: `0.5px solid ${T.separator}`,
+        }}
+      >
         {/* Search */}
         <div
-          className="mt-3 flex items-center gap-2.5"
+          className="flex items-center gap-2.5"
           style={{
-            height: 40,
-            borderRadius: T.r.xl,
-            backgroundColor: T.card,
-            paddingLeft: 14,
+            height: 36,
+            borderRadius: 12,
+            backgroundColor: T.bg,
+            paddingLeft: 12,
             paddingRight: 8,
-            boxShadow: T.shadowInset,
-            border: `1px solid ${T.border}`,
+            boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.02)',
           }}
         >
-          <Search size={15} strokeWidth={1.8} color={T.textMuted} />
+          <Search size={16} strokeWidth={2.5} color={T.textMuted} />
           <input
             className="min-w-0 flex-1 bg-transparent outline-none"
-            style={{ fontSize: 14, color: T.textPrimary }}
-            placeholder="搜索聊天、消息..."
+            style={{ fontSize: 15, color: T.textPrimary, fontWeight: 500 }}
+            placeholder="搜索信件..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
           <AnimatePresence>
             {query && (
               <motion.button
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                exit={{ scale: 0 }}
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0, opacity: 0 }}
                 className="flex items-center justify-center rounded-full"
                 style={{ width: 20, height: 20, backgroundColor: T.textMuted }}
                 onClick={() => setQuery('')}
               >
-                <X size={12} strokeWidth={2.5} color={T.card} />
+                <X size={12} strokeWidth={2.5} color="#fff" />
               </motion.button>
             )}
           </AnimatePresence>
@@ -83,24 +88,29 @@ export function ChatListTab() {
       </div>
 
       {/* Conversation list */}
-      <div className="scrollbar-hide mt-3 min-h-0 flex-1 overflow-y-auto px-4">
+      <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto bg-white">
         {filtered.length === 0 && query.trim() ? (
-          <div className="flex flex-col items-center py-12">
-            <span style={{ fontSize: 13, color: T.textMuted }}>没有找到相关结果</span>
-          </div>
+          <motion.div 
+            className="flex flex-col items-center py-20"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <span style={{ fontSize: 40, marginBottom: 12 }}>📭</span>
+            <span style={{ fontSize: 14, color: T.textMuted, fontWeight: 500 }}>没有找到相关信件</span>
+          </motion.div>
         ) : (
           filtered.map((conv, i) => (
             <motion.div
               key={conv.id}
-              initial={{ opacity: 0, y: 16 }}
+              initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.03, ...springs.gentle }}
+              transition={{ delay: i * 0.04, ...springs.gentle }}
             >
               <ConvRow conv={conv} onTap={() => openChat(conv.id)} />
             </motion.div>
           ))
         )}
-        <div style={{ height: 16 }} />
+        <div style={{ height: 24 }} />
       </div>
     </div>
   );
@@ -112,43 +122,57 @@ function ConvRow({ conv, onTap }: { conv: Conversation; onTap: () => void }) {
 
   return (
     <motion.button
-      className="flex w-full items-center gap-3"
+      className="flex w-full items-center gap-3.5 relative"
       style={{
-        padding: '12px 14px',
-        marginBottom: 4,
-        borderRadius: T.r.lg,
-        backgroundColor: T.card,
-        boxShadow: conv.unread > 0 ? T.shadow2 : T.shadow1,
-        border: `1px solid ${conv.unread > 0 ? T.border : 'transparent'}`,
-        transition: 'box-shadow 0.2s',
+        padding: '12px 16px',
+        backgroundColor: conv.unread > 0 ? T.bg : 'transparent',
       }}
       onClick={onTap}
-      whileTap={{ scale: 0.98 }}
-      transition={springs.press}
+      whileTap={{ backgroundColor: 'rgba(0,0,0,0.04)' }}
+      transition={{ duration: 0 }}
     >
-      <Avatar
-        src={idol.avatar}
-        size={44}
-        ringIndex={idol.ringIndex}
-        online={idol.online}
-        unread={conv.unread}
-      />
+      <div className="relative">
+        <Avatar
+          src={idol.avatar}
+          size={50}
+          ringIndex={idol.ringIndex}
+          online={idol.online}
+        />
+        {conv.unread > 0 && (
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            className="absolute -right-1 -top-1 flex items-center justify-center rounded-full"
+            style={{
+              width: 18,
+              height: 18,
+              backgroundColor: T.accent,
+              border: '2px solid #fff',
+              color: '#fff',
+              fontSize: 10,
+              fontWeight: 700,
+            }}
+          >
+            {conv.unread > 99 ? '99+' : conv.unread}
+          </motion.div>
+        )}
+      </div>
 
-      <div className="flex min-w-0 flex-1 flex-col items-start gap-1">
+      <div className="flex min-w-0 flex-1 flex-col items-start gap-1 py-1">
         <div className="flex w-full items-center justify-between">
           <div className="flex items-center gap-1.5">
-            <span style={{ fontSize: 15, fontWeight: 600, color: T.textPrimary }}>
+            <span style={{ fontSize: 16, fontWeight: 600, color: T.textPrimary }}>
               {idol.name}
             </span>
             {idol.isGroup && (
               <span
                 style={{
-                  fontSize: 9,
-                  fontWeight: 500,
-                  color: T.textSecondary,
-                  background: `${T.accent}12`,
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: T.accent,
+                  background: 'rgba(255,174,201,0.15)',
                   borderRadius: T.r.xs,
-                  padding: '1px 5px',
+                  padding: '2px 6px',
                 }}
               >
                 {idol.memberCount}人
@@ -156,8 +180,8 @@ function ConvRow({ conv, onTap }: { conv: Conversation; onTap: () => void }) {
             )}
           </div>
           <div className="flex items-center gap-1">
-            {conv.pinned && <Pin size={10} strokeWidth={2} color={T.textMuted} />}
-            <span style={{ fontSize: 11, color: T.textMuted }}>
+            {conv.pinned && <Pin size={12} strokeWidth={2.5} color={T.textMuted} />}
+            <span style={{ fontSize: 12, fontWeight: 500, color: conv.unread > 0 ? T.accent : T.textMuted }}>
               {formatTime(conv.lastTime)}
             </span>
           </div>
@@ -165,16 +189,26 @@ function ConvRow({ conv, onTap }: { conv: Conversation; onTap: () => void }) {
         <span
           className="truncate"
           style={{
-            fontSize: 13,
-            color: T.textMuted,
+            fontSize: 14,
+            color: conv.unread > 0 ? T.textPrimary : T.textSecondary,
             fontWeight: conv.unread > 0 ? 500 : 400,
             maxWidth: '100%',
-            lineHeight: 1.2,
+            lineHeight: 1.4,
           }}
         >
           {conv.lastMsg}
         </span>
       </div>
+      
+      {/* iOS style separator */}
+      <div 
+        className="absolute bottom-0 right-0" 
+        style={{ 
+          height: 0.5, 
+          backgroundColor: T.separator, 
+          left: 80 // aligns with text
+        }} 
+      />
     </motion.button>
   );
 }

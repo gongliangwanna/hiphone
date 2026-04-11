@@ -1,15 +1,22 @@
-import { useRef, useEffect, memo } from 'react';
+import { useRef, useEffect, useMemo, memo } from 'react';
 import { motion, useAnimationControls } from 'motion/react';
 import type { AppInfo } from './apps.data';
 import { getSpringboardMetrics, type SpringboardMetrics } from '../Device/viewportProfile';
 import { spring } from '@/platform/design-tokens/motion';
 import { useAppRuntimeStore, type AppOrigin } from '@/platform/stores/appRuntimeStore';
+import { useLongPress } from '@/platform/gesture/useLongPress';
+import { useSpringboardLayoutStore } from '@/platform/stores/springboardLayoutStore';
+import './jiggle.css';
 
 interface AppIconProps {
   app: AppInfo;
   hideLabel?: boolean;
   metrics?: SpringboardMetrics;
   hideIconImages?: boolean;
+  pageIndex?: number;
+  localIndex?: number;
+  isEditMode?: boolean;
+  onDragStart?: (pageIndex: number, localIndex: number, e: React.PointerEvent<HTMLElement>) => void;
   onOpen: (id: string, origin: AppOrigin) => void;
 }
 
@@ -23,17 +30,36 @@ function getPlaceholderColor(seed: string) {
   return `hsl(${Math.abs(hash) % 360} 62% 56%)`;
 }
 
-export const AppIcon = memo(function AppIcon({ app, hideLabel, metrics = getSpringboardMetrics('regular'), hideIconImages, onOpen }: AppIconProps) {
+export const AppIcon = memo(function AppIcon({
+  app,
+  hideLabel,
+  metrics = getSpringboardMetrics('regular'),
+  hideIconImages,
+  pageIndex,
+  localIndex,
+  isEditMode = false,
+  onDragStart,
+  onOpen,
+}: AppIconProps) {
   const iconRef = useRef<HTMLDivElement>(null);
   const iconControls = useAnimationControls();
   const dismissedAppId = useAppRuntimeStore((s) => s.dismissedAppId);
   const dismissReason = useAppRuntimeStore((s) => s.dismissReason);
+  const enterEditMode = useSpringboardLayoutStore((s) => s.enterEditMode);
   const isLandingTarget = dismissedAppId === app.id && dismissReason === 'home';
+
+  // Random jiggle delay per icon (stable across re-renders) — desyncs the
+  // start phase so neighbours don't move in lock-step.
+  const jiggleDelay = useMemo(() => `${Math.random() * 0.2}s`, []);
+  // Alternate keyframe direction by index parity for extra visual variety.
+  const jiggleClass = isEditMode
+    ? ((pageIndex ?? 0) + (localIndex ?? 0)) % 2 === 0
+      ? 'springboard-jiggle'
+      : 'springboard-jiggle-alt'
+    : '';
 
   useEffect(() => {
     if (isLandingTarget) {
-      // Delay until the morph visually arrives at the icon, then:
-      // instant upward displacement (impact), spring back to rest.
       const timer = setTimeout(() => {
         iconControls.set({ y: -3.5, scaleX: 1.03, scaleY: 0.97 });
         iconControls.start({
@@ -47,7 +73,20 @@ export const AppIcon = memo(function AppIcon({ app, hideLabel, metrics = getSpri
     }
   }, [isLandingTarget, iconControls]);
 
+  // Long-press to enter edit mode (only when NOT already in edit mode)
+  const longPress = useLongPress(
+    (e) => {
+      enterEditMode();
+      if (pageIndex !== undefined && localIndex !== undefined && onDragStart) {
+        onDragStart(pageIndex, localIndex, e);
+      }
+    },
+    { delay: 600 },
+  );
+
   const handleClick = () => {
+    // In edit mode, don't open apps
+    if (isEditMode) return;
     const el = iconRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
@@ -61,17 +100,29 @@ export const AppIcon = memo(function AppIcon({ app, hideLabel, metrics = getSpri
     });
   };
 
+  // In edit mode, icon pointer events initiate drag (stop propagation to prevent page swipe)
+  const handleEditPointerDown = (e: React.PointerEvent<HTMLElement>) => {
+    e.stopPropagation();
+    if (pageIndex !== undefined && localIndex !== undefined && onDragStart) {
+      onDragStart(pageIndex, localIndex, e);
+    }
+  };
+
   return (
     <motion.button
-      className="flex flex-col items-center gap-1"
+      className={`flex flex-col items-center gap-1 ${jiggleClass}`}
       style={{
         width: `${metrics.cellWidth}px`,
         paddingTop: 4,
         paddingBottom: 4,
+        animationDelay: isEditMode ? jiggleDelay : undefined,
       }}
-      whileTap={{ scale: 0.92 }}
+      whileTap={isEditMode ? undefined : { scale: 0.92 }}
       transition={{ type: 'spring', ...spring.snappy }}
-      onClick={handleClick}
+      onClick={isEditMode ? undefined : handleClick}
+      onPointerDown={isEditMode ? handleEditPointerDown : longPress.onPointerDown}
+      onPointerUp={isEditMode ? undefined : longPress.onPointerUp}
+      onPointerCancel={isEditMode ? undefined : longPress.onPointerCancel}
       data-testid={`app-icon-${app.id}`}
     >
       {/* Icon image with iOS mask */}
@@ -102,7 +153,6 @@ export const AppIcon = memo(function AppIcon({ app, hideLabel, metrics = getSpri
         )}
       </motion.div>
 
-      {/* Label — hidden when hideLabel is true (used in Dock) */}
       {!hideLabel && (
         <span
           className="w-full truncate text-center"

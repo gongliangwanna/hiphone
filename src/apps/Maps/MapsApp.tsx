@@ -25,7 +25,7 @@ export function MapsApp() {
   }, [reset]);
 
   return (
-    <AppScreen backgroundColor="transparent" style={{ background: '#f2f1ed' }}>
+    <AppScreen edgeToEdge backgroundColor="transparent" style={{ background: '#f2f1ed' }}>
       <MapsContent />
     </AppScreen>
   );
