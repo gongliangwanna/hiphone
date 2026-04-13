@@ -25,8 +25,7 @@ describe('SettingsApp', () => {
     render(<SettingsApp />);
     expect(screen.getByTestId('settings-persona-card')).toBeTruthy();
     expect(screen.getByTestId('list-row-角色')).toBeTruthy();
-    expect(screen.getByTestId('list-row-聊天偏好')).toBeTruthy();
-    expect(screen.getByTestId('list-row-连接设置')).toBeTruthy();
+    expect(screen.getByTestId('list-row-AI 设置')).toBeTruthy();
     expect(screen.getByTestId('list-row-壁纸')).toBeTruthy();
     expect(screen.getByTestId('list-row-关于本机')).toBeTruthy();
   });

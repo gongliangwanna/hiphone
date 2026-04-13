@@ -105,7 +105,16 @@ const siliconflow: ProviderAdapter = {
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string;
+  content: string | Array<{ type: string; [key: string]: unknown }>;
+}
+
+export interface GenerationParams {
+  maxTokens?: number;
+  temperature?: number;
+  topP?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+  reasoningEffort?: 'low' | 'medium' | 'high';
 }
 
 /**
@@ -122,6 +131,7 @@ export async function streamChat(
   messages: ChatMessage[],
   onToken: (token: string) => void,
   signal?: AbortSignal,
+  generationParams?: GenerationParams,
 ): Promise<void> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -132,10 +142,21 @@ export async function streamChat(
     headers['X-Title'] = 'hiPhone';
   }
 
+  const body: Record<string, unknown> = {
+    model,
+    messages,
+    stream: true,
+    max_tokens: generationParams?.maxTokens ?? 2048,
+  };
+  if (generationParams?.temperature != null) body.temperature = generationParams.temperature;
+  if (generationParams?.topP != null) body.top_p = generationParams.topP;
+  if (generationParams?.frequencyPenalty != null) body.frequency_penalty = generationParams.frequencyPenalty;
+  if (generationParams?.presencePenalty != null) body.presence_penalty = generationParams.presencePenalty;
+
   const res = await fetch(`${endpoint}/chat/completions`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ model, messages, stream: true, max_tokens: 256 }),
+    body: JSON.stringify(body),
     signal,
   });
 

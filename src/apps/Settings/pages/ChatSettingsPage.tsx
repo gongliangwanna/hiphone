@@ -121,6 +121,13 @@ function SliderRow({
   );
 }
 
+const REASONING_OPTIONS = [
+  { value: 'off', label: '关闭' },
+  { value: 'low', label: '低' },
+  { value: 'medium', label: '中' },
+  { value: 'high', label: '高' },
+] as const;
+
 export function ChatSettingsPage() {
   const temperature = useAIConfigStore((s) => s.temperature);
   const topP = useAIConfigStore((s) => s.topP);
@@ -128,10 +135,12 @@ export function ChatSettingsPage() {
   const frequencyPenalty = useAIConfigStore((s) => s.frequencyPenalty);
   const presencePenalty = useAIConfigStore((s) => s.presencePenalty);
   const keepRecentMessages = useAIConfigStore((s) => s.keepRecentMessages);
-  const summarizeAfter = useAIConfigStore((s) => s.summarizeAfter);
+  const summarizeThreshold = useAIConfigStore((s) => s.summarizeThreshold);
   const worldInfoBudgetPercent = useAIConfigStore((s) => s.worldInfoBudgetPercent);
   const systemPrompt = useAIConfigStore((s) => s.systemPrompt);
   const postHistoryInstructions = useAIConfigStore((s) => s.postHistoryInstructions);
+  const reasoningEffort = useAIConfigStore((s) => s.reasoningEffort);
+  const enableVision = useAIConfigStore((s) => s.enableVision);
 
   const setTemperature = useAIConfigStore((s) => s.setTemperature);
   const setTopP = useAIConfigStore((s) => s.setTopP);
@@ -139,8 +148,10 @@ export function ChatSettingsPage() {
   const setFrequencyPenalty = useAIConfigStore((s) => s.setFrequencyPenalty);
   const setPresencePenalty = useAIConfigStore((s) => s.setPresencePenalty);
   const setKeepRecentMessages = useAIConfigStore((s) => s.setKeepRecentMessages);
-  const setSummarizeAfter = useAIConfigStore((s) => s.setSummarizeAfter);
+  const setSummarizeThreshold = useAIConfigStore((s) => s.setSummarizeThreshold);
   const setWorldInfoBudgetPercent = useAIConfigStore((s) => s.setWorldInfoBudgetPercent);
+  const setReasoningEffort = useAIConfigStore((s) => s.setReasoningEffort);
+  const setEnableVision = useAIConfigStore((s) => s.setEnableVision);
   const push = useSettingsNavStore((s) => s.push);
 
   return (
@@ -153,6 +164,77 @@ export function ChatSettingsPage() {
           <SliderRow label="最大 Token" value={maxTokens} min={256} max={8192} step={256} onChange={setMaxTokens} />
           <SliderRow label="频率惩罚" value={frequencyPenalty} min={0} max={2} step={0.05} onChange={setFrequencyPenalty} />
           <SliderRow label="存在惩罚" value={presencePenalty} min={0} max={2} step={0.05} onChange={setPresencePenalty} isLast />
+        </ListSection>
+
+        {/* Model capabilities */}
+        <ListSection title="模型能力">
+          {/* Reasoning effort */}
+          <div className="px-4" style={{ paddingTop: 10, paddingBottom: 10, borderBottom: '0.5px solid var(--color-separator)' }}>
+            <div className="mb-2 flex items-center justify-between">
+              <span style={{ fontSize: 'var(--font-size-body)', color: 'var(--color-label)' }}>
+                思考模式
+              </span>
+              <span style={{ fontSize: 'var(--font-size-callout)', color: 'var(--color-secondaryLabel)' }}>
+                {REASONING_OPTIONS.find((o) => o.value === reasoningEffort)?.label}
+              </span>
+            </div>
+            <div className="flex gap-1 overflow-hidden" style={{ borderRadius: 8, backgroundColor: 'rgba(120,120,128,0.12)', padding: 2 }}>
+              {REASONING_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setReasoningEffort(opt.value as typeof reasoningEffort)}
+                  className="flex-1"
+                  style={{
+                    height: 30,
+                    borderRadius: 7,
+                    border: 'none',
+                    fontSize: 13,
+                    fontWeight: reasoningEffort === opt.value ? 600 : 400,
+                    color: reasoningEffort === opt.value ? 'var(--color-label)' : 'var(--color-secondaryLabel)',
+                    backgroundColor: reasoningEffort === opt.value ? 'var(--color-tertiarySystemBackground)' : 'transparent',
+                    boxShadow: reasoningEffort === opt.value ? '0 0.5px 2px rgba(0,0,0,0.12)' : 'none',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {/* Vision toggle */}
+          <div
+            className="flex items-center justify-between px-4"
+            style={{ height: 44 }}
+          >
+            <span style={{ fontSize: 'var(--font-size-body)', color: 'var(--color-label)' }}>
+              图片识别
+            </span>
+            <div
+              onClick={() => setEnableVision(!enableVision)}
+              style={{
+                width: 51,
+                height: 31,
+                borderRadius: 16,
+                backgroundColor: enableVision ? 'var(--color-systemGreen)' : 'rgba(120,120,128,0.16)',
+                padding: 2,
+                cursor: 'pointer',
+                transition: 'background-color 0.2s',
+              }}
+            >
+              <div
+                style={{
+                  width: 27,
+                  height: 27,
+                  borderRadius: 14,
+                  backgroundColor: 'white',
+                  boxShadow: '0 0.5px 3px rgba(0,0,0,0.2)',
+                  transform: enableVision ? 'translateX(20px)' : 'translateX(0)',
+                  transition: 'transform 0.2s',
+                }}
+              />
+            </div>
+          </div>
         </ListSection>
 
         {/* Prompts */}
@@ -183,10 +265,10 @@ export function ChatSettingsPage() {
           />
           <SliderRow
             label="自动摘要"
-            value={summarizeAfter}
-            min={0} max={100} step={10}
-            format={(v) => (v === 0 ? '关闭' : `每 ${v} 条`)}
-            onChange={setSummarizeAfter}
+            value={summarizeThreshold}
+            min={0} max={1} step={0.05}
+            format={(v) => (v === 0 ? '关闭' : `${Math.round(v * 100)}%`)}
+            onChange={setSummarizeThreshold}
           />
           <SliderRow
             label="世界信息预算"

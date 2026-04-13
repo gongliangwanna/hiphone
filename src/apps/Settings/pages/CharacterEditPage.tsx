@@ -1,6 +1,8 @@
-import { useRef } from 'react';
-import { Camera } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { Camera, Trash2, Brain, ChevronRight } from 'lucide-react';
 import { useCharacterStore } from '@/platform/stores/characterStore';
+import { useXYData } from '@/apps/XingYu/xingYuDataStore';
+import { useSettingsNavStore } from '../settingsNavStore';
 import { TextArea } from '@/system';
 
 function SectionHeader({ title }: { title: string }) {
@@ -71,6 +73,11 @@ export function CharacterEditPage() {
   const characters = useCharacterStore((s) => s.characters);
   const activeId = useCharacterStore((s) => s.activeCharacterId);
   const updateCharacter = useCharacterStore((s) => s.updateCharacter);
+
+  const clearCharacterMemory = useXYData((s) => s.clearCharacterMemory);
+  const push = useSettingsNavStore((s) => s.push);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [clearDone, setClearDone] = useState(false);
 
   const char = characters.find((c) => c.id === activeId) ?? characters[0];
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -297,8 +304,141 @@ export function CharacterEditPage() {
         备注内容不会进入对话上下文。
       </div>
 
+      {/* Data section */}
+      <SectionHeader title="数据" />
+      <div
+        className="mx-4 mb-4 overflow-hidden"
+        style={{
+          backgroundColor: 'var(--color-tertiarySystemBackground)',
+          borderRadius: 'var(--radius-group)',
+        }}
+      >
+        {/* Prompt Viewer */}
+        <div
+          onClick={() => push('promptViewer')}
+          className="flex items-center gap-3 px-4"
+          style={{ height: 44, cursor: 'pointer' }}
+        >
+          <Brain size={18} color="var(--color-systemBlue)" strokeWidth={2} />
+          <span className="flex-1" style={{ fontSize: 'var(--font-size-body)', color: 'var(--color-label)' }}>
+            记忆结构
+          </span>
+          <ChevronRight size={16} color="var(--color-tertiaryLabel)" strokeWidth={2} />
+        </div>
+        <div style={{ height: '0.5px', backgroundColor: 'var(--color-separator)', marginLeft: 48 }} />
+        {/* Clear Memory */}
+        <div
+          onClick={() => { setClearDone(false); setShowClearConfirm(true); }}
+          className="flex items-center gap-3 px-4"
+          style={{ height: 44, cursor: 'pointer' }}
+        >
+          <Trash2 size={18} color="var(--color-systemRed)" strokeWidth={2} />
+          <span style={{ fontSize: 'var(--font-size-body)', color: 'var(--color-systemRed)' }}>
+            清除记忆
+          </span>
+        </div>
+      </div>
+      <div
+        className="mx-4 mb-5"
+        style={{
+          fontSize: 'var(--font-size-footnote)',
+          color: 'var(--color-secondaryLabel)',
+        }}
+      >
+        「记忆结构」查看当前发给 AI 的完整提示词组成。「清除记忆」将删除全部聊天记录和上下文摘要。
+      </div>
+
       {/* Spacer */}
       <div style={{ height: 40 }} />
+
+      {/* Confirm Dialog */}
+      {showClearConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+          onClick={() => setShowClearConfirm(false)}
+        >
+          <div
+            className="mx-8 w-full"
+            style={{
+              maxWidth: 270,
+              backgroundColor: 'var(--color-tertiarySystemBackground)',
+              borderRadius: 14,
+              overflow: 'hidden',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-4 pb-2 pt-5 text-center">
+              <div style={{ fontSize: 17, fontWeight: 600, color: 'var(--color-label)' }}>
+                清除记忆
+              </div>
+              <div
+                className="mt-1"
+                style={{ fontSize: 13, color: 'var(--color-secondaryLabel)', lineHeight: 1.4 }}
+              >
+                {clearDone
+                  ? `已清除「${char.name}」的所有对话记忆。`
+                  : `确定要清除与「${char.name}」的所有聊天记录和上下文摘要吗？此操作不可撤销。`}
+              </div>
+            </div>
+            <div style={{ borderTop: '0.5px solid var(--color-separator)' }}>
+              {clearDone ? (
+                <button
+                  onClick={() => setShowClearConfirm(false)}
+                  className="w-full"
+                  style={{
+                    height: 44,
+                    fontSize: 17,
+                    fontWeight: 600,
+                    color: 'var(--color-systemBlue)',
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  好的
+                </button>
+              ) : (
+                <div className="flex">
+                  <button
+                    onClick={() => setShowClearConfirm(false)}
+                    className="flex-1"
+                    style={{
+                      height: 44,
+                      fontSize: 17,
+                      fontWeight: 600,
+                      color: 'var(--color-systemBlue)',
+                      backgroundColor: 'transparent',
+                      border: 'none',
+                      borderRight: '0.5px solid var(--color-separator)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={() => {
+                      clearCharacterMemory(char.id);
+                      setClearDone(true);
+                    }}
+                    className="flex-1"
+                    style={{
+                      height: 44,
+                      fontSize: 17,
+                      color: 'var(--color-systemRed)',
+                      backgroundColor: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    清除
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

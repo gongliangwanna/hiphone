@@ -1,17 +1,13 @@
 import { useState, useRef } from 'react';
 import { motion, useScroll, useTransform, AnimatePresence } from 'motion/react';
-import { Plus } from 'lucide-react';
 import { useXYData } from '../xingYuDataStore';
-import { useXYNav } from '../xingYuNavStore';
 import { MomentCard } from '../components/MomentCard';
-import { MomentComposer } from '../components/MomentComposer';
 import { DEFAULT_AVATAR, DEFAULT_COVER } from '../data';
 import { T, springs } from '../theme';
 
 export function MomentsTab() {
   const moments = useXYData((s) => s.moments);
   const userSettings = useXYData((s) => s.userSettings);
-  const openComposer = useXYNav((s) => s.openMomentComposer);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const { scrollY } = useScroll({ container: scrollRef });
@@ -22,13 +18,13 @@ export function MomentsTab() {
   const headerBgOpacity = useTransform(scrollY, [0, 100], [0, 0.85]);
   const headerBlur = useTransform(scrollY, [0, 100], [0, 20]);
   const headerTitleOpacity = useTransform(scrollY, [80, 120], [0, 1]);
-  const headerIconColor = useTransform(scrollY, [0, 100], ['#FFFFFF', T.textPrimary]);
+
 
   return (
     <div className="relative flex h-full flex-col bg-white">
       {/* 动态渐变导航栏 */}
       <motion.div
-        className="absolute top-0 left-0 right-0 z-20 px-4 pt-2 pb-2 flex items-center justify-between"
+        className="absolute top-0 left-0 right-0 z-20 px-4 pt-2 pb-2 flex items-center justify-center"
         style={{
           backgroundColor: useTransform(headerBgOpacity, (v) => `rgba(255, 255, 255, ${v})`),
           backdropFilter: useTransform(headerBlur, (v) => `blur(${v}px)`),
@@ -36,26 +32,19 @@ export function MomentsTab() {
           borderBottom: useTransform(headerBgOpacity, (v) => `0.5px solid rgba(0,0,0,${v * 0.05})`),
         }}
       >
-        <div className="w-8" /> {/* 占位平衡 */}
-        <motion.span 
-          style={{ opacity: headerTitleOpacity, fontSize: 17, fontWeight: 600, color: T.textPrimary }}
+        <motion.span
+          style={{
+            opacity: headerTitleOpacity,
+            fontSize: 17,
+            fontWeight: 600,
+            color: T.textPrimary,
+          }}
         >
           星球
         </motion.span>
-        <motion.button
-          className="flex items-center justify-center"
-          style={{ width: 32, height: 32 }}
-          onClick={openComposer}
-          whileTap={{ scale: 0.85, opacity: 0.7 }}
-          transition={springs.press}
-        >
-          <motion.div style={{ color: headerIconColor }}>
-            <Plus size={24} strokeWidth={2.5} color="inherit" />
-          </motion.div>
-        </motion.button>
       </motion.div>
 
-      <div ref={scrollRef} className="scrollbar-hide min-h-0 flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="scrollbar-hide relative z-0 min-h-0 flex-1 overflow-y-auto">
         {/* 个人封面区域 (类似朋友圈) */}
         <div className="relative" style={{ height: 280, backgroundColor: T.bg }}>
           {/* 封面图 */}
@@ -165,8 +154,6 @@ export function MomentsTab() {
         )}
       </AnimatePresence>
 
-      {/* Moment Composer Overlay */}
-      <MomentComposer />
     </div>
   );
 }

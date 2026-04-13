@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { idbStorage } from '@/platform/storage/idbStorage';
 
 /** Character Card — CCV2 compatible subset */
 export interface CharacterCard {
@@ -157,6 +158,7 @@ export const useCharacterStore = create<CharacterState>()(
     }),
     {
       name: 'hiPhone-characters',
+      storage: idbStorage,
       partialize: (s) => ({
         characters: s.characters,
         activeCharacterId: s.activeCharacterId,

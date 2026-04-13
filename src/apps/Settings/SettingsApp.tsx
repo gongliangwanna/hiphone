@@ -5,9 +5,8 @@ import { useAppRuntimeStore, wasAppKilled, clearAppKilled } from '@/platform/sto
 import { SettingsHome } from './SettingsHome';
 import { AboutPage } from './AboutPage';
 import { WallpaperPage } from './WallpaperPage';
-import { AIServicePage } from './pages/AIServicePage';
+import { AISettingsPage } from './pages/AISettingsPage';
 import { PersonaPage } from './pages/PersonaPage';
-import { ChatSettingsPage } from './pages/ChatSettingsPage';
 import { SystemPromptEditPage, PostHistoryEditPage } from './pages/PromptEditPage';
 import { DisplayPage } from './pages/DisplayPage';
 import { CharactersPage } from './pages/CharactersPage';
@@ -16,6 +15,9 @@ import { DisclaimerPage } from './pages/DisclaimerPage';
 import { WorldBooksPage } from './pages/WorldBooksPage';
 import { WorldBookEditPage } from './pages/WorldBookEditPage';
 import { WorldBookEntryEditPage } from './pages/WorldBookEntryEditPage';
+import { PromptViewerPage } from './pages/PromptViewerPage';
+import { HeartbeatSettingsPage } from './pages/HeartbeatSettingsPage';
+import { ModelSelectPage } from './pages/ModelSelectPage';
 import { AppScreen, NavBar } from '@/system';
 
 const PAGE_TITLES: Record<string, string> = {
@@ -26,15 +28,17 @@ const PAGE_TITLES: Record<string, string> = {
   display: '显示与亮度',
   // AI
   persona: '我的身份',
-  aiService: 'AI 服务',
+  aiSettings: 'AI 设置',
   characters: '角色管理',
   characterEdit: '编辑角色',
-  chatSettings: '对话设置',
   systemPromptEdit: '系统提示词',
   postHistoryEdit: '历史后置指令',
   worldBooks: '世界书',
   worldBookEdit: '编辑世界书',
   worldBookEntryEdit: '编辑条目',
+  promptViewer: '记忆结构',
+  modelSelect: '选择模型',
+  heartbeat: '心跳系统',
   disclaimer: '免责声明',
 };
 
@@ -44,15 +48,17 @@ const PAGE_COMPONENTS: Record<string, React.ComponentType> = {
   wallpaper: WallpaperPage,
   display: DisplayPage,
   persona: PersonaPage,
-  aiService: AIServicePage,
+  aiSettings: AISettingsPage,
   characters: CharactersPage,
   characterEdit: CharacterEditPage,
-  chatSettings: ChatSettingsPage,
   systemPromptEdit: SystemPromptEditPage,
   postHistoryEdit: PostHistoryEditPage,
   worldBooks: WorldBooksPage,
   worldBookEdit: WorldBookEditPage,
   worldBookEntryEdit: WorldBookEntryEditPage,
+  promptViewer: PromptViewerPage,
+  modelSelect: ModelSelectPage,
+  heartbeat: HeartbeatSettingsPage,
   disclaimer: DisclaimerPage,
 };
 

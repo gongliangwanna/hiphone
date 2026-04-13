@@ -3,8 +3,6 @@ import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 're
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
-  DEFAULT_CENTER,
-  DEFAULT_ZOOM,
   MIN_ZOOM,
   MAX_ZOOM,
   TILE_URL,
@@ -58,13 +56,21 @@ const locationIcon = L.divIcon({
 // ---------------------------------------------------------------------------
 
 function MapEventHandler() {
+  const map = useMap();
   const setMapView = useMapsStore((s) => s.setMapView);
+
+  // Sync store on mount — Leaflet doesn't fire moveend on initial creation,
+  // so without this the store can retain a stale center from a previous session.
+  useEffect(() => {
+    const c = map.getCenter();
+    setMapView([c.lat, c.lng], map.getZoom());
+  }, [map, setMapView]);
 
   useMapEvents({
     moveend: (e) => {
-      const map = e.target;
-      const c = map.getCenter();
-      setMapView([c.lat, c.lng], map.getZoom());
+      const m = e.target;
+      const c = m.getCenter();
+      setMapView([c.lat, c.lng], m.getZoom());
     },
   });
 
@@ -187,10 +193,16 @@ interface MapViewProps {
 export function MapView({ selectedPlace, searchResults, userLocation, flyTarget }: MapViewProps) {
   const markers = selectedPlace ? [selectedPlace] : searchResults;
 
+  // Read store once on mount — MapContainer's center/zoom are immutable after creation.
+  // This ensures re-mounts (going home then reopening) resume at the user's last position
+  // instead of always resetting to the hardcoded Shanghai default.
+  const [initialCenter] = useState(() => useMapsStore.getState().mapCenter);
+  const [initialZoom] = useState(() => useMapsStore.getState().mapZoom);
+
   return (
     <MapContainer
-      center={DEFAULT_CENTER}
-      zoom={DEFAULT_ZOOM}
+      center={initialCenter}
+      zoom={initialZoom}
       minZoom={MIN_ZOOM}
       maxZoom={MAX_ZOOM}
       zoomControl={false}

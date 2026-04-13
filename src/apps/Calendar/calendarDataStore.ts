@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { idbStorage } from '@/platform/storage/idbStorage';
 import { startOfDay, startOfMonth, setHours } from 'date-fns';
 
 export interface CalendarEvent {
@@ -97,6 +98,7 @@ export const useCalendarDataStore = create<CalendarDataState>()(
     }),
     {
       name: 'hiPhone-calendar',
+      storage: idbStorage,
       partialize: (state) => ({ events: state.events }),
     },
   ),

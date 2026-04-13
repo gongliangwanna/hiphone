@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type XYTab = 'chat' | 'contacts' | 'moments' | 'profile';
+export type XYTab = 'chat' | 'contacts' | 'compose' | 'moments' | 'profile';
 
 interface XingYuNavState {
   activeTab: XYTab;
@@ -8,6 +8,7 @@ interface XingYuNavState {
   activeChatId: string | null;
   activeIdolId: string | null;
   momentComposerOpen: boolean;
+  stickerManagerOrigin: string | null;
 
   setTab: (tab: XYTab) => void;
   openChat: (convId: string) => void;
@@ -18,15 +19,20 @@ interface XingYuNavState {
   closeMomentComposer: () => void;
   openSettings: () => void;
   closeSettings: () => void;
+  openStickerManager: (from?: string) => void;
+  closeStickerManager: () => void;
+  openChatSettings: () => void;
+  closeChatSettings: () => void;
   reset: () => void;
 }
 
-export const useXYNav = create<XingYuNavState>()((set) => ({
+export const useXYNav = create<XingYuNavState>()((set, get) => ({
   activeTab: 'chat',
   page: null,
   activeChatId: null,
   activeIdolId: null,
   momentComposerOpen: false,
+  stickerManagerOrigin: null,
 
   setTab: (tab) => set({ activeTab: tab, page: null, activeChatId: null, activeIdolId: null }),
   openChat: (convId) => set({ page: 'chat-detail', activeChatId: convId }),
@@ -37,5 +43,16 @@ export const useXYNav = create<XingYuNavState>()((set) => ({
   closeMomentComposer: () => set({ momentComposerOpen: false }),
   openSettings: () => set({ page: 'settings' }),
   closeSettings: () => set({ page: null }),
-  reset: () => set({ activeTab: 'chat', page: null, activeChatId: null, activeIdolId: null, momentComposerOpen: false }),
+  openStickerManager: (from) => set({ page: 'sticker-manager', stickerManagerOrigin: from ?? null }),
+  closeStickerManager: () => {
+    const origin = get().stickerManagerOrigin;
+    if (origin === 'chat-detail') {
+      set({ page: 'chat-detail', stickerManagerOrigin: null });
+    } else {
+      set({ page: null, stickerManagerOrigin: null });
+    }
+  },
+  openChatSettings: () => set({ page: 'chat-settings' }),
+  closeChatSettings: () => set({ page: 'chat-detail' }),
+  reset: () => set({ activeTab: 'chat', page: null, activeChatId: null, activeIdolId: null, momentComposerOpen: false, stickerManagerOrigin: null }),
 }));

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { idbStorage } from '@/platform/storage/idbStorage';
 
 export interface Persona {
   id: string;
@@ -71,6 +72,7 @@ export const usePersonaStore = create<PersonaState>()(
     }),
     {
       name: 'hiPhone-persona',
+      storage: idbStorage,
       partialize: (s) => ({
         personas: s.personas,
         activePersonaId: s.activePersonaId,

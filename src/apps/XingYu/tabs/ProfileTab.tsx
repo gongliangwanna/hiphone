@@ -1,16 +1,23 @@
-import { useRef } from 'react';
-import { motion, useScroll, useTransform } from 'motion/react';
+import { useRef, useState } from 'react';
+import { motion, useScroll, useTransform, AnimatePresence } from 'motion/react';
 import { Star, Heart, Clock, ChevronRight, Settings, Image as ImageIcon, Smile, Settings2 } from 'lucide-react';
 import { useXYNav } from '../xingYuNavStore';
 import { useXYData } from '../xingYuDataStore';
+import { useStickerStore } from '../stickerStore';
 import { DEFAULT_COVER, DEFAULT_AVATAR } from '../data';
 import { T, springs } from '../theme';
 
+const DEFAULT_SIGNATURE = '还没有个性签名';
+
 export function ProfileTab() {
   const openSettings = useXYNav((s) => s.openSettings);
+  const openStickerManager = useXYNav((s) => s.openStickerManager);
   const settings = useXYData((s) => s.userSettings);
+  const stickerPacks = useStickerStore((s) => s.packs);
   const conversations = useXYData((s) => s.conversations);
   const moments = useXYData((s) => s.moments);
+  const userSignatureHistory = useXYData((s) => s.userSignatureHistory);
+  const [showHistory, setShowHistory] = useState(false);
 
   const myMomentsCount = moments.filter((m) => m.idolId === 'me').length;
   const totalChats = conversations.length;
@@ -101,9 +108,64 @@ export function ProfileTab() {
             <span style={{ fontSize: 22, fontWeight: 700, color: T.textPrimary }}>
               {settings.nickname}
             </span>
-            <span style={{ fontSize: 14, color: T.textSecondary, marginTop: 6, textAlign: 'center', lineHeight: 1.4 }}>
-              {settings.bio}
+            <span
+              style={{
+                fontSize: 14,
+                color: T.textSecondary,
+                marginTop: 6,
+                textAlign: 'center',
+                lineHeight: 1.4,
+                fontStyle: settings.bio ? 'normal' : 'italic',
+              }}
+            >
+              {settings.bio || DEFAULT_SIGNATURE}
             </span>
+
+            {/* 签名历史 */}
+            {userSignatureHistory.length > 0 && (
+              <>
+                <motion.button
+                  className="mt-2 flex items-center gap-1"
+                  onClick={() => setShowHistory((p) => !p)}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  <Clock size={11} strokeWidth={2} color={T.textMuted} />
+                  <span style={{ fontSize: 11, color: T.textMuted, fontWeight: 500 }}>
+                    {showHistory ? '收起' : `历史签名 (${userSignatureHistory.length})`}
+                  </span>
+                </motion.button>
+                <AnimatePresence>
+                  {showHistory && (
+                    <motion.div
+                      className="mt-1.5 flex w-full flex-col gap-1"
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      style={{ overflow: 'hidden' }}
+                    >
+                      {userSignatureHistory.slice(0, 20).map((record, i) => (
+                        <div
+                          key={`${record.timestamp}-${i}`}
+                          className="flex items-baseline justify-between gap-2"
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: 8,
+                            backgroundColor: `${T.accent}08`,
+                          }}
+                        >
+                          <span style={{ fontSize: 12, color: T.textSecondary, flex: 1 }}>
+                            {record.text}
+                          </span>
+                          <span style={{ fontSize: 10, color: T.textMuted, whiteSpace: 'nowrap' }}>
+                            {formatDate(record.timestamp)}
+                          </span>
+                        </div>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </>
+            )}
 
             {/* 统计数据 */}
             <div className="mt-6 flex w-full justify-around pt-5" style={{ borderTop: `0.5px solid ${T.separator}` }}>
@@ -125,13 +187,13 @@ export function ProfileTab() {
         <div className="relative px-4 pb-8 flex flex-col gap-4" style={{ zIndex: 1 }}>
           <MenuSection>
             <MenuItem icon={Star} label="我的收藏" desc="42 条内容" color="#FFD700" />
-            <MenuItem icon={Heart} label="特别关心" desc="3 人" color="#FFB6C1" />
-            <MenuItem icon={Clock} label="互动历史" desc="" color="#BFE4FF" isLast />
+            <MenuItem icon={Heart} label="特别关心" desc="3 人" color="#FF2D55" />
+            <MenuItem icon={Clock} label="互动历史" desc="" color="#5AC8FA" isLast />
           </MenuSection>
 
           <MenuSection>
-            <MenuItem icon={ImageIcon} label="个性装扮" desc="聊天背景/气泡" color="#B4E4D9" />
-            <MenuItem icon={Smile} label="表情包库" desc="已添加 4 个" color="#FFAEC9" isLast />
+            <MenuItem icon={ImageIcon} label="个性装扮" desc="聊天背景/气泡" color="#34C759" />
+            <MenuItem icon={Smile} label="表情包库" desc={`已添加 ${stickerPacks.length} 个`} color="#007AFF" isLast onClick={() => openStickerManager()} />
           </MenuSection>
 
           <MenuSection>
@@ -189,4 +251,13 @@ function MenuItem({ icon: Icon, label, desc, color, isLast, onClick }: any) {
       )}
     </motion.button>
   );
+}
+
+function formatDate(ts: number): string {
+  const d = new Date(ts);
+  const mo = d.getMonth() + 1;
+  const dd = d.getDate();
+  const hh = d.getHours().toString().padStart(2, '0');
+  const mm = d.getMinutes().toString().padStart(2, '0');
+  return `${mo}/${dd} ${hh}:${mm}`;
 }

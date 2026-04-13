@@ -15,7 +15,7 @@ export interface Idol {
   memberCount?: number;
 }
 
-export type MsgType = 'text' | 'image' | 'sticker' | 'voice';
+export type MsgType = 'text' | 'image' | 'sticker' | 'voice' | 'heartbeat_log';
 
 export interface Message {
   id: string;
@@ -24,10 +24,15 @@ export interface Message {
   type: MsgType;
   text?: string;
   imageUrl?: string;
-  stickerEmoji?: string;
+  /** 表情包图片 (base64 data URL)，独立于表情包存储，删包不影响历史 */
+  stickerUrl?: string;
+  /** 表情包描述，用于 AI 理解 */
+  stickerDesc?: string;
   timestamp: number;
   /** AI 流式消息还在 append 中(character 对话才会用到) */
   streaming?: boolean;
+  /** 心跳 agent 主动发出的消息（非用户触发） */
+  proactive?: boolean;
 }
 
 export interface Conversation {
@@ -38,7 +43,20 @@ export interface Conversation {
   lastMsg: string;
   lastTime: number;
   unread: number;
-  pinned?: boolean;
+  /** LLM 生成的历史摘要，用于 context 压缩 */
+  summary?: string;
+  /** 摘要覆盖到的最后一条消息的时间戳 */
+  summaryUpToTimestamp?: number;
+  /** 聊天背景图 URL (base64 data URI 或预设 URL) */
+  backgroundUrl?: string;
+  /** 用户设置的联系人备注名 */
+  remarkName?: string;
+  /** 用户创建的群聊名称 */
+  groupName?: string;
+  /** 用户创建的群聊成员 idol IDs */
+  groupMemberIds?: string[];
+  /** AI-to-AI 会话：两个参与者的 characterId */
+  aiChatParticipants?: [string, string];
 }
 
 export interface Moment {
@@ -53,8 +71,6 @@ export interface Moment {
 }
 
 /* ── Helpers ── */
-const h = (hours: number) => Date.now() - hours * 3600_000;
-const m = (mins: number) => Date.now() - mins * 60_000;
 
 /**
  * 本地托管的真人头像（JPG，放在 public/resource/avatars/）。
@@ -193,132 +209,27 @@ export const PRESET_COVERS: string[] = [
 export const DEFAULT_COVER = PRESET_COVERS[0]!;
 export const DEFAULT_AVATAR = AVATAR.me;
 
-/* ── Sticker System ── */
+/* ── Sticker System (用户上传图片表情包) ── */
 
 export interface Sticker {
   id: string;
-  emoji: string;
-  label: string;
+  /** base64 data URL */
+  imageData: string;
+  /** 描述文本，给 AI 看 — e.g. "开心地笑"、"比心" */
+  description: string;
 }
 
 export interface StickerPack {
   id: string;
   name: string;
-  description: string;
-  icon: string;
   stickers: Sticker[];
 }
 
-export const STICKER_PACKS: StickerPack[] = [
-  {
-    id: 'sweet-daily',
-    name: '甜蜜日常',
-    description: '开心的时候发',
-    icon: '🍬',
-    stickers: [
-      { id: 'sd1', emoji: '😊', label: '开心' },
-      { id: 'sd2', emoji: '🥰', label: '喜欢' },
-      { id: 'sd3', emoji: '😘', label: '亲亲' },
-      { id: 'sd4', emoji: '💕', label: '爱心' },
-      { id: 'sd5', emoji: '✨', label: '闪闪' },
-      { id: 'sd6', emoji: '🌸', label: '花花' },
-      { id: 'sd7', emoji: '🎀', label: '蝴蝶结' },
-      { id: 'sd8', emoji: '💖', label: '心动' },
-      { id: 'sd9', emoji: '🌈', label: '彩虹' },
-      { id: 'sd10', emoji: '☀️', label: '阳光' },
-    ],
-  },
-  {
-    id: 'cute-essentials',
-    name: '卖萌必备',
-    description: '撒娇的时候用',
-    icon: '🐱',
-    stickers: [
-      { id: 'ce1', emoji: '🥺', label: '可怜' },
-      { id: 'ce2', emoji: '😽', label: '猫猫亲' },
-      { id: 'ce3', emoji: '🙈', label: '害羞' },
-      { id: 'ce4', emoji: '😚', label: '嘟嘴' },
-      { id: 'ce5', emoji: '🤗', label: '抱抱' },
-      { id: 'ce6', emoji: '💗', label: '心跳' },
-      { id: 'ce7', emoji: '😻', label: '花痴' },
-      { id: 'ce8', emoji: '🫣', label: '偷看' },
-      { id: 'ce9', emoji: '🐰', label: '兔兔' },
-      { id: 'ce10', emoji: '🧸', label: '熊熊' },
-    ],
-  },
-  {
-    id: 'mood-station',
-    name: '心情小站',
-    description: '表达心情',
-    icon: '🎭',
-    stickers: [
-      { id: 'ms1', emoji: '😭', label: '大哭' },
-      { id: 'ms2', emoji: '😤', label: '生气' },
-      { id: 'ms3', emoji: '🥱', label: '困了' },
-      { id: 'ms4', emoji: '😳', label: '害羞' },
-      { id: 'ms5', emoji: '🤔', label: '思考' },
-      { id: 'ms6', emoji: '😅', label: '尴尬' },
-      { id: 'ms7', emoji: '🤣', label: '笑死' },
-      { id: 'ms8', emoji: '😎', label: '酷' },
-      { id: 'ms9', emoji: '🥳', label: '庆祝' },
-      { id: 'ms10', emoji: '😴', label: '睡觉' },
-    ],
-  },
-  {
-    id: 'starry-tales',
-    name: '星空物语',
-    description: '浪漫的夜晚',
-    icon: '🌙',
-    stickers: [
-      { id: 'st1', emoji: '🌙', label: '月亮' },
-      { id: 'st2', emoji: '⭐', label: '星星' },
-      { id: 'st3', emoji: '🌟', label: '亮晶晶' },
-      { id: 'st4', emoji: '💫', label: '流星' },
-      { id: 'st5', emoji: '🔮', label: '水晶球' },
-      { id: 'st6', emoji: '🪐', label: '星球' },
-      { id: 'st7', emoji: '🌌', label: '银河' },
-      { id: 'st8', emoji: '🦋', label: '蝴蝶' },
-    ],
-  },
-  {
-    id: 'food-time',
-    name: '美食时光',
-    description: '嘴馋的时候',
-    icon: '🍰',
-    stickers: [
-      { id: 'ft1', emoji: '🍰', label: '蛋糕' },
-      { id: 'ft2', emoji: '🍓', label: '草莓' },
-      { id: 'ft3', emoji: '🧋', label: '奶茶' },
-      { id: 'ft4', emoji: '🍦', label: '冰淇淋' },
-      { id: 'ft5', emoji: '🍩', label: '甜甜圈' },
-      { id: 'ft6', emoji: '🍪', label: '饼干' },
-      { id: 'ft7', emoji: '🍫', label: '巧克力' },
-      { id: 'ft8', emoji: '🍭', label: '棒棒糖' },
-      { id: 'ft9', emoji: '🥐', label: '可颂' },
-      { id: 'ft10', emoji: '🍡', label: '团子' },
-    ],
-  },
-  {
-    id: 'animal-party',
-    name: '动物派对',
-    description: '可爱到爆',
-    icon: '🐾',
-    stickers: [
-      { id: 'ap1', emoji: '🐱', label: '猫咪' },
-      { id: 'ap2', emoji: '🐶', label: '狗狗' },
-      { id: 'ap3', emoji: '🐰', label: '兔兔' },
-      { id: 'ap4', emoji: '🐻', label: '小熊' },
-      { id: 'ap5', emoji: '🐼', label: '熊猫' },
-      { id: 'ap6', emoji: '🦊', label: '狐狸' },
-      { id: 'ap7', emoji: '🐧', label: '企鹅' },
-      { id: 'ap8', emoji: '🦄', label: '独角兽' },
-      { id: 'ap9', emoji: '🐝', label: '小蜜蜂' },
-      { id: 'ap10', emoji: '🦋', label: '蝴蝶' },
-    ],
-  },
-];
+/** 单张表情压缩后的最大字节 (200 KB) */
+export const STICKER_MAX_BYTES = 200 * 1024;
+/** 单个表情包最多表情数 */
+export const STICKER_PACK_MAX_COUNT = 30;
 
-export const DEFAULT_STICKER_PACK_IDS = ['sweet-daily', 'cute-essentials', 'mood-station'];
 
 /* ── Chat Gallery Images ──
  * 聊天内"相册"直接复用 Photos app 的照片数据（picsum.photos）,
@@ -417,84 +328,13 @@ export const IDOL_REPLY_POOL: Record<string, string[]> = {
 };
 
 /* ── Conversations ── */
-export const SEED_CONVS: Conversation[] = [
-  { id: 'c-xingchen', idolId: 'xingchen', lastMsg: '晚安，今天也辛苦了', lastTime: m(3), unread: 2, pinned: true },
-  { id: 'c-zhixia', idolId: 'zhixia', lastMsg: '快来看我新学的舞！', lastTime: m(15), unread: 1, pinned: true },
-  { id: 'c-starlight', idolId: 'starlight', lastMsg: '[星野翔] 明天演唱会见！', lastTime: m(40), unread: 5 },
-  { id: 'c-mobai', idolId: 'mobai', lastMsg: '为你写了一首新诗', lastTime: h(1), unread: 0 },
-  { id: 'c-sho', idolId: 'sho', lastMsg: '今日のおやつは何？', lastTime: h(2), unread: 0 },
-  { id: 'c-sweet', idolId: 'sweet', lastMsg: '[林知夏] 姐妹们冲鸭！', lastTime: h(3), unread: 3 },
-  { id: 'c-qingqing', idolId: 'qingqing', lastMsg: '周末一起喝下午茶吧', lastTime: h(5), unread: 0 },
-];
+export const SEED_CONVS: Conversation[] = [];
 
 /* ── Messages ── */
-export const SEED_MSGS: Message[] = [
-  { id: 'm1', convId: 'c-xingchen', senderId: 'xingchen', type: 'text', text: '今天过得怎么样？', timestamp: h(2) },
-  { id: 'm2', convId: 'c-xingchen', senderId: 'me', type: 'text', text: '还好啦，就是有点累', timestamp: h(1.8) },
-  { id: 'm3', convId: 'c-xingchen', senderId: 'xingchen', type: 'text', text: '累了就休息一下吧，不要太勉强自己', timestamp: h(1.5) },
-  { id: 'm4', convId: 'c-xingchen', senderId: 'me', type: 'text', text: '谢谢你～有你在就觉得好多了', timestamp: h(1) },
-  { id: 'm5', convId: 'c-xingchen', senderId: 'xingchen', type: 'text', text: '我一直都在呀', timestamp: m(30) },
-  { id: 'm6', convId: 'c-xingchen', senderId: 'me', type: 'sticker', stickerEmoji: '💕', timestamp: m(20) },
-  { id: 'm7', convId: 'c-xingchen', senderId: 'xingchen', type: 'text', text: '晚安，今天也辛苦了', timestamp: m(3) },
-
-  { id: 'z1', convId: 'c-zhixia', senderId: 'zhixia', type: 'text', text: '在干嘛呀～', timestamp: h(1) },
-  { id: 'z2', convId: 'c-zhixia', senderId: 'me', type: 'text', text: '在摸鱼哈哈', timestamp: m(50) },
-  { id: 'z3', convId: 'c-zhixia', senderId: 'zhixia', type: 'text', text: '哈哈哈被我抓到了！', timestamp: m(45) },
-  { id: 'z4', convId: 'c-zhixia', senderId: 'zhixia', type: 'image', imageUrl: 'https://picsum.photos/seed/xingyu-dance/300/300', timestamp: m(20) },
-  { id: 'z5', convId: 'c-zhixia', senderId: 'zhixia', type: 'text', text: '快来看我新学的舞！', timestamp: m(15) },
-
-  { id: 'b1', convId: 'c-mobai', senderId: 'mobai', type: 'text', text: '春水初生，春林初盛', timestamp: h(3) },
-  { id: 'b2', convId: 'c-mobai', senderId: 'me', type: 'text', text: '好美的句子...', timestamp: h(2) },
-  { id: 'b3', convId: 'c-mobai', senderId: 'mobai', type: 'text', text: '为你写了一首新诗', timestamp: h(1) },
-
-  { id: 's1', convId: 'c-sho', senderId: 'sho', type: 'text', text: 'おはよう！今天天气好好～', timestamp: h(4) },
-  { id: 's2', convId: 'c-sho', senderId: 'me', type: 'text', text: 'おはよう！你今天有什么安排？', timestamp: h(3) },
-  { id: 's3', convId: 'c-sho', senderId: 'sho', type: 'text', text: '今日のおやつは何？', timestamp: h(2) },
-];
+export const SEED_MSGS: Message[] = [];
 
 /* ── Moments ── */
-export const SEED_MOMENTS: Moment[] = [
-  {
-    id: 'mo1', idolId: 'xingchen',
-    text: '今晚的月亮很美，想和你一起看。',
-    imageUrl: 'https://picsum.photos/seed/xingyu-moon/400/300',
-    likes: 328, liked: false, timestamp: h(1),
-    comments: [
-      { userId: 'zhixia', text: '好浪漫呀！' },
-      { userId: 'qingqing', text: '月亮确实很美呢' },
-    ],
-  },
-  {
-    id: 'mo2', idolId: 'zhixia',
-    text: '新舞蹈终于学会啦！今天练了三个小时，明天直播给大家看！',
-    imageUrl: 'https://picsum.photos/seed/xingyu-dance2/400/400',
-    likes: 512, liked: true, timestamp: h(3),
-    comments: [{ userId: 'sho', text: '加油！' }],
-  },
-  {
-    id: 'mo3', idolId: 'mobai',
-    text: '落花人独立，微雨燕双飞。\n——今日读到的最美一句。',
-    likes: 267, liked: false, timestamp: h(5),
-    comments: [],
-  },
-  {
-    id: 'mo4', idolId: 'sho',
-    text: '東京の桜が咲きました！给大家看看我拍的照片～',
-    imageUrl: 'https://picsum.photos/seed/xingyu-sakura/400/300',
-    likes: 445, liked: true, timestamp: h(8),
-    comments: [
-      { userId: 'zhixia', text: '好漂亮！我也想去' },
-      { userId: 'xingchen', text: '翔くん拍得真好' },
-    ],
-  },
-  {
-    id: 'mo5', idolId: 'qingqing',
-    text: '周末自己做了草莓蛋糕，虽然有点歪但是味道超棒的！',
-    imageUrl: 'https://picsum.photos/seed/xingyu-cake/400/400',
-    likes: 189, liked: false, timestamp: h(12),
-    comments: [],
-  },
-];
+export const SEED_MOMENTS: Moment[] = [];
 
 /* ── Lookup ── */
 const idolMap = new Map(IDOLS.map((i) => [i.id, i]));

@@ -70,6 +70,7 @@ const cnApps: AppInfo[] = [
   { id: 'quark', name: '夸克', icon: `${CN_ICON_BASE}/quark.jpg`, page: 1 },
   { id: 'snapchat', name: 'Snapchat', icon: `${CN_ICON_BASE}/snapchat.svg`, page: 1 },
   { id: 'xingyu', name: '可爱信', icon: `${CN_ICON_BASE}/xingyu.svg`, page: 1 },
+  { id: 'gomoku', name: '五子棋', icon: `${CN_ICON_BASE}/gomoku.svg`, page: 1 },
 ];
 
 /** Dock apps — fixed 4 slots */

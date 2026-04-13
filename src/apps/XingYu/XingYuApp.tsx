@@ -12,6 +12,9 @@ import { ProfileTab } from './tabs/ProfileTab';
 import { ChatDetail } from './pages/ChatDetail';
 import { IdolProfile } from './pages/IdolProfile';
 import { Settings } from './pages/Settings';
+import { ChatSettings } from './pages/ChatSettings';
+import { ComposeTab } from './tabs/ComposeTab';
+import { StickerManager } from './pages/StickerManager';
 
 const SLIDE_MS = 350;
 const SLIDE_EASE = [0.32, 0.72, 0, 1] as const;
@@ -55,6 +58,7 @@ export function XingYuApp() {
               <div className="min-h-0 flex-1 overflow-hidden">
                 {activeTab === 'chat' && <ChatListTab />}
                 {activeTab === 'contacts' && <ContactsTab />}
+                {activeTab === 'compose' && <ComposeTab />}
                 {activeTab === 'moments' && <MomentsTab />}
                 {activeTab === 'profile' && <ProfileTab />}
               </div>
@@ -73,6 +77,8 @@ export function XingYuApp() {
               {page === 'chat-detail' && <ChatDetail />}
               {page === 'idol-profile' && <IdolProfile />}
               {page === 'settings' && <Settings />}
+              {page === 'chat-settings' && <ChatSettings />}
+              {page === 'sticker-manager' && <StickerManager />}
             </motion.div>
           )}
         </AnimatePresence>

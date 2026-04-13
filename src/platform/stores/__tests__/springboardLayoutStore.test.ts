@@ -175,9 +175,9 @@ describe('springboardLayoutStore', () => {
 
     it('pageAppCapacity respects widget occupancy', () => {
       expect(pageAppCapacity(undefined)).toBe(20);
-      const w: WidgetInstance = { id: 'w1', kind: 'clock', size: '2x2', col: 0, row: 0 };
+      const w: WidgetInstance = { id: 'w1', kind: 'clock', size: '2x2', col: 0, row: 0, styleIndex: 0 };
       expect(pageAppCapacity([w])).toBe(16);
-      const w2: WidgetInstance = { id: 'w2', kind: 'weather', size: '4x4', col: 0, row: 0 };
+      const w2: WidgetInstance = { id: 'w2', kind: 'weather', size: '4x4', col: 0, row: 0, styleIndex: 0 };
       expect(pageAppCapacity([w, w2])).toBe(0);
     });
   });
@@ -229,7 +229,7 @@ describe('springboardLayoutStore', () => {
   describe('resolveSlotPages', () => {
     it('places widgets before apps on the same page', () => {
       const widgets: WidgetInstance[][] = [
-        [{ id: 'w1', kind: 'clock', size: '2x2', col: 0, row: 0 }],
+        [{ id: 'w1', kind: 'clock', size: '2x2', col: 0, row: 0, styleIndex: 0 }],
       ];
       const slots = resolveSlotPages(null, widgets);
       expect(slots[0]![0]!.type).toBe('widget');
@@ -239,7 +239,7 @@ describe('springboardLayoutStore', () => {
     it('reduces page app capacity by widget cells', () => {
       // One 4x4 widget on page 0 should leave 4 app slots on page 0
       const widgets: WidgetInstance[][] = [
-        [{ id: 'w1', kind: 'photo', size: '4x4', col: 0, row: 0 }],
+        [{ id: 'w1', kind: 'photo', size: '4x4', col: 0, row: 0, styleIndex: 0 }],
       ];
       const slots = resolveSlotPages(null, widgets);
       const page0Apps = slots[0]!.filter((s) => s.type === 'app');
@@ -248,7 +248,7 @@ describe('springboardLayoutStore', () => {
 
     it('resolveOrderedPages still returns app-only view', () => {
       const widgets: WidgetInstance[][] = [
-        [{ id: 'w1', kind: 'clock', size: '2x2', col: 0, row: 0 }],
+        [{ id: 'w1', kind: 'clock', size: '2x2', col: 0, row: 0, styleIndex: 0 }],
       ];
       const pages = resolveOrderedPages(null, widgets);
       // 16 app slots left on page 0 after the 2x2 widget
@@ -368,9 +368,9 @@ describe('springboardLayoutStore', () => {
       useSpringboardLayoutStore.setState({
         pageWidgets: [
           [
-            { id: 'mover', kind: 'clock', size: '2x2', col: 0, row: 0 },
-            { id: 'filler', kind: 'weather', size: '2x2', col: 2, row: 0 },
-            { id: 'target', kind: 'date', size: '4x2', col: 0, row: 2 },
+            { id: 'mover', kind: 'clock', size: '2x2', col: 0, row: 0, styleIndex: 0 },
+            { id: 'filler', kind: 'weather', size: '2x2', col: 2, row: 0, styleIndex: 0 },
+            { id: 'target', kind: 'date', size: '4x2', col: 0, row: 2, styleIndex: 0 },
           ],
         ],
       });
@@ -429,7 +429,7 @@ describe('springboardLayoutStore', () => {
       useSpringboardLayoutStore.setState({
         appOrder: [apps.slice(0, 10).map((a) => a.id)],
         pageWidgets: [
-          [{ id: 'big', kind: 'photo', size: '4x4', col: 0, row: 0 }],
+          [{ id: 'big', kind: 'photo', size: '4x4', col: 0, row: 0, styleIndex: 0 }],
         ],
       });
       // Any move triggers the cascade path. Reorder two apps within page 0.
@@ -471,7 +471,7 @@ describe('springboardLayoutStore', () => {
       const v2State = {
         appOrder: [[apps[0]!.id]],
         pageWidgets: [
-          [{ id: 'w1', kind: 'clock', size: '2x2', col: 2, row: 3 }],
+          [{ id: 'w1', kind: 'clock', size: '2x2', col: 2, row: 3, styleIndex: 0 }],
         ],
       };
       localStorage.setItem(

@@ -141,6 +141,8 @@ export function AssistiveTouch() {
     };
     e.currentTarget.setPointerCapture(e.pointerId);
     animate(ballScale, 0.88, { type: 'spring', ...spring.snappy });
+    // Immediately show full opacity on touch (no fade-in delay)
+    ballOpacity.set(ACTIVE_OPACITY);
     resetIdleTimer();
   };
 
@@ -238,10 +240,14 @@ export function AssistiveTouch() {
               top: menuPosition.y,
               transformOrigin,
             }}
-            initial={{ scale: 0, opacity: 0 }}
+            initial={{ scale: 0, opacity: 1 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0, opacity: 0 }}
-            transition={{ type: 'spring', ...spring.snappy }}
+            transition={{
+              type: 'spring',
+              ...spring.snappy,
+              opacity: { duration: 0.1 },
+            }}
             data-testid="assistive-touch-menu"
           >
             <Material

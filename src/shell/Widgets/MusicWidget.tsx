@@ -64,7 +64,13 @@ export function MusicWidget({ size, variant, previewWidth }: MusicWidgetProps) {
   const duration = song?.duration ?? 0;
 
   const handleOpenMusicApp = () => {
-    if (!interactive) return;
+    if (variant === 'drawer') return;
+    // Read isEditMode freshly from the store rather than relying on the
+    // captured `interactive` closure. Long-press → enterEditMode() flips
+    // the store synchronously but the click that fires immediately after
+    // pointerUp can race React's re-render. Reading the store directly
+    // means we never open the Music app for a long-press-to-edit gesture.
+    if (useSpringboardLayoutStore.getState().isEditMode) return;
     const el = shellRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
@@ -292,41 +298,50 @@ function SmallMusic({
   hasSong,
   onTogglePlay,
 }: SmallProps) {
+  // 2x2 layout (mirrors Apple Music "Now Playing" small widget):
+  //   ┌───────────────────────┐
+  //   │ [Art 58]         (▶︎) │   ← play button floats in the widget's
+  //   │                        │     top-right corner, not hanging off
+  //   │                        │     the album tile.
+  //   │  Title                 │
+  //   │  ♪ Artist              │
+  //   │  ───────────           │
+  //   └───────────────────────┘
   return (
-    <div className="flex h-full w-full flex-col" style={{ gap: 8 }}>
-      <div className="relative" style={{ width: 58, height: 58 }}>
-        <ArtTile artwork={artwork} size={58} spin={false} />
-        {hasSong && (
-          <div
-            style={{
-              position: 'absolute',
-              right: -6,
-              bottom: -6,
-            }}
+    <div className="relative flex h-full w-full flex-col">
+      <ArtTile artwork={artwork} size={58} spin={false} />
+
+      {hasSong && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+          }}
+        >
+          <CircleControl
+            interactive={interactive}
+            onTap={onTogglePlay}
+            diameter={32}
+            testId="widget-music-play"
+            label={isPlaying ? '暂停' : '播放'}
           >
-            <CircleControl
-              interactive={interactive}
-              onTap={onTogglePlay}
-              diameter={26}
-              testId="widget-music-play"
-              label={isPlaying ? '暂停' : '播放'}
-            >
-              {isPlaying ? (
-                <Pause size={13} fill="white" color="white" strokeWidth={0} />
-              ) : (
-                <Play
-                  size={13}
-                  fill="white"
-                  color="white"
-                  strokeWidth={0}
-                  style={{ marginLeft: 1 }}
-                />
-              )}
-            </CircleControl>
-          </div>
-        )}
-      </div>
-      <div className="min-w-0">
+            {isPlaying ? (
+              <Pause size={15} fill="white" color="white" strokeWidth={0} />
+            ) : (
+              <Play
+                size={15}
+                fill="white"
+                color="white"
+                strokeWidth={0}
+                style={{ marginLeft: 1 }}
+              />
+            )}
+          </CircleControl>
+        </div>
+      )}
+
+      <div className="min-w-0" style={{ marginTop: 'auto' }}>
         <div
           className="truncate"
           style={{ fontSize: 12.5, fontWeight: 700, color: 'white', lineHeight: 1.25, letterSpacing: '-0.01em' }}
@@ -352,9 +367,9 @@ function SmallMusic({
             {artist}
           </div>
         </div>
-      </div>
-      <div className="mt-auto">
-        <ProgressBarLive duration={duration} />
+        <div style={{ marginTop: 6 }}>
+          <ProgressBarLive duration={duration} />
+        </div>
       </div>
     </div>
   );

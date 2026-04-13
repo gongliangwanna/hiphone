@@ -1,0 +1,157 @@
+/**
+ * IndexedDB storage adapter for Zustand persist.
+ *
+ * Replaces localStorage (5 MB cap) with IndexedDB (virtually unlimited).
+ * On first access, transparently migrates existing localStorage data so
+ * users don't lose anything on upgrade.
+ *
+ * Usage:
+ *   persist(fn, { storage: idbStorage, ... })
+ */
+
+// ---------------------------------------------------------------------------
+// DB constants
+// ---------------------------------------------------------------------------
+
+const DB_NAME = 'hiPhone-storage';
+const DB_VERSION = 1;
+const STORE_NAME = 'kv';
+
+// ---------------------------------------------------------------------------
+// Cached connection — one IDBDatabase instance shared across all stores
+// ---------------------------------------------------------------------------
+
+let dbPromise: Promise<IDBDatabase> | null = null;
+
+function getDB(): Promise<IDBDatabase> {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => {
+      dbPromise = null; // allow retry
+      reject(req.error);
+    };
+  });
+  return dbPromise;
+}
+
+// ---------------------------------------------------------------------------
+// Low-level IDB helpers
+// ---------------------------------------------------------------------------
+
+function idbGet<T>(db: IDBDatabase, key: string): Promise<T | undefined> {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const req = tx.objectStore(STORE_NAME).get(key);
+    req.onsuccess = () => resolve(req.result as T | undefined);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function idbSet(db: IDBDatabase, key: string, value: unknown): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function idbDelete(db: IDBDatabase, key: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Fallback: localStorage adapter (for test environments without IndexedDB)
+// ---------------------------------------------------------------------------
+
+const hasIDB = typeof indexedDB !== 'undefined';
+
+const localStorageFallback = {
+  getItem: (name: string) => {
+    const raw = localStorage.getItem(name);
+    return raw ? JSON.parse(raw) : null;
+  },
+  setItem: (name: string, value: unknown) => {
+    localStorage.setItem(name, JSON.stringify(value));
+  },
+  removeItem: (name: string) => {
+    localStorage.removeItem(name);
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Zustand PersistStorage adapter
+// ---------------------------------------------------------------------------
+
+/**
+ * Zustand persist storage backed by IndexedDB.
+ *
+ * Falls back to localStorage when IndexedDB is unavailable (jsdom / SSR).
+ *
+ * `getItem` transparently migrates from localStorage on first read:
+ *   1. Try IndexedDB → return if found
+ *   2. Try localStorage → if found, copy to IndexedDB, delete from localStorage
+ *   3. Return null
+ */
+export const idbStorage = hasIDB
+  ? {
+      getItem: async (name: string) => {
+        try {
+          const db = await getDB();
+
+          // 1. IndexedDB
+          const value = await idbGet(db, name);
+          if (value !== undefined && value !== null) return value;
+
+          // 2. Migrate from localStorage
+          const raw = localStorage.getItem(name);
+          if (raw) {
+            try {
+              const parsed = JSON.parse(raw);
+              await idbSet(db, name, parsed);
+              localStorage.removeItem(name);
+              console.log(`[idbStorage] migrated "${name}" from localStorage → IndexedDB`);
+              return parsed;
+            } catch {
+              // Corrupted JSON — discard
+              localStorage.removeItem(name);
+            }
+          }
+        } catch (e) {
+          console.warn(`[idbStorage] getItem("${name}") failed:`, e);
+        }
+        return null;
+      },
+
+      setItem: async (name: string, value: unknown) => {
+        try {
+          const db = await getDB();
+          await idbSet(db, name, value);
+        } catch (e) {
+          console.error(`[idbStorage] setItem("${name}") failed:`, e);
+        }
+      },
+
+      removeItem: async (name: string) => {
+        try {
+          const db = await getDB();
+          await idbDelete(db, name);
+        } catch (e) {
+          console.warn(`[idbStorage] removeItem("${name}") failed:`, e);
+        }
+      },
+    }
+  : localStorageFallback;

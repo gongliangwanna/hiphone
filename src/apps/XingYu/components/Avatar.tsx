@@ -8,14 +8,13 @@ interface AvatarProps {
   online?: boolean;
 }
 
-// 柔和马卡龙渐变色环
 const RINGS = [
-  'linear-gradient(135deg, #FFAEC9, #FFC1CC)', // 樱花粉
-  'linear-gradient(135deg, #B4E4D9, #8DE8B1)', // 薄荷青
-  'linear-gradient(135deg, #BFE4FF, #A1C4FD)', // 晴空蓝
-  'linear-gradient(135deg, #FFD700, #FFF0BA)', // 闪亮金
-  'linear-gradient(135deg, #E0C5E5, #D4A0A0)', // 薰衣草
-  'linear-gradient(135deg, #FFBFA3, #FFD1DC)', // 珊瑚粉
+  'linear-gradient(135deg, #5AC8FA, #007AFF)', // 天蓝
+  'linear-gradient(135deg, #34C759, #30D158)', // 翠绿
+  'linear-gradient(135deg, #AF52DE, #BF5AF2)', // 紫色
+  'linear-gradient(135deg, #FF9500, #FFB340)', // 橙色
+  'linear-gradient(135deg, #5856D6, #7D7AFF)', // 靛蓝
+  'linear-gradient(135deg, #FF2D55, #FF6482)', // 红色
 ];
 
 export function Avatar({ src, size = 48, ringIndex = -1, online }: AvatarProps) {

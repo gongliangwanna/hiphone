@@ -8,18 +8,15 @@ import {
   type WidgetKind,
   type WidgetSize,
 } from '@/platform/stores/springboardLayoutStore';
-import { widgetCatalog, type WidgetCatalogEntry } from '../Widgets/registry';
+import { widgetCatalog, getStyleCount, type WidgetCatalogEntry } from '../Widgets/registry';
 
 /**
  * Widget gallery sheet that slides up from the bottom of the device.
  *
- * Mirrors the iOS "Add Widget" drawer: a category list on the left (kind
- * chooser) plus a gallery on the right showing each supported size as a
- * tappable preview card. Tapping a card adds the widget to the page the
- * user is currently viewing and closes the drawer.
- *
- * Composition lives in `Device.tsx`; this component just renders the
- * sheet when `isWidgetDrawerOpen` is true.
+ * For each size, if the widget supports multiple styles the drawer shows
+ * a horizontally scrollable row of preview cards — one per style. The user
+ * swipes left/right to browse styles, then taps to add the chosen style.
+ * Widgets without multiple styles render a single centred card per size.
  */
 export function WidgetDrawer() {
   const isOpen = useSpringboardLayoutStore((s) => s.isWidgetDrawerOpen);
@@ -39,14 +36,17 @@ export function WidgetDrawer() {
 
   if (!isOpen) return null;
 
-  const handleAdd = (kind: WidgetKind, size: WidgetSize) => {
-    const id = addWidget(currentPage, kind, size);
+  const handleAdd = (kind: WidgetKind, size: WidgetSize, styleIndex: number) => {
+    const id = addWidget(currentPage, kind, size, styleIndex);
     if (id) {
-      setFeedback(`已添加 ${sizeLabel(size)} ${selectedEntry.name}`);
+      const styleName = selectedEntry.styles?.[size]?.[styleIndex]?.label;
+      const label = styleName
+        ? `${sizeLabel(size)} ${selectedEntry.name}·${styleName}`
+        : `${sizeLabel(size)} ${selectedEntry.name}`;
+      setFeedback(`已添加 ${label}`);
       closeDrawer();
     } else {
       setFeedback('此页已满 — 请先删除一个小组件或 App');
-      // auto-hide after a moment
       window.setTimeout(() => setFeedback(null), 1800);
     }
   };
@@ -131,7 +131,7 @@ export function WidgetDrawer() {
             color: 'rgba(235,235,245,0.55)',
           }}
         >
-          从类别中选择，再点击尺寸即可添加到第 {currentPage + 1} 页
+          选择样式，点击即可添加到第 {currentPage + 1} 页
         </div>
 
         {/* category selector (horizontal scroll pill row) */}
@@ -176,7 +176,7 @@ export function WidgetDrawer() {
         {/* gallery */}
         <div
           className="flex-1 overflow-y-auto"
-          style={{ padding: '8px 20px 28px' }}
+          style={{ padding: '8px 0 28px' }}
           data-testid="widget-drawer-gallery"
         >
           <div
@@ -185,6 +185,7 @@ export function WidgetDrawer() {
               fontWeight: 600,
               color: 'rgba(235,235,245,0.85)',
               marginBottom: 6,
+              padding: '0 20px',
             }}
           >
             {selectedEntry.name}
@@ -194,47 +195,21 @@ export function WidgetDrawer() {
               fontSize: 12,
               color: 'rgba(235,235,245,0.55)',
               marginBottom: 18,
+              padding: '0 20px',
             }}
           >
             {selectedEntry.tagline}
           </div>
 
-          <div className="flex flex-col items-center gap-6">
-            {selectedEntry.sizes.map((size) => {
-              const Component = selectedEntry.component;
-              return (
-                <div key={size} className="flex flex-col items-center">
-                  <button
-                    type="button"
-                    onClick={() => handleAdd(selectedEntry.kind, size)}
-                    className="flex items-center justify-center"
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      padding: 0,
-                      cursor: 'pointer',
-                    }}
-                    data-testid={`widget-drawer-card-${selectedEntry.kind}-${size}`}
-                    aria-label={`添加 ${sizeLabel(size)} ${selectedEntry.name}`}
-                  >
-                    <Component
-                      size={size}
-                      variant="drawer"
-                      previewWidth={140}
-                    />
-                  </button>
-                  <div
-                    style={{
-                      marginTop: 8,
-                      fontSize: 12,
-                      color: 'rgba(235,235,245,0.65)',
-                    }}
-                  >
-                    {sizeLabel(size)}
-                  </div>
-                </div>
-              );
-            })}
+          <div className="flex flex-col gap-8">
+            {selectedEntry.sizes.map((size) => (
+              <SizeStyleRow
+                key={size}
+                entry={selectedEntry}
+                size={size}
+                onAdd={handleAdd}
+              />
+            ))}
           </div>
         </div>
 
@@ -259,6 +234,121 @@ export function WidgetDrawer() {
         )}
       </Material>
     </motion.div>
+  );
+}
+
+/**
+ * Per-size row in the gallery. If the widget has multiple styles for this
+ * size, renders a horizontally scrollable strip of preview cards; otherwise
+ * a single centred card.
+ */
+function SizeStyleRow({
+  entry,
+  size,
+  onAdd,
+}: {
+  entry: WidgetCatalogEntry;
+  size: WidgetSize;
+  onAdd: (kind: WidgetKind, size: WidgetSize, styleIndex: number) => void;
+}) {
+  const Component = entry.component;
+  const count = getStyleCount(entry.kind, size);
+  const styles = entry.styles?.[size];
+
+  if (count <= 1) {
+    // Single style — centred card (original layout).
+    return (
+      <div className="flex flex-col items-center">
+        <button
+          type="button"
+          onClick={() => onAdd(entry.kind, size, 0)}
+          className="flex items-center justify-center"
+          style={{
+            background: 'transparent',
+            border: 'none',
+            padding: 0,
+            cursor: 'pointer',
+          }}
+          data-testid={`widget-drawer-card-${entry.kind}-${size}`}
+          aria-label={`添加 ${sizeLabel(size)} ${entry.name}`}
+        >
+          <Component size={size} variant="drawer" previewWidth={140} />
+        </button>
+        <div
+          style={{
+            marginTop: 8,
+            fontSize: 12,
+            color: 'rgba(235,235,245,0.65)',
+          }}
+        >
+          {sizeLabel(size)}
+        </div>
+      </div>
+    );
+  }
+
+  // Multiple styles — horizontal scroll strip.
+  return (
+    <div>
+      <div
+        style={{
+          fontSize: 12,
+          fontWeight: 600,
+          color: 'rgba(235,235,245,0.65)',
+          marginBottom: 8,
+          padding: '0 20px',
+        }}
+      >
+        {sizeLabel(size)}
+      </div>
+      <div
+        className="flex gap-4 overflow-x-auto"
+        style={{
+          padding: '0 20px',
+          scrollbarWidth: 'none',
+          scrollSnapType: 'x mandatory',
+        }}
+      >
+        {Array.from({ length: count }, (_, i) => (
+          <div
+            key={i}
+            className="flex flex-shrink-0 flex-col items-center"
+            style={{ scrollSnapAlign: 'center' }}
+          >
+            <button
+              type="button"
+              onClick={() => onAdd(entry.kind, size, i)}
+              className="flex items-center justify-center"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                padding: 0,
+                cursor: 'pointer',
+              }}
+              data-testid={`widget-drawer-card-${entry.kind}-${size}-style-${i}`}
+              aria-label={`添加 ${sizeLabel(size)} ${entry.name} · ${styles?.[i]?.label ?? ''}`}
+            >
+              <Component
+                size={size}
+                variant="drawer"
+                previewWidth={140}
+                styleIndex={i}
+              />
+            </button>
+            <div
+              style={{
+                marginTop: 6,
+                fontSize: 11,
+                fontWeight: 500,
+                color: 'rgba(235,235,245,0.55)',
+              }}
+            >
+              {styles?.[i]?.label ?? `样式 ${i + 1}`}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 

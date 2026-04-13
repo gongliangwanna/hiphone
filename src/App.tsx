@@ -1,7 +1,13 @@
+import { useEffect } from 'react';
 import { Device } from './shell/Device';
 import { MusicPlaybackHost } from './apps/Music/MusicPlaybackHost';
+import { startHeartbeatScheduler } from './platform/ai/heartbeatAgent';
 
 export function App() {
+  useEffect(() => {
+    startHeartbeatScheduler();
+  }, []);
+
   return (
     <>
       {/* Always-on audio engine: drives playback from the music store so the

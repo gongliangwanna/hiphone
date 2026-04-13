@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { idbStorage } from '@/platform/storage/idbStorage';
 import type { Conversation, ChatMessage } from './data';
 import { SEED_CONVERSATIONS, SEED_MESSAGES } from './data';
 
@@ -47,6 +48,7 @@ export const useSnapchatDataStore = create<SnapchatDataState>()(
     }),
     {
       name: 'hiPhone-snapchat',
+      storage: idbStorage,
       partialize: (state) => ({
         conversations: state.conversations,
         messages: state.messages,

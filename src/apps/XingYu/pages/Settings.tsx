@@ -1,21 +1,22 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, Check, Camera, Image as ImageIcon, Upload } from 'lucide-react';
+import { ChevronLeft, Check, Camera, Image as ImageIcon } from 'lucide-react';
 import { useXYNav } from '../xingYuNavStore';
 import { useXYData } from '../xingYuDataStore';
 import { PRESET_AVATARS, PRESET_COVERS, DEFAULT_AVATAR, DEFAULT_COVER } from '../data';
 import { Avatar } from '../components/Avatar';
+import { PickerSheet } from '../components/PickerSheet';
 import { T, springs } from '../theme';
 
 const ACCENT_COLORS = [
-  { label: '樱花粉', value: '#FFAEC9' },
-  { label: '蜜桃', value: '#FFB6C1' },
-  { label: '薄荷', value: '#B4E4D9' },
-  { label: '天空', value: '#BFE4FF' },
-  { label: '香草', value: '#FFF0BA' },
-  { label: '薰衣草', value: '#E0C5E5' },
-  { label: '珊瑚', value: '#FFBFA3' },
-  { label: '青提', value: '#D4F0B7' },
+  { label: '天蓝', value: '#007AFF' },
+  { label: '翠绿', value: '#34C759' },
+  { label: '紫色', value: '#AF52DE' },
+  { label: '橙色', value: '#FF9500' },
+  { label: '靛蓝', value: '#5856D6' },
+  { label: '红色', value: '#FF2D55' },
+  { label: '青色', value: '#5AC8FA' },
+  { label: '薄荷', value: '#00C7BE' },
 ];
 
 export function Settings() {
@@ -286,152 +287,6 @@ export function Settings() {
         )}
       </AnimatePresence>
     </div>
-  );
-}
-
-/* ── Image Picker Bottom Sheet ── */
-
-function PickerSheet({
-  title,
-  images,
-  currentImage,
-  onSelect,
-  onClose,
-  isAvatar,
-}: {
-  title: string;
-  images: string[];
-  currentImage: string;
-  onSelect: (url: string) => void;
-  onClose: () => void;
-  isAvatar?: boolean;
-}) {
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        onSelect(reader.result);
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  return (
-    <motion.div
-      className="absolute inset-0 z-50 flex flex-col"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
-    >
-      {/* 遮罩 */}
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      {/* 面板 */}
-      <motion.div
-        className="mt-auto flex flex-col"
-        style={{
-          backgroundColor: T.bg,
-          borderTopLeftRadius: 24,
-          borderTopRightRadius: 24,
-          maxHeight: '70%',
-        }}
-        initial={{ y: '100%' }}
-        animate={{ y: 0 }}
-        exit={{ y: '100%' }}
-        transition={{ type: 'spring', damping: 28, stiffness: 300 }}
-      >
-        {/* 拖拽指示条 */}
-        <div className="flex justify-center pt-3 pb-1">
-          <div className="h-1 w-10 rounded-full" style={{ backgroundColor: T.separator }} />
-        </div>
-
-        {/* 标题栏 */}
-        <div className="flex items-center justify-between px-5 pb-3">
-          <span style={{ fontSize: 16, fontWeight: 700, color: T.textPrimary }}>{title}</span>
-          <motion.button
-            onClick={onClose}
-            whileTap={{ scale: 0.9 }}
-            style={{ fontSize: 14, color: T.accent, fontWeight: 600 }}
-          >
-            完成
-          </motion.button>
-        </div>
-
-        {/* 图片网格 */}
-        <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto px-5 pb-8">
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: isAvatar ? 'repeat(4, 1fr)' : 'repeat(3, 1fr)',
-              gap: 10,
-            }}
-          >
-            {/* 上传按钮 */}
-            <motion.button
-              className="flex flex-col items-center justify-center"
-              style={{
-                aspectRatio: isAvatar ? '1' : '4/3',
-                borderRadius: isAvatar ? '50%' : 10,
-                border: `1.5px dashed ${T.border}`,
-                backgroundColor: T.card,
-              }}
-              onClick={() => fileRef.current?.click()}
-              whileTap={{ scale: 0.93 }}
-            >
-              <Upload size={20} color={T.textMuted} strokeWidth={2} />
-              <span style={{ fontSize: 10, color: T.textMuted, marginTop: 4 }}>上传</span>
-            </motion.button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleUpload}
-            />
-
-            {/* 预设图片 */}
-            {images.map((url) => {
-              const isActive = currentImage === url;
-              return (
-                <motion.button
-                  key={url}
-                  className="relative overflow-hidden"
-                  style={{
-                    aspectRatio: isAvatar ? '1' : '4/3',
-                    borderRadius: isAvatar ? '50%' : 10,
-                    boxShadow: isActive ? `0 0 0 3px ${T.accent}` : 'none',
-                  }}
-                  onClick={() => onSelect(url)}
-                  whileTap={{ scale: 0.93 }}
-                >
-                  <img
-                    src={url}
-                    alt=""
-                    className="absolute inset-0 h-full w-full object-cover"
-                    style={{ borderRadius: isAvatar ? '50%' : 10 }}
-                  />
-                  {isActive && (
-                    <div
-                      className="absolute inset-0 flex items-center justify-center"
-                      style={{
-                        backgroundColor: 'rgba(0,0,0,0.3)',
-                        borderRadius: isAvatar ? '50%' : 10,
-                      }}
-                    >
-                      <Check size={22} strokeWidth={3} color="#fff" />
-                    </div>
-                  )}
-                </motion.button>
-              );
-            })}
-          </div>
-        </div>
-      </motion.div>
-    </motion.div>
   );
 }
 

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { idbStorage } from '@/platform/storage/idbStorage';
 import { type ModelInfo, getAdapter } from '@/platform/ai/providers';
 
 // ── Types ──────────────────────────────────────────────
@@ -25,11 +26,17 @@ export interface AIConfigState {
   topP: number;
   frequencyPenalty: number;
   presencePenalty: number;
+  /** Reasoning / thinking effort: 'off' disables, others map to reasoning_effort */
+  reasoningEffort: 'off' | 'low' | 'medium' | 'high';
+
+  // Capabilities
+  /** Whether to send images as multimodal content (requires vision-capable model) */
+  enableVision: boolean;
 
   // Context & memory
   contextWindow: number;
   worldInfoBudgetPercent: number;
-  summarizeAfter: number;
+  summarizeThreshold: number;
   keepRecentMessages: number;
 
   // Prompts
@@ -49,11 +56,15 @@ export interface AIConfigState {
   setTopP: (v: number) => void;
   setFrequencyPenalty: (v: number) => void;
   setPresencePenalty: (v: number) => void;
+  setReasoningEffort: (v: 'off' | 'low' | 'medium' | 'high') => void;
+
+  // Actions — capabilities
+  setEnableVision: (v: boolean) => void;
 
   // Actions — memory
   setContextWindow: (v: number) => void;
   setWorldInfoBudgetPercent: (v: number) => void;
-  setSummarizeAfter: (v: number) => void;
+  setSummarizeThreshold: (v: number) => void;
   setKeepRecentMessages: (v: number) => void;
 
   // Actions — prompts
@@ -80,10 +91,13 @@ export const useAIConfigStore = create<AIConfigState>()(
       topP: 0.9,
       frequencyPenalty: 0,
       presencePenalty: 0,
+      reasoningEffort: 'off' as const,
+
+      enableVision: true,
 
       contextWindow: 128000,
       worldInfoBudgetPercent: 25,
-      summarizeAfter: 30,
+      summarizeThreshold: 0.8,
       keepRecentMessages: 50,
 
       systemPrompt: '',
@@ -124,12 +138,15 @@ export const useAIConfigStore = create<AIConfigState>()(
       setTopP: (v) => set({ topP: Math.max(0, Math.min(1, v)) }),
       setFrequencyPenalty: (v) => set({ frequencyPenalty: Math.max(0, Math.min(2, v)) }),
       setPresencePenalty: (v) => set({ presencePenalty: Math.max(0, Math.min(2, v)) }),
+      setReasoningEffort: (v) => set({ reasoningEffort: v }),
+
+      setEnableVision: (v) => set({ enableVision: v }),
 
       // ── Memory actions ──
 
       setContextWindow: (v) => set({ contextWindow: v }),
       setWorldInfoBudgetPercent: (v) => set({ worldInfoBudgetPercent: Math.max(0, Math.min(100, v)) }),
-      setSummarizeAfter: (v) => set({ summarizeAfter: Math.max(0, v) }),
+      setSummarizeThreshold: (v) => set({ summarizeThreshold: Math.max(0, Math.min(1, v)) }),
       setKeepRecentMessages: (v) => set({ keepRecentMessages: Math.max(1, v) }),
 
       // ── Prompt actions ──
@@ -139,6 +156,7 @@ export const useAIConfigStore = create<AIConfigState>()(
     }),
     {
       name: 'hiPhone-ai-config',
+      storage: idbStorage,
       partialize: (s) => ({
         provider: s.provider,
         apiKey: s.apiKey,
@@ -150,9 +168,11 @@ export const useAIConfigStore = create<AIConfigState>()(
         topP: s.topP,
         frequencyPenalty: s.frequencyPenalty,
         presencePenalty: s.presencePenalty,
+        reasoningEffort: s.reasoningEffort,
+        enableVision: s.enableVision,
         contextWindow: s.contextWindow,
         worldInfoBudgetPercent: s.worldInfoBudgetPercent,
-        summarizeAfter: s.summarizeAfter,
+        summarizeThreshold: s.summarizeThreshold,
         keepRecentMessages: s.keepRecentMessages,
         systemPrompt: s.systemPrompt,
         postHistoryInstructions: s.postHistoryInstructions,
@@ -163,4 +183,4 @@ export const useAIConfigStore = create<AIConfigState>()(
 
 /** Helper: get the adapter for the current provider */
 export { PROVIDER_ADAPTERS, getAdapter, streamChat } from '@/platform/ai/providers';
-export type { ModelInfo } from '@/platform/ai/providers';
+export type { ModelInfo, GenerationParams } from '@/platform/ai/providers';

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { idbStorage } from '@/platform/storage/idbStorage';
 
 export interface Note {
   id: string;
@@ -65,6 +66,7 @@ export const useNotesDataStore = create<NotesDataState>()(
     }),
     {
       name: 'hiPhone-notes',
+      storage: idbStorage,
       partialize: (state) => ({ notes: state.notes }),
     },
   ),

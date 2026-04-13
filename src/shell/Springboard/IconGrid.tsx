@@ -167,6 +167,14 @@ function WidgetSlot({
       onPointerDown={isEditMode ? handleEditPointerDown : longPress.onPointerDown}
       onPointerUp={isEditMode ? undefined : longPress.onPointerUp}
       onPointerCancel={isEditMode ? undefined : longPress.onPointerCancel}
+      // Suppress the click that browsers synthesize on pointerUp following
+      // a fired long-press. Using onClickCapture (capture phase) is
+      // essential: bubble-phase stopPropagation would run AFTER the inner
+      // widget's onClick (e.g. MusicWidget's tap-to-open), which would
+      // have already launched the app. Capture-phase stops the event
+      // before it descends into any child handler. Non-long-press clicks
+      // see `firedRef = false` and pass through untouched.
+      onClickCapture={longPress.onClick}
       data-testid={`widget-slot-${widget.id}`}
     >
       {/*
@@ -178,7 +186,10 @@ function WidgetSlot({
       */}
       {isBeingDragged ? null : (
         <>
-          <Component size={widget.size} />
+          <Component
+            size={widget.size}
+            styleIndex={widget.styleIndex ?? 0}
+          />
 
           {isEditMode && (
             <button

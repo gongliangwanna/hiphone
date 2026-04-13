@@ -79,21 +79,21 @@ describe('WidgetDrawer', () => {
   it('defaults to the clock gallery and switches category on click', () => {
     openDrawer();
     render(<WidgetDrawer />);
-    // clock cards visible by default
-    expect(screen.getByTestId('widget-drawer-card-clock-2x2')).toBeInTheDocument();
-    expect(screen.getByTestId('widget-drawer-card-clock-4x2')).toBeInTheDocument();
-    expect(screen.getByTestId('widget-drawer-card-clock-4x4')).toBeInTheDocument();
+    // Clock has multiple styles: each size renders per-style cards.
+    expect(screen.getByTestId('widget-drawer-card-clock-2x2-style-0')).toBeInTheDocument();
+    expect(screen.getByTestId('widget-drawer-card-clock-4x2-style-0')).toBeInTheDocument();
+    expect(screen.getByTestId('widget-drawer-card-clock-4x4-style-0')).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('widget-drawer-category-weather'));
     expect(screen.getByTestId('widget-drawer-card-weather-2x2')).toBeInTheDocument();
-    expect(screen.queryByTestId('widget-drawer-card-clock-2x2')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('widget-drawer-card-clock-2x2-style-0')).not.toBeInTheDocument();
   });
 
   it('adds a widget to the current page and closes the drawer when a card is tapped', () => {
     openDrawer(0);
     render(<WidgetDrawer />);
 
-    fireEvent.click(screen.getByTestId('widget-drawer-card-clock-2x2'));
+    fireEvent.click(screen.getByTestId('widget-drawer-card-clock-2x2-style-0'));
 
     const state = useSpringboardLayoutStore.getState();
     expect(state.isWidgetDrawerOpen).toBe(false);
@@ -101,6 +101,7 @@ describe('WidgetDrawer', () => {
     expect(state.pageWidgets![0]).toHaveLength(1);
     expect(state.pageWidgets![0]![0]!.kind).toBe('clock');
     expect(state.pageWidgets![0]![0]!.size).toBe('2x2');
+    expect(state.pageWidgets![0]![0]!.styleIndex).toBe(0);
   });
 
   it('honors currentSpringboardPage when adding', () => {
@@ -119,6 +120,20 @@ describe('WidgetDrawer', () => {
     expect(state.pageWidgets![2]![0]!.size).toBe('4x2');
   });
 
+  it('adds a widget with the chosen styleIndex when a style card is tapped', () => {
+    openDrawer(0);
+    render(<WidgetDrawer />);
+    // Clock 4x4 has 3 styles — tap style 2 (index 2).
+    fireEvent.click(screen.getByTestId('widget-drawer-card-clock-4x4-style-2'));
+
+    const state = useSpringboardLayoutStore.getState();
+    expect(state.isWidgetDrawerOpen).toBe(false);
+    expect(state.pageWidgets![0]).toHaveLength(1);
+    expect(state.pageWidgets![0]![0]!.kind).toBe('clock');
+    expect(state.pageWidgets![0]![0]!.size).toBe('4x4');
+    expect(state.pageWidgets![0]![0]!.styleIndex).toBe(2);
+  });
+
   it('closes via the X button', () => {
     openDrawer();
     render(<WidgetDrawer />);
@@ -133,7 +148,7 @@ describe('WidgetDrawer', () => {
     useSpringboardLayoutStore.getState().addWidget(0, 'clock', '4x4');
 
     render(<WidgetDrawer />);
-    fireEvent.click(screen.getByTestId('widget-drawer-card-clock-4x2'));
+    fireEvent.click(screen.getByTestId('widget-drawer-card-clock-4x2-style-0'));
 
     // Drawer stays open and feedback appears
     expect(useSpringboardLayoutStore.getState().isWidgetDrawerOpen).toBe(true);

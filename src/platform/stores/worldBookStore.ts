@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { idbStorage } from '@/platform/storage/idbStorage';
 
 /**
  * World Book — 一组纯文本设定，所有启用的条目会全量注入 system prompt。
@@ -200,6 +201,7 @@ export const useWorldBookStore = create<WorldBookState>()(
     }),
     {
       name: 'hiPhone-world-books',
+      storage: idbStorage,
       partialize: (s) => ({ books: s.books }),
     },
   ),

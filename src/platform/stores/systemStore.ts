@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { idbStorage } from '@/platform/storage/idbStorage';
 
 export type DarkMode = 'light' | 'dark' | 'auto';
 
@@ -51,6 +52,7 @@ export const useSystemStore = create<SystemState>()(
     }),
     {
       name: 'hiPhone-system',
+      storage: idbStorage,
       partialize: (state) => ({
         wallpaperId: state.wallpaperId,
         brightness: state.brightness,

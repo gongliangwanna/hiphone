@@ -207,6 +207,19 @@ export function useIconDrag({
     setWidgetDropPos(null);
   }, []);
 
+  // ---- Settle animation (shared by app + widget drag) -------------------------
+  // When a drag ends, we animate the overlay to the target grid cell before
+  // hiding it, so the icon / widget doesn't teleport.
+  const [isSettling, setIsSettling] = useState(false);
+  const pendingMoveRef = useRef<(() => void) | null>(null);
+
+  const onSettleComplete = useCallback(() => {
+    pendingMoveRef.current?.();
+    pendingMoveRef.current = null;
+    setIsSettling(false);
+    resetAllState();
+  }, [resetAllState]);
+
   const onDragStart = useCallback(
     (pageIndex: number, localIndex: number, e: React.PointerEvent<HTMLElement>) => {
       const area = gestureAreaRef.current;
@@ -405,14 +418,64 @@ export function useIconDrag({
     clearAutoScroll();
     const kind = dragKindRef.current;
 
+    // Shared geometry used by both app and widget settle paths
+    const sidePadding = metrics.sidePadding;
+    const colWidth = (viewportWidth - sidePadding * 2) / COLS;
+    const contentHeight =
+      4 + metrics.iconSize + 4 + metrics.labelSize * 1.2 + 4;
+    const rowH = contentHeight + metrics.gridGapY;
+
     if (kind === 'app') {
       const drag = dragPosRef.current;
       const drop = dropPosRef.current;
       if (drag && drop) {
-        const sameSpot = drag.page === drop.page && drag.localIndex === drop.localIndex;
+        const sameSpot =
+          drag.page === drop.page && drag.localIndex === drop.localIndex;
+
+        // Defer moveApp until the settle animation completes
         if (!sameSpot) {
-          moveApp(drag.page, drag.localIndex, drop.page, drop.localIndex);
+          pendingMoveRef.current = () =>
+            moveApp(drag.page, drag.localIndex, drop.page, drop.localIndex);
         }
+
+        // Compute the target grid cell via the packer (mirrors IconGrid's
+        // effectiveApps so the overlay lands exactly where the slot will be).
+        const draggedApp = pages[drag.page]?.[drag.localIndex];
+        const targetApps = pages[drop.page] ?? [];
+        const targetWidgets = widgetPages[drop.page] ?? [];
+
+        const effectiveIds = targetApps.map((a) => a.id);
+        if (drag.page === drop.page) {
+          effectiveIds.splice(drag.localIndex, 1);
+        }
+        effectiveIds.splice(drop.localIndex, 0, draggedApp?.id ?? '');
+
+        const { appPlacements } = packPage(targetWidgets, effectiveIds);
+        const tp = appPlacements.find((p) => p.id === draggedApp?.id);
+
+        if (tp) {
+          // Stop accepting pointer moves but keep dragPos/dropPos alive
+          // so the grid slot stays hidden during the settle animation.
+          pointerRef.current = null;
+          dragKindRef.current = null;
+
+          // The DragOverlay is iconSize × iconSize, matching the icon image
+          // inside the AppIcon button. The icon image sits centered
+          // horizontally in the grid column and 4px below the cell top
+          // (the button's paddingTop).
+          setDragX(
+            sidePadding + tp.col * colWidth + (colWidth - metrics.iconSize) / 2,
+          );
+          setDragY(metrics.springboardTopPadding + tp.row * rowH + 4);
+          setIsSettling(true);
+        } else {
+          // Couldn't compute target — commit immediately
+          pendingMoveRef.current?.();
+          pendingMoveRef.current = null;
+          resetAllState();
+        }
+      } else {
+        resetAllState();
       }
     } else if (kind === 'widget') {
       const meta = widgetDragRef.current;
@@ -422,14 +485,28 @@ export function useIconDrag({
           drop.page === meta.fromPage &&
           drop.col === meta.widget.col &&
           drop.row === meta.widget.row;
-        if (!same) {
-          moveWidget(meta.fromPage, meta.widget.id, drop.page, drop.col, drop.row);
-        }
-      }
-    }
 
-    resetAllState();
-  }, [moveApp, moveWidget, clearAutoScroll, resetAllState]);
+        // Defer moveWidget until the settle animation completes
+        if (!same) {
+          pendingMoveRef.current = () =>
+            moveWidget(meta.fromPage, meta.widget.id, drop.page, drop.col, drop.row);
+        }
+
+        // Stop accepting pointer moves but keep widgetDrag/widgetDropPos
+        // alive so the grid slot stays hidden during the settle animation.
+        pointerRef.current = null;
+        dragKindRef.current = null;
+
+        setDragX(sidePadding + drop.col * colWidth);
+        setDragY(metrics.springboardTopPadding + drop.row * rowH);
+        setIsSettling(true);
+      } else {
+        resetAllState();
+      }
+    } else {
+      resetAllState();
+    }
+  }, [moveApp, moveWidget, clearAutoScroll, resetAllState, metrics, viewportWidth, pages, widgetPages]);
 
   const onPointerUp = useCallback(
     (e: React.PointerEvent<HTMLElement>) => {
@@ -466,6 +543,9 @@ export function useIconDrag({
     widgetDrag,
     widgetDropPos,
     onWidgetDragStart,
+    // Widget settle animation
+    isSettling,
+    onSettleComplete,
     // Shared pointer handlers (Springboard routes them here)
     onPointerMove,
     onPointerUp,

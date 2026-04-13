@@ -1,7 +1,11 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { format, isSameDay, isToday, startOfDay, addDays } from 'date-fns';
+import { motion } from 'motion/react';
 import { WidgetShell } from './WidgetShell';
 import type { WidgetSize } from '@/platform/stores/springboardLayoutStore';
+import { useSpringboardLayoutStore } from '@/platform/stores/springboardLayoutStore';
+import { useAppRuntimeStore } from '@/platform/stores/appRuntimeStore';
+import { useCalendarNavStore } from '@/apps/Calendar/calendarNavStore';
 import { useCalendarDataStore, type CalendarEvent } from '@/apps/Calendar/calendarDataStore';
 import {
   generateMonthGrid,
@@ -27,19 +31,58 @@ export function DateWidget({ size, variant, previewWidth }: DateWidgetProps) {
   const events = useCalendarDataStore((s) => s.events);
   const now = new Date();
 
+  const shellRef = useRef<HTMLDivElement>(null);
+  const openApp = useAppRuntimeStore((s) => s.openApp);
+  const push = useCalendarNavStore((s) => s.push);
+
+  const handleOpenCalendarApp = () => {
+    if (variant === 'drawer') return;
+    if (useSpringboardLayoutStore.getState().isEditMode) return;
+    const el = shellRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const deviceRoot = el.closest('[data-testid="device-root"]') as HTMLElement | null;
+    const deviceRect = deviceRoot?.getBoundingClientRect();
+    openApp('calendar', {
+      x: rect.left - (deviceRect?.left ?? 0),
+      y: rect.top - (deviceRect?.top ?? 0),
+      width: rect.width,
+      height: rect.height,
+    });
+  };
+
+  const handleEventClick = (eventId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (variant === 'drawer') return;
+    if (useSpringboardLayoutStore.getState().isEditMode) return;
+    
+    // push to event detail and then open app
+    push('event-detail', { eventId });
+    handleOpenCalendarApp();
+  };
+
+  const interactive = variant !== 'drawer' && !useSpringboardLayoutStore.getState().isEditMode;
+
   return (
-    <WidgetShell size={size} variant={variant} previewWidth={previewWidth} testId="widget-date">
+    <WidgetShell 
+      ref={shellRef} 
+      size={size} 
+      variant={variant} 
+      previewWidth={previewWidth} 
+      testId="widget-date"
+      onClick={handleOpenCalendarApp}
+    >
       <div
         className="flex h-full w-full flex-col"
         style={{
           padding: size === '2x2' ? 14 : 16,
-          background: 'linear-gradient(180deg, #ffffff 0%, #f4f4f6 100%)',
+          background: '#ffffff', // Crisp white background for iOS widget
           color: '#1c1c1e',
         }}
       >
-        {size === '2x2' && <SmallLayout now={now} events={events} />}
-        {size === '4x2' && <MediumLayout now={now} events={events} />}
-        {size === '4x4' && <LargeLayout now={now} events={events} />}
+        {size === '2x2' && <SmallLayout now={now} events={events} onEventClick={handleEventClick} interactive={interactive} />}
+        {size === '4x2' && <MediumLayout now={now} events={events} onEventClick={handleEventClick} interactive={interactive} />}
+        {size === '4x4' && <LargeLayout now={now} events={events} onEventClick={handleEventClick} interactive={interactive} />}
       </div>
     </WidgetShell>
   );
@@ -47,7 +90,14 @@ export function DateWidget({ size, variant, previewWidth }: DateWidgetProps) {
 
 // ---- Layouts --------------------------------------------------------------
 
-function SmallLayout({ now, events }: { now: Date; events: CalendarEvent[] }) {
+interface LayoutProps {
+  now: Date;
+  events: CalendarEvent[];
+  onEventClick: (id: string, e: React.MouseEvent) => void;
+  interactive: boolean;
+}
+
+function SmallLayout({ now, events, onEventClick, interactive }: LayoutProps) {
   const todayEvents = useMemo(() => getEventsForDate(events, now), [events, now]);
   const next = todayEvents[0];
 
@@ -56,7 +106,12 @@ function SmallLayout({ now, events }: { now: Date; events: CalendarEvent[] }) {
       <DateHeader now={now} />
       <div className="mt-auto" style={{ minHeight: 28 }}>
         {next ? (
-          <NextEventLine event={next} compact />
+          <NextEventLine 
+            event={next} 
+            compact 
+            onClick={(e) => onEventClick(next.id, e)} 
+            interactive={interactive} 
+          />
         ) : (
           <div style={{ fontSize: 11, color: '#8e8e93', fontWeight: 500 }}>
             今日无安排
@@ -67,7 +122,7 @@ function SmallLayout({ now, events }: { now: Date; events: CalendarEvent[] }) {
   );
 }
 
-function MediumLayout({ now, events }: { now: Date; events: CalendarEvent[] }) {
+function MediumLayout({ now, events, onEventClick, interactive }: LayoutProps) {
   const upcoming = useMemo(() => {
     // 今天 + 未来 2 天的事件，按起始时间排序，最多 3 条
     const today = startOfDay(now).getTime();
@@ -86,7 +141,13 @@ function MediumLayout({ now, events }: { now: Date; events: CalendarEvent[] }) {
       <div className="flex flex-1 flex-col justify-center" style={{ gap: 8 }}>
         {upcoming.length > 0 ? (
           upcoming.map((event) => (
-            <UpcomingEventRow key={event.id} event={event} now={now} />
+            <UpcomingEventRow 
+              key={event.id} 
+              event={event} 
+              now={now} 
+              onClick={(e) => onEventClick(event.id, e)} 
+              interactive={interactive} 
+            />
           ))
         ) : (
           <div style={{ fontSize: 12, color: '#8e8e93', fontWeight: 500 }}>
@@ -98,7 +159,7 @@ function MediumLayout({ now, events }: { now: Date; events: CalendarEvent[] }) {
   );
 }
 
-function LargeLayout({ now, events }: { now: Date; events: CalendarEvent[] }) {
+function LargeLayout({ now, events, onEventClick, interactive }: LayoutProps) {
   const todayEvents = useMemo(() => getEventsForDate(events, now), [events, now]);
   const datesWithEvents = useMemo(() => getDatesWithEvents(events), [events]);
 
@@ -120,7 +181,13 @@ function LargeLayout({ now, events }: { now: Date; events: CalendarEvent[] }) {
           todayEvents
             .slice(0, 3)
             .map((event) => (
-              <UpcomingEventRow key={event.id} event={event} now={now} />
+              <UpcomingEventRow 
+                key={event.id} 
+                event={event} 
+                now={now} 
+                onClick={(e) => onEventClick(event.id, e)} 
+                interactive={interactive} 
+              />
             ))
         ) : (
           <div style={{ fontSize: 12, color: '#8e8e93', fontWeight: 500 }}>
@@ -167,8 +234,15 @@ function DateHeader({ now, compact }: { now: Date; compact?: boolean }) {
   );
 }
 
-function NextEventLine({ event, compact }: { event: CalendarEvent; compact?: boolean }) {
-  return (
+interface NextEventProps {
+  event: CalendarEvent;
+  compact?: boolean;
+  onClick?: (e: React.MouseEvent) => void;
+  interactive?: boolean;
+}
+
+function NextEventLine({ event, compact, onClick, interactive }: NextEventProps) {
+  const content = (
     <div className="flex items-start" style={{ gap: 6 }}>
       <div
         style={{
@@ -205,13 +279,35 @@ function NextEventLine({ event, compact }: { event: CalendarEvent; compact?: boo
       </div>
     </div>
   );
+
+  if (interactive && onClick) {
+    return (
+      <motion.div
+        whileTap={{ scale: 0.96, opacity: 0.7 }}
+        onClick={onClick}
+        style={{ cursor: 'pointer', margin: '-4px', padding: '4px', borderRadius: '8px' }}
+      >
+        {content}
+      </motion.div>
+    );
+  }
+
+  return content;
 }
 
-function UpcomingEventRow({ event, now }: { event: CalendarEvent; now: Date }) {
+interface EventRowProps {
+  event: CalendarEvent;
+  now: Date;
+  onClick?: (e: React.MouseEvent) => void;
+  interactive?: boolean;
+}
+
+function UpcomingEventRow({ event, now, onClick, interactive }: EventRowProps) {
   const eventDate = new Date(event.startTime);
   const isOnToday = isSameDay(eventDate, now);
   const dayLabel = isOnToday ? '今天' : format(eventDate, 'M月d日');
-  return (
+  
+  const content = (
     <div className="flex items-center" style={{ gap: 8 }}>
       <div
         style={{
@@ -247,6 +343,20 @@ function UpcomingEventRow({ event, now }: { event: CalendarEvent; now: Date }) {
       </div>
     </div>
   );
+
+  if (interactive && onClick) {
+    return (
+      <motion.div
+        whileTap={{ scale: 0.96, opacity: 0.7 }}
+        onClick={onClick}
+        style={{ cursor: 'pointer', margin: '-4px', padding: '4px', borderRadius: '8px' }}
+      >
+        {content}
+      </motion.div>
+    );
+  }
+
+  return content;
 }
 
 function MiniMonthGrid({

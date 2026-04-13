@@ -411,8 +411,9 @@ function SwitcherCard({
       }}
       transition={{ duration: isActivatingOther ? 0.16 : 0 }}
     >
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         className="w-full text-left outline-none"
         onClick={(event) => {
           if (draggedRef.current || isFlyingAway) {
@@ -460,7 +461,7 @@ function SwitcherCard({
             <SwitcherAppContent appId={appId} cardWidth={cardWidth} />
           </div>
         </div>
-      </button>
+      </div>
 
       <div className="mt-2.5 flex items-center justify-center gap-1.5">
         {app?.icon ? (

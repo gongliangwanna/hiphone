@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { idbStorage } from '@/platform/storage/idbStorage';
 import type { Song, Album, LrcLine } from './data';
 import { searchTracks, fetchFeaturedFromMeting, lookupAlbum, fetchLyrics } from './itunesApi';
 
@@ -243,6 +244,7 @@ export const useMusicDataStore = create<MusicDataState>()(
     }),
     {
       name: 'hiPhone-music',
+      storage: idbStorage,
       version: 4, // bump to invalidate stale artwork URLs
       partialize: (s) => ({
         currentSongId: s.currentSongId,

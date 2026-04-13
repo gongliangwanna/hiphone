@@ -38,11 +38,11 @@ export function MomentComposer() {
       {open && (
         <motion.div
           className="absolute inset-0 z-50 flex flex-col"
-          style={{ backgroundColor: T.bg }}
-          initial={{ opacity: 0, y: '100%' }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: '100%' }}
-          transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+          style={{ backgroundColor: T.bg, transformOrigin: 'center bottom' }}
+          initial={{ opacity: 0, scale: 0.85, y: 40 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.9, y: 30 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 28 }}
         >
           {/* Header */}
           <div

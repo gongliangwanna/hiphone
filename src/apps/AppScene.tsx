@@ -9,6 +9,7 @@ import { SafariApp } from './Safari/SafariApp';
 import { PhotosApp } from './Photos/PhotosApp';
 import { SnapchatApp } from './Snapchat/SnapchatApp';
 import { XingYuApp } from './XingYu/XingYuApp';
+import { GomokuApp } from './Gomoku/GomokuApp';
 import { DemoApp } from './DemoApp';
 
 interface AppSceneProps {
@@ -27,5 +28,6 @@ export function AppScene({ appId }: AppSceneProps) {
   if (appId === 'photos') return <PhotosApp />;
   if (appId === 'snapchat') return <SnapchatApp />;
   if (appId === 'xingyu') return <XingYuApp />;
+  if (appId === 'gomoku') return <GomokuApp />;
   return <DemoApp appId={appId} />;
 }

@@ -1,7 +1,7 @@
 import {
   Heart,
-  Users,
-  MessageSquare,
+  Cpu,
+  Activity,
   Image,
   Info,
   ChevronRight,
@@ -100,10 +100,10 @@ export function SettingsHome() {
           chevron
         />
         <ListRow
-          icon={<MessageSquare size={18} />}
+          icon={<Cpu size={18} />}
           iconColor="#AF52DE"
-          title="聊天偏好"
-          onClick={() => push('chatSettings')}
+          title="AI 设置"
+          onClick={() => push('aiSettings')}
           chevron
         />
         <ListRow
@@ -114,10 +114,10 @@ export function SettingsHome() {
           chevron
         />
         <ListRow
-          icon={<Users size={18} />}
-          iconColor="#FF9500"
-          title="连接设置"
-          onClick={() => push('aiService')}
+          icon={<Activity size={18} />}
+          iconColor="#5856D6"
+          title="心跳系统"
+          onClick={() => push('heartbeat')}
           chevron
           isLast
         />

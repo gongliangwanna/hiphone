@@ -1,18 +1,68 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { idbStorage } from '@/platform/storage/idbStorage';
 import type { Conversation, Message, Moment } from './data';
 import {
   SEED_CONVS,
   SEED_MSGS,
   SEED_MOMENTS,
-  DEFAULT_STICKER_PACK_IDS,
   IDOL_REPLY_POOL,
+  IDOLS,
   getIdol,
 } from './data';
 import { useCharacterStore } from '@/platform/stores/characterStore';
 import { useAIConfigStore } from '@/platform/stores/aiConfigStore';
+import { usePersonaStore } from '@/platform/stores/personaStore';
 import { useWorldBookStore } from '@/platform/stores/worldBookStore';
-import { streamChat, getAdapter } from '@/platform/ai/providers';
+import { getAdapter } from '@/platform/ai/providers';
+import { assemblePrompt, type HistoryMessage } from '@/platform/ai/promptAssembly';
+import { chatComplete } from '@/platform/ai/chatComplete';
+import { parseReply } from '@/platform/ai/replyParser';
+import { compressHistory } from '@/platform/ai/summarizer';
+import { buildDeviceContext } from '@/platform/ai/deviceContext';
+import { filterReply } from '@/platform/ai/replyFilters';
+import { useXYNav } from './xingYuNavStore';
+import { useStickerStore } from './stickerStore';
+
+/**
+ * 某 conv 当前是否正被用户"看着":
+ * 如果是,回复到达时就不要 unread++,否则"边看边红点"很蠢。
+ * navStore 只依赖 zustand,不会反向 import dataStore,无循环依赖风险。
+ */
+function isChatActive(convId: string): boolean {
+  return useXYNav.getState().activeChatId === convId;
+}
+
+/**
+ * Collect all messages relevant to a character's prompt context:
+ * - Messages from the primary user-character conversation (c-char-{characterId})
+ * - Messages from all AI-AI conversations where this character participates
+ *
+ * Returns HistoryMessage[] sorted by timestamp, ready for assemblePrompt.
+ */
+export function collectCharacterHistory(
+  characterId: string,
+  state: { messages: Message[]; conversations: Conversation[] },
+): HistoryMessage[] {
+  const primaryConvId = `c-char-${characterId}`;
+
+  const aiAiConvIds = state.conversations
+    .filter((c) => c.aiChatParticipants?.includes(characterId))
+    .map((c) => c.id);
+
+  const relevantConvIds = new Set([primaryConvId, ...aiAiConvIds]);
+
+  return state.messages
+    .filter((m) => relevantConvIds.has(m.convId))
+    .map((m) => ({
+      senderId: m.senderId,
+      type: m.type,
+      text: m.text,
+      imageUrl: m.imageUrl,
+      stickerDesc: m.stickerDesc,
+      timestamp: m.timestamp,
+    }));
+}
 
 /* ── Auto-reply timers (module-level, not serializable) ── */
 const replyTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -43,28 +93,63 @@ export interface UserSettings {
   coverUrl: string;
 }
 
+export interface SignatureRecord {
+  text: string;
+  timestamp: number;
+}
+
+export interface CharacterSignatureData {
+  current: string;
+  history: SignatureRecord[];
+}
+
 interface XingYuDataState {
   conversations: Conversation[];
   messages: Message[];
   moments: Moment[];
-  installedStickerPackIds: string[];
   userSettings: UserSettings;
+  /** 角色个性签名，key 为 characterId */
+  characterSignatures: Record<string, CharacterSignatureData>;
+  /** 用户个性签名历史 */
+  userSignatureHistory: SignatureRecord[];
 
   sendMessage: (convId: string, text: string) => void;
   sendImageMessage: (convId: string, imageUrl: string) => void;
-  sendStickerMessage: (convId: string, stickerEmoji: string) => void;
+  sendStickerMessage: (convId: string, stickerUrl: string, stickerDesc: string) => void;
   markRead: (convId: string) => void;
+  /**
+   * 从信箱里删除一条会话: 清掉 conv + 其所有 messages,
+   * 并中断正在进行的 AI 流 / 取消待发的 mock 回复 timer。
+   */
+  deleteConversation: (convId: string) => void;
   toggleLike: (momentId: string) => void;
-  installStickerPack: (packId: string) => void;
-  uninstallStickerPack: (packId: string) => void;
   addMoment: (text: string, imageUrl?: string) => void;
   addComment: (momentId: string, text: string) => void;
   updateSettings: (settings: Partial<UserSettings>) => void;
+  /** 更新角色个性签名（AI 调用或手动） */
+  updateCharacterSignature: (characterId: string, text: string) => void;
   /**
    * 确保指定 character 的会话存在,不存在则创建并插入 firstMessage。
    * 返回 convId,供导航跳转使用。
    */
   ensureCharacterConversation: (characterId: string) => string;
+  /**
+   * 确保指定 mock idol 的会话存在,不存在则在信箱顶部新建一条空会话。
+   * 用于通讯录点开旧 idol 时,即使该 conv 曾被删除也能重新出现。
+   * 返回 convId,供导航跳转使用。
+   */
+  ensureIdolConversation: (idolId: string) => string;
+  /** 更新单个会话的设置（背景、备注名等） */
+  updateConversationSettings: (convId: string, patch: Partial<Pick<Conversation, 'backgroundUrl' | 'remarkName'>>) => void;
+  /** 创建用户自建群聊，返回 convId */
+  createGroupConversation: (name: string, memberIds: string[]) => string;
+  /** 清除角色的对话记忆（消息+摘要），保留会话并重注入开场白 */
+  clearCharacterMemory: (characterId: string) => void;
+  /**
+   * 确保两个 AI 角色之间的会话存在,不存在则创建。
+   * 返回 convId。
+   */
+  ensureAIChatConversation: (charIdA: string, charIdB: string) => string;
 }
 
 function createUserMsg(
@@ -112,12 +197,18 @@ function scheduleIdolReply(convId: string, get: () => XingYuDataState) {
       timestamp: Date.now(),
     };
     const state = get();
+    const active = isChatActive(convId);
     // Use setState directly to avoid stale closure
     useXYData.setState({
       messages: [...state.messages, msg],
       conversations: state.conversations.map((c) =>
         c.id === convId
-          ? { ...c, lastMsg: reply, lastTime: Date.now(), unread: c.unread + 1 }
+          ? {
+              ...c,
+              lastMsg: reply,
+              lastTime: Date.now(),
+              unread: active ? c.unread : c.unread + 1,
+            }
           : c,
       ),
     });
@@ -127,11 +218,88 @@ function scheduleIdolReply(convId: string, get: () => XingYuDataState) {
 }
 
 /**
- * 用 streamChat() 驱动 character 会话的真实 AI 回复。
- * 流程: 先 insert 一条 streaming placeholder → onToken append → 结束/出错时 finalize。
+ * 后台触发 context 压缩。
+ * 将当前会话中旧消息（summary 已覆盖的时间戳之前的不重复压缩）交给 LLM 生成摘要，
+ * 结果写入 conversation.summary + summaryUpToTimestamp。
+ */
+export function triggerCompression(
+  convId: string,
+  endpoint: string,
+  aiConfig: { apiKey: string; model: string; provider: string },
+) {
+  const s = useXYData.getState();
+  const conv = s.conversations.find((c) => c.id === convId);
+  if (!conv) return;
+
+  // Gather messages for this conversation, sorted chronologically
+  const convMsgs = s.messages
+    .filter((m) => m.convId === convId)
+    .sort((a, b) => a.timestamp - b.timestamp);
+
+  // Only compress messages we haven't already summarized
+  const cutoff = conv.summaryUpToTimestamp ?? 0;
+  // Keep the most recent N messages out of compression (they stay as full history)
+  const keepRecent = useAIConfigStore.getState().keepRecentMessages;
+  const recentBoundary = convMsgs.length > keepRecent
+    ? convMsgs[convMsgs.length - keepRecent]!.timestamp
+    : 0;
+
+  const toCompress = convMsgs.filter(
+    (m) => m.timestamp > cutoff && m.timestamp < recentBoundary,
+  );
+  if (toCompress.length === 0) return;
+
+  const messagesToCompress = toCompress.map((m) => ({
+    role: (m.senderId === 'me' ? 'user' : 'assistant') as 'user' | 'assistant',
+    content: m.text || (m.type === 'image' ? '[图片]' : m.type === 'sticker' ? `[表情：${m.stickerDesc ?? '表情包'}]` : ''),
+  }));
+
+  const lastTimestamp = toCompress[toCompress.length - 1]!.timestamp;
+
+  // Resolve character & user names for first-person summary
+  const characterId = convId.replace('c-char-', '');
+  const character = useCharacterStore.getState().characters.find((c) => c.id === characterId);
+  const persona = usePersonaStore.getState().getActivePersona();
+  const fullAiConfig = useAIConfigStore.getState();
+
+  compressHistory({
+    previousSummary: conv.summary,
+    messagesToCompress,
+    endpoint,
+    apiKey: aiConfig.apiKey,
+    model: aiConfig.model,
+    providerId: aiConfig.provider,
+    characterName: character?.name ?? '角色',
+    userName: persona?.name ?? '用户',
+    contextWindow: fullAiConfig.contextWindow,
+    maxTokens: fullAiConfig.maxTokens,
+  })
+    .then((summary) => {
+      const current = useXYData.getState();
+      useXYData.setState({
+        conversations: current.conversations.map((c) =>
+          c.id === convId
+            ? { ...c, summary, summaryUpToTimestamp: lastTimestamp }
+            : c,
+        ),
+      });
+    })
+    .catch((e) => {
+      console.warn('[summarizer] compression failed:', e);
+    });
+}
+
+/**
+ * 非流式 AI 回复 + 多消息投递。
+ *
+ * 流程:
+ * 1. 显示 typing indicator（streaming placeholder）
+ * 2. 调 chatComplete() 获取完整回复
+ * 3. parseReply() 解析 JSON 数组
+ * 4. 移除 placeholder，逐条投递消息（每条间隔 300-800ms）
  */
 function scheduleAICharacterReply(convId: string, get: () => XingYuDataState) {
-  // Abort any in-flight stream for this conversation
+  // Abort any in-flight request for this conversation
   const prev = aiControllers.get(convId);
   if (prev) prev.abort();
 
@@ -172,43 +340,65 @@ function scheduleAICharacterReply(convId: string, get: () => XingYuDataState) {
   if (!adapter) return;
   const endpoint = aiConfig.apiEndpoint || adapter.defaultEndpoint;
 
-  // ── Build system prompt (character + aiConfig global) ──
-  const baseline = [
-    `You are ${character.name}.`,
-    character.description && character.description.trim(),
-    character.personality && `Personality: ${character.personality}`,
-    character.scenario && `Scenario: ${character.scenario}`,
-    'Reply in character, in the user\'s language. Keep replies short and natural for a chat app.',
-  ]
-    .filter(Boolean)
-    .join('\n');
-
+  // ── Assemble prompt via the pipeline ──
+  const persona = usePersonaStore.getState().getActivePersona();
   const worldBookChunk = useWorldBookStore.getState().buildSystemPromptChunk();
 
-  const systemChunks = [
-    character.systemPrompt?.trim(),
-    aiConfig.systemPrompt?.trim(),
+  const historyMsgs = collectCharacterHistory(conv.characterId!, get());
+
+  // Collect available stickers for the AI
+  const allStickers = useStickerStore.getState().packs.flatMap((pack) =>
+    pack.stickers.map((s) => ({ id: s.id, description: s.description })),
+  );
+
+  const characterSenderId = `char-${conv.characterId}`;
+
+  // Build sender name map for other characters that may appear in history
+  const senderNames: Record<string, string> = {};
+  const allCharacters = useCharacterStore.getState().characters;
+  for (const m of historyMsgs) {
+    if (m.senderId !== 'me' && m.senderId !== characterSenderId && !senderNames[m.senderId]) {
+      const charId = m.senderId.replace(/^char-/, '');
+      const found = allCharacters.find((c) => c.id === charId);
+      if (found) senderNames[m.senderId] = found.name;
+    }
+  }
+
+  const { messages: chatMessages, historyTokenRatio } = assemblePrompt({
+    character: {
+      name: character.name,
+      description: character.description,
+      personality: character.personality,
+      scenario: character.scenario,
+      systemPrompt: character.systemPrompt,
+      postHistoryInstructions: character.postHistoryInstructions,
+      messageExamples: character.messageExamples,
+    },
+    persona: {
+      name: persona?.name ?? '用户',
+      description: persona?.description ?? '',
+    },
+    aiConfig: {
+      systemPrompt: aiConfig.systemPrompt,
+      postHistoryInstructions: aiConfig.postHistoryInstructions,
+      contextWindow: aiConfig.contextWindow,
+      maxTokens: aiConfig.maxTokens,
+      keepRecentMessages: aiConfig.keepRecentMessages,
+      worldInfoBudgetPercent: aiConfig.worldInfoBudgetPercent,
+      enableVision: aiConfig.enableVision,
+    },
     worldBookChunk,
-    baseline,
-  ].filter((s): s is string => !!s && s.length > 0);
-  const systemPrompt = systemChunks.join('\n\n');
+    history: historyMsgs,
+    now: new Date(),
+    summary: conv.summary,
+    summaryUpToTimestamp: conv.summaryUpToTimestamp,
+    deviceContext: buildDeviceContext(),
+    availableStickers: allStickers.length > 0 ? allStickers : undefined,
+    characterSenderId,
+    senderNames,
+  });
 
-  // ── Build history (text-only, keepRecentMessages sliding window) ──
-  const allMsgs = get()
-    .messages.filter((m) => m.convId === convId && m.type === 'text' && m.text)
-    .sort((a, b) => a.timestamp - b.timestamp);
-  const keep = Math.max(1, aiConfig.keepRecentMessages ?? 50);
-  const recent = allMsgs.slice(-keep);
-
-  const chatMessages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
-    { role: 'system', content: systemPrompt },
-    ...recent.map((m) => ({
-      role: (m.senderId === 'me' ? 'user' : 'assistant') as 'user' | 'assistant',
-      content: m.text!,
-    })),
-  ];
-
-  // ── Insert streaming placeholder ──
+  // ── Show typing indicator ──
   const placeholderId = uid();
   const placeholder: Message = {
     id: placeholderId,
@@ -232,52 +422,131 @@ function scheduleAICharacterReply(convId: string, get: () => XingYuDataState) {
   const controller = new AbortController();
   aiControllers.set(convId, controller);
 
-  let accumulated = '';
-  streamChat(
-    {
-      endpoint,
-      apiKey: aiConfig.apiKey,
-      model: aiConfig.model,
-      providerId: aiConfig.provider,
-    },
+  chatComplete(
+    { endpoint, apiKey: aiConfig.apiKey, model: aiConfig.model, providerId: aiConfig.provider },
     chatMessages,
-    (token) => {
-      accumulated += token;
-      const s = useXYData.getState();
-      useXYData.setState({
-        messages: s.messages.map((m) =>
-          m.id === placeholderId ? { ...m, text: accumulated } : m,
-        ),
-      });
+    {
+      maxTokens: aiConfig.maxTokens,
+      temperature: aiConfig.temperature,
+      topP: aiConfig.topP,
+      frequencyPenalty: aiConfig.frequencyPenalty,
+      presencePenalty: aiConfig.presencePenalty,
+      reasoningEffort: aiConfig.reasoningEffort !== 'off' ? aiConfig.reasoningEffort : undefined,
     },
     controller.signal,
   )
-    .then(() => {
-      const finalText = accumulated || '[空回复]';
-      const finishedAt = Date.now();
-      const s = useXYData.getState();
+    .then(async (rawReply) => {
+      // Remove typing indicator placeholder
+      const s0 = useXYData.getState();
       useXYData.setState({
-        messages: s.messages.map((m) =>
-          m.id === placeholderId
-            ? { ...m, text: finalText, streaming: false, timestamp: finishedAt }
-            : m,
-        ),
-        conversations: s.conversations.map((c) =>
-          c.id === convId
-            ? { ...c, lastMsg: finalText.slice(0, 60), lastTime: finishedAt, unread: c.unread + 1 }
-            : c,
-        ),
+        messages: s0.messages.filter((m) => m.id !== placeholderId),
       });
+
+      // Parse structured reply
+      const items = parseReply(rawReply);
+      const active = isChatActive(convId);
+
+      // Deliver messages one by one with natural delays
+      for (let i = 0; i < items.length; i++) {
+        if (i > 0) {
+          await new Promise((r) => setTimeout(r, 300 + Math.random() * 500));
+        }
+        if (controller.signal.aborted) return;
+
+        const item = items[i]!;
+        const ts = Date.now();
+
+        // Signature update — silent, no chat bubble
+        if (item.type === 'signature') {
+          if (conv.characterId) {
+            useXYData.getState().updateCharacterSignature(conv.characterId, item.text);
+          }
+          continue;
+        }
+
+        let msg: Message;
+        let lastMsgPreview: string;
+
+        if (item.type === 'sticker') {
+          // Look up the sticker by ID from the store
+          const stickerPacks = useStickerStore.getState().packs;
+          let foundSticker: { imageData: string; description: string } | undefined;
+          for (const pack of stickerPacks) {
+            const s = pack.stickers.find((st) => st.id === item.stickerId);
+            if (s) { foundSticker = s; break; }
+          }
+
+          if (foundSticker) {
+            msg = {
+              id: uid(),
+              convId,
+              senderId,
+              type: 'sticker',
+              stickerUrl: foundSticker.imageData,
+              stickerDesc: foundSticker.description,
+              timestamp: ts,
+            };
+            lastMsgPreview = `[表情：${foundSticker.description}]`;
+          } else {
+            // Sticker not found — fallback to text
+            msg = {
+              id: uid(),
+              convId,
+              senderId,
+              type: 'text',
+              text: item.content || '[表情]',
+              timestamp: ts,
+            };
+            lastMsgPreview = item.content || '[表情]';
+          }
+        } else {
+          const text = filterReply(item.content) || '[空回复]';
+          msg = {
+            id: uid(),
+            convId,
+            senderId,
+            type: 'text',
+            text,
+            timestamp: ts,
+          };
+          lastMsgPreview = text.slice(0, 60);
+        }
+
+        const s = useXYData.getState();
+        useXYData.setState({
+          messages: [...s.messages, msg],
+          conversations: s.conversations.map((c) =>
+            c.id === convId
+              ? {
+                  ...c,
+                  lastMsg: lastMsgPreview,
+                  lastTime: ts,
+                  unread: active ? c.unread : c.unread + 1,
+                }
+              : c,
+          ),
+        });
+      }
+
+      // ── Context compression check ──
+      const threshold = useAIConfigStore.getState().summarizeThreshold;
+      if (threshold > 0 && historyTokenRatio > threshold) {
+        triggerCompression(convId, endpoint, aiConfig);
+      }
     })
     .catch((e) => {
-      // Ignore aborts triggered by a newer request on the same convo.
       if (e?.name === 'AbortError') return;
-      const errText = `[AI 回复失败] ${e instanceof Error ? e.message : String(e)}`;
+      // Keep error message short — raw JSON error bodies in history cause
+      // nested-escape issues when re-sent to the API in future requests.
+      const rawMsg = e instanceof Error ? e.message : String(e);
+      const brief = rawMsg.length > 80 ? `${rawMsg.slice(0, 80)}…` : rawMsg;
+      const errText = `[AI 回复失败] ${brief}`;
       const s = useXYData.getState();
       useXYData.setState({
-        messages: s.messages.map((m) =>
-          m.id === placeholderId ? { ...m, text: errText, streaming: false } : m,
-        ),
+        messages: [
+          ...s.messages.filter((m) => m.id !== placeholderId),
+          { id: uid(), convId, senderId, type: 'text' as const, text: errText, timestamp: Date.now() },
+        ],
         conversations: s.conversations.map((c) =>
           c.id === convId ? { ...c, lastMsg: errText, lastTime: Date.now() } : c,
         ),
@@ -296,11 +565,13 @@ export const useXYData = create<XingYuDataState>()(
       conversations: SEED_CONVS,
       messages: SEED_MSGS,
       moments: SEED_MOMENTS,
-      installedStickerPackIds: [...DEFAULT_STICKER_PACK_IDS],
+      characterSignatures: {},
+      userSignatureHistory: [],
+
       userSettings: {
         nickname: '小星星',
-        bio: '用星语，和偶像聊天吧～',
-        accentColor: '#E8A0BF', // 默认粉色
+        bio: '',
+        accentColor: '#007AFF',
         avatarUrl: '',
         coverUrl: '',
       },
@@ -331,8 +602,8 @@ export const useXYData = create<XingYuDataState>()(
         scheduleIdolReply(convId, get);
       },
 
-      sendStickerMessage: (convId, stickerEmoji) => {
-        const msg = createUserMsg(convId, 'sticker', { stickerEmoji });
+      sendStickerMessage: (convId, stickerUrl, stickerDesc) => {
+        const msg = createUserMsg(convId, 'sticker', { stickerUrl, stickerDesc });
         set((s) => ({
           messages: [...s.messages, msg],
           conversations: s.conversations.map((c) =>
@@ -351,6 +622,25 @@ export const useXYData = create<XingYuDataState>()(
           ),
         })),
 
+      deleteConversation: (convId) => {
+        // Tear down side-effects first — otherwise an in-flight AI stream
+        // would keep pushing tokens into a conv we just dropped.
+        const timer = replyTimers.get(convId);
+        if (timer) {
+          clearTimeout(timer);
+          replyTimers.delete(convId);
+        }
+        const controller = aiControllers.get(convId);
+        if (controller) {
+          controller.abort();
+          aiControllers.delete(convId);
+        }
+        set((s) => ({
+          conversations: s.conversations.filter((c) => c.id !== convId),
+          messages: s.messages.filter((m) => m.convId !== convId),
+        }));
+      },
+
       toggleLike: (momentId) =>
         set((s) => ({
           moments: s.moments.map((mo) =>
@@ -360,17 +650,6 @@ export const useXYData = create<XingYuDataState>()(
           ),
         })),
 
-      installStickerPack: (packId) =>
-        set((s) => ({
-          installedStickerPackIds: s.installedStickerPackIds.includes(packId)
-            ? s.installedStickerPackIds
-            : [...s.installedStickerPackIds, packId],
-        })),
-
-      uninstallStickerPack: (packId) =>
-        set((s) => ({
-          installedStickerPackIds: s.installedStickerPackIds.filter((id) => id !== packId),
-        })),
 
       addMoment: (text, imageUrl) => {
         const moment: Moment = {
@@ -396,9 +675,81 @@ export const useXYData = create<XingYuDataState>()(
         })),
 
       updateSettings: (settings) =>
-        set((s) => ({
-          userSettings: { ...s.userSettings, ...settings },
-        })),
+        set((s) => {
+          // Track bio changes in signature history
+          const bioChanged =
+            settings.bio !== undefined && settings.bio !== s.userSettings.bio && s.userSettings.bio;
+          return {
+            userSettings: { ...s.userSettings, ...settings },
+            userSignatureHistory: bioChanged
+              ? [
+                  { text: s.userSettings.bio, timestamp: Date.now() },
+                  ...s.userSignatureHistory,
+                ]
+              : s.userSignatureHistory,
+          };
+        }),
+
+      updateCharacterSignature: (characterId, text) =>
+        set((s) => {
+          const existing = s.characterSignatures[characterId];
+          const oldText = existing?.current ?? '';
+          const history = existing?.history ?? [];
+          return {
+            characterSignatures: {
+              ...s.characterSignatures,
+              [characterId]: {
+                current: text,
+                history: oldText
+                  ? [{ text: oldText, timestamp: Date.now() }, ...history]
+                  : history,
+              },
+            },
+          };
+        }),
+
+      ensureIdolConversation: (idolId) => {
+        const convId = `c-${idolId}`;
+        const state = get();
+        const existing = state.conversations.find((c) => c.id === convId);
+        if (existing) return convId;
+
+        const idol = getIdol(idolId);
+        if (!idol) return convId;
+
+        const conv: Conversation = {
+          id: convId,
+          idolId,
+          lastMsg: idol.bio || idol.title,
+          lastTime: Date.now(),
+          unread: 0,
+        };
+        set({ conversations: [conv, ...state.conversations] });
+        return convId;
+      },
+
+      updateConversationSettings: (convId, patch) => {
+        set({
+          conversations: get().conversations.map((c) =>
+            c.id === convId ? { ...c, ...patch } : c,
+          ),
+        });
+      },
+
+      createGroupConversation: (name, memberIds) => {
+        const convId = `c-group-${uid()}`;
+        const conv: Conversation = {
+          id: convId,
+          idolId: convId, // placeholder
+          lastMsg: '',
+          lastTime: Date.now(),
+          unread: 0,
+          groupName: name,
+          groupMemberIds: memberIds,
+        };
+        set({ conversations: [conv, ...get().conversations] });
+        return convId;
+      },
 
       ensureCharacterConversation: (characterId) => {
         const convId = `c-char-${characterId}`;
@@ -442,16 +793,132 @@ export const useXYData = create<XingYuDataState>()(
         });
         return convId;
       },
+
+      clearCharacterMemory: (characterId) => {
+        const convId = `c-char-${characterId}`;
+
+        // Abort in-flight AI stream
+        const controller = aiControllers.get(convId);
+        if (controller) {
+          controller.abort();
+          aiControllers.delete(convId);
+        }
+        const timer = replyTimers.get(convId);
+        if (timer) {
+          clearTimeout(timer);
+          replyTimers.delete(convId);
+        }
+
+        const character = useCharacterStore
+          .getState()
+          .characters.find((c) => c.id === characterId);
+        const senderId = `char-${characterId}`;
+        const now = Date.now();
+        const firstMsgText = character?.firstMessage?.trim() || '';
+
+        // Re-inject firstMessage as fresh start
+        const seedMessages: Message[] = firstMsgText
+          ? [{
+              id: uid(),
+              convId,
+              senderId,
+              type: 'text',
+              text: firstMsgText,
+              timestamp: now,
+            }]
+          : [];
+
+        set((s) => ({
+          // Remove all messages for this conversation, then add seed
+          messages: [
+            ...s.messages.filter((m) => m.convId !== convId),
+            ...seedMessages,
+          ],
+          // Reset summary and update lastMsg
+          conversations: s.conversations.map((c) =>
+            c.id === convId
+              ? {
+                  ...c,
+                  summary: undefined,
+                  summaryUpToTimestamp: undefined,
+                  lastMsg: firstMsgText || character?.name || '',
+                  lastTime: now,
+                  unread: 0,
+                }
+              : c,
+          ),
+        }));
+      },
+
+      ensureAIChatConversation: (charIdA, charIdB) => {
+        const [id1, id2] = [charIdA, charIdB].sort() as [string, string];
+        const convId = `c-ai2ai-${id1}-${id2}`;
+        const existing = get().conversations.find((c) => c.id === convId);
+        if (existing) return convId;
+
+        const conv: Conversation = {
+          id: convId,
+          idolId: `char-${id1}`,
+          aiChatParticipants: [id1, id2],
+          lastMsg: '',
+          lastTime: Date.now(),
+          unread: 0,
+        };
+        set((s) => ({
+          conversations: [conv, ...s.conversations],
+        }));
+        return convId;
+      },
     }),
     {
       name: 'hiPhone-xingyu',
+      version: 2,
+      migrate: (persisted: unknown, version: number) => {
+        const state = persisted as {
+          conversations?: Conversation[];
+          messages?: Message[];
+          moments?: Moment[];
+          userSettings?: UserSettings;
+          characterSignatures?: Record<string, CharacterSignatureData>;
+          userSignatureHistory?: SignatureRecord[];
+        };
+
+        let conversations = state.conversations ?? [];
+        let messages = state.messages ?? [];
+        let moments = state.moments ?? [];
+
+        // v0 → v1: strip legacy mock-idol data
+        if (version < 1) {
+          const idolIds = new Set(IDOLS.map((i) => i.id));
+          conversations = conversations.filter(
+            (c) => c.characterId || !idolIds.has(c.idolId),
+          );
+          const keepConvIds = new Set(conversations.map((c) => c.id));
+          messages = messages.filter((m) => keepConvIds.has(m.convId));
+          moments = moments.filter(
+            (m) => m.idolId === 'me' || !idolIds.has(m.idolId),
+          );
+        }
+
+        // v1 → v2: initialize signature fields
+        return {
+          ...state,
+          conversations,
+          messages,
+          moments,
+          characterSignatures: state.characterSignatures ?? {},
+          userSignatureHistory: state.userSignatureHistory ?? [],
+        };
+      },
       partialize: (s) => ({
         conversations: s.conversations,
         messages: s.messages,
         moments: s.moments,
-        installedStickerPackIds: s.installedStickerPackIds,
         userSettings: s.userSettings,
+        characterSignatures: s.characterSignatures,
+        userSignatureHistory: s.userSignatureHistory,
       }),
+      storage: idbStorage,
     },
   ),
 );

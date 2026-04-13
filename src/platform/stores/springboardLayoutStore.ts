@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { idbStorage } from '@/platform/storage/idbStorage';
 import { apps as defaultApps, type AppInfo } from '@/shell/Springboard/apps.data';
 import {
   GRID_COLS,
@@ -34,6 +35,12 @@ export interface WidgetInstance {
   col: number;
   /** Top-origin row on the 5-row grid. See `col` for sentinel semantics. */
   row: number;
+  /**
+   * Active visual style variant (0-based index into the widget kind's
+   * per-size `styles` array in the registry). Defaults to 0 when absent
+   * (v2→v3 migration stamps this).
+   */
+  styleIndex: number;
 }
 
 /**
@@ -122,10 +129,13 @@ interface SpringboardLayoutState {
    * if the target page has no room. The origin is chosen via row-major
    * `firstFit` on the target page's current widget occupancy.
    */
-  addWidget: (page: number, kind: WidgetKind, size: WidgetSize) => string | null;
+  addWidget: (page: number, kind: WidgetKind, size: WidgetSize, styleIndex?: number) => string | null;
 
   /** Remove a widget instance from a page. */
   removeWidget: (page: number, widgetId: string) => void;
+
+  /** Update a widget's active visual style index. */
+  setWidgetStyle: (page: number, widgetId: string, styleIndex: number) => void;
 
   /**
    * Move a widget to a new origin on the same or a different page.
@@ -402,7 +412,7 @@ export const useSpringboardLayoutStore = create<SpringboardLayoutState>()(
         set({ appOrder: cascaded });
       },
 
-      addWidget: (page, kind, size) => {
+      addWidget: (page, kind, size, styleIndex = 0) => {
         const { pageWidgets, appOrder } = get();
         const current = pageWidgets ? pageWidgets.map((p) => [...p]) : [];
         while (current.length <= page) current.push([]);
@@ -425,6 +435,7 @@ export const useSpringboardLayoutStore = create<SpringboardLayoutState>()(
           size,
           col: fit.col,
           row: fit.row,
+          styleIndex,
         };
         current[page] = [...targetWidgets, instance];
 
@@ -450,6 +461,16 @@ export const useSpringboardLayoutStore = create<SpringboardLayoutState>()(
         if (!pageWidgets || !pageWidgets[page]) return;
         const next = pageWidgets.map((p) => [...p]);
         next[page] = next[page]!.filter((w) => w.id !== widgetId);
+        set({ pageWidgets: next });
+      },
+
+      setWidgetStyle: (page, widgetId, styleIndex) => {
+        const { pageWidgets } = get();
+        if (!pageWidgets || !pageWidgets[page]) return;
+        const next = pageWidgets.map((p) => p.slice());
+        const idx = next[page]!.findIndex((w) => w.id === widgetId);
+        if (idx === -1) return;
+        next[page]![idx] = { ...next[page]![idx]!, styleIndex };
         set({ pageWidgets: next });
       },
 
@@ -521,20 +542,20 @@ export const useSpringboardLayoutStore = create<SpringboardLayoutState>()(
     }),
     {
       name: 'hiPhone-springboard-layout',
-      version: 2,
+      storage: idbStorage,
+      version: 3,
       partialize: (state) => ({
         appOrder: state.appOrder,
         pageWidgets: state.pageWidgets,
       }),
       migrate: (persistedState, version) => {
-        // v1 (or any implicit earlier version) did not carry col/row on
-        // widgets. Stamp the sentinel origin so the first render-time packer
-        // pass runs firstFit and writes the resolved origin back to the store.
+        const state = (persistedState ?? {}) as {
+          appOrder?: string[][] | null;
+          pageWidgets?: Array<Array<Partial<WidgetInstance>>> | null;
+        };
+
+        // v1 → v2: add col/row with sentinel origin
         if (version < 2) {
-          const state = (persistedState ?? {}) as {
-            appOrder?: string[][] | null;
-            pageWidgets?: Array<Array<Partial<WidgetInstance>>> | null;
-          };
           if (state.pageWidgets && Array.isArray(state.pageWidgets)) {
             state.pageWidgets = state.pageWidgets.map((page) =>
               (Array.isArray(page) ? page : []).map((w) => ({
@@ -545,11 +566,26 @@ export const useSpringboardLayoutStore = create<SpringboardLayoutState>()(
                   typeof w?.col === 'number' ? w.col : UNPLACED_SENTINEL,
                 row:
                   typeof w?.row === 'number' ? w.row : UNPLACED_SENTINEL,
+                styleIndex: 0,
               })),
             );
           }
           return state;
         }
+
+        // v2 → v3: add styleIndex (defaults to 0)
+        if (version < 3) {
+          if (state.pageWidgets && Array.isArray(state.pageWidgets)) {
+            state.pageWidgets = state.pageWidgets.map((page) =>
+              (Array.isArray(page) ? page : []).map((w) => ({
+                ...w,
+                styleIndex: typeof w?.styleIndex === 'number' ? w.styleIndex : 0,
+              } as WidgetInstance)),
+            );
+          }
+          return state;
+        }
+
         return persistedState;
       },
     },

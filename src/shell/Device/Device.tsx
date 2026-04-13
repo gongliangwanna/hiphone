@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useEffect, useLayoutEffect, type CSSProperties } from 'react';
+import { useRef, useCallback, useEffect, useLayoutEffect, type CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { StatusBar } from '../StatusBar/StatusBar';
 import { AssistiveTouch } from '../AssistiveTouch/AssistiveTouch';
@@ -60,51 +60,22 @@ export function Device() {
 
   const viewportProfile = useViewportProfile();
 
-  // iOS Safari keyboard handling — pragmatic non-intervention strategy.
-  //
-  // The history (everything below has been tried in this codebase and
-  // produced visible bugs the user has reported):
-  //   • Shrink `device-root.height` to `visualViewport.height` — looks
-  //     correct in theory, but iOS auto-scrolls `vv.offsetTop` to bring
-  //     the focused input into view BEFORE our resize handler runs.
-  //     After we shrink, the input reflows to vv's top while iOS still
-  //     has `vv.offsetTop ≈ 394`. The visible region is then
-  //     `body[394..864]` — input (76px) followed by ~374px of empty
-  //     `#root` background (because `#root` has `min-height: 100dvh`
-  //     from `index.html` + `src/styles/global.css`, so it stays 844px
-  //     while the device inside shrinks to 470). Symptom: chat input
-  //     pinned to the top of the visible area, header missing, big
-  //     black space below to the keyboard. **This is the exact bug
-  //     the user has hit twice in a row.**
-  //   • Pin `<body>` with `position: fixed` + JS height — same root
-  //     bug, plus the CSS `min-height: 100dvh` silently clobbers the JS
-  //     height unless we ALSO inline `min-height: 0` on html/body/#root,
-  //     which introduced its own race conditions across iOS versions.
-  //   • Counter-transform `device-root` by `-vv.offsetTop` — 1-frame
-  //     lag produces visible jitter on every keyboard animation step,
-  //     and iOS 26 has a documented `vv.offsetTop` regression
-  //     (https://developer.apple.com/forums/thread/800125).
-  //
-  // What we do INSTEAD: don't touch dimensions in response to the
-  // keyboard at all. Let iOS scroll the visual viewport natively to
-  // bring the focused input above the keyboard — exactly the same
-  // behavior as Telegram Web, WhatsApp Web, Twitter mobile, etc. The
-  // chat header scrolls out of view while the keyboard is open; that's
-  // the standard iOS web tradeoff and it's *correct* layout, even if
-  // it's not as polished as a native app.
-  //
-  // We still track `keyboardOpen` off `visualViewport` so the
-  // `--app-safe-bottom` CSS var can collapse when the keyboard occupies
-  // the home-indicator area, but we *do not* use it to mutate any
-  // element's height.
+  // iOS Safari keyboard handling: **intentionally none**. We accept iOS's
+  // default `scrollToRevealFocusedElement` — tapping an input lets iOS
+  // auto-scroll the visual viewport so the focus is visible, exactly
+  // like every other iOS web app. Six prior rounds of avoidance (see
+  // docs/plan/2026-04-11-1546-chat-keyboard-fix.md +
+  // docs/plan/2026-04-11-1823-keyboard-counter-scroll.md) were
+  // explicitly reverted — do NOT add `--keyboard-height`, `keyboardOpen`,
+  // `visualViewport` listeners, or imperative transforms here without
+  // first writing a new plan that explains why this time is different.
+  // See docs/plan/2026-04-11-1849-revert-keyboard-optimizations.md.
   const profileWidthRef = useRef(viewportProfile.width);
   const profileHeightRef = useRef(viewportProfile.height);
   const shellModeRef = useRef(viewportProfile.shellMode);
   profileWidthRef.current = viewportProfile.width;
   profileHeightRef.current = viewportProfile.height;
   shellModeRef.current = viewportProfile.shellMode;
-
-  const [keyboardOpen, setKeyboardOpen] = useState(false);
 
   const applyGeometry = useCallback(() => {
     const el = deviceRef.current;
@@ -113,8 +84,10 @@ export function Device() {
     const profileWidth = profileWidthRef.current;
     const isFullscreen = shellModeRef.current === 'fullscreen';
 
-    // Always use the React profile dimensions. NEVER cap by vv.height —
-    // see the comment block above.
+    // Always use the React profile dimensions. Never cap by vv.height —
+    // the coarse-pointer stable height in useViewportProfile already
+    // freezes profileHeight across keyboard-induced shrinks, so the
+    // shell stays at its pre-keyboard size when iOS opens the keyboard.
     el.style.width = `${profileWidth}px`;
     el.style.height = `${profileHeight}px`;
     if (isFullscreen) {
@@ -139,108 +112,6 @@ export function Device() {
     viewportProfile.height,
     viewportProfile.shellMode,
   ]);
-
-  // Keyboard height tracking + `--keyboard-height` CSS var.
-  //
-  // We track this for two reasons:
-  //   1. The `--app-safe-bottom` CSS var collapses when the keyboard is
-  //      occupying the home-indicator area (no need for safe-area clearance).
-  //   2. ChatDetail (and any other "input pinned to bottom" UI) reads
-  //      `--keyboard-height` and applies `transform: translateY(calc(-1 *
-  //      var(--keyboard-height)))` to the input bar, plus a matching
-  //      `padding-bottom` on the messages scroll area. This is what keeps
-  //      the chat header visible when the keyboard is up: by visually
-  //      hoisting the input above the keyboard ourselves, iOS sees that
-  //      `getBoundingClientRect()` of the focused input is already inside
-  //      the visual viewport and *does not* auto-scroll vv to bring it
-  //      into view (the auto-scroll is what was hiding the header).
-  //
-  // The hard part is the FIRST keyboard open. iOS evaluates "is this
-  // input visible?" between `focusin` and the first `vv.resize`. If we
-  // wait for `vv.resize` to set `--keyboard-height`, iOS has already
-  // auto-scrolled by then. Workaround: cache the last observed keyboard
-  // height in localStorage, and on `focusin` *immediately* set
-  // `--keyboard-height` to the cached value (a reasonable estimate for
-  // first-time users). This gives the input transform a head start so
-  // iOS sees the focused input already in vv. We then refine the value
-  // when `vv.resize` fires with the actual height.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const vv = window.visualViewport;
-    if (!vv) return;
-
-    const KB_CACHE_KEY = 'hiphone:kbHeight';
-    let cachedKb = (() => {
-      try {
-        const v = parseInt(localStorage.getItem(KB_CACHE_KEY) ?? '300', 10);
-        return Number.isFinite(v) && v >= 150 && v <= 500 ? v : 300;
-      } catch {
-        return 300;
-      }
-    })();
-
-    const setKbVar = (h: number) => {
-      const el = deviceRef.current;
-      if (!el) return;
-      el.style.setProperty('--keyboard-height', `${h}px`);
-    };
-
-    const isTextInput = (el: EventTarget | null): el is HTMLElement => {
-      if (!el || !(el instanceof HTMLElement)) return false;
-      const tag = el.tagName;
-      if (tag === 'INPUT') {
-        const type = (el as HTMLInputElement).type;
-        return type !== 'button' && type !== 'submit' && type !== 'checkbox' && type !== 'radio' && type !== 'file';
-      }
-      return tag === 'TEXTAREA' || el.isContentEditable;
-    };
-
-    const onFocusIn = (e: FocusEvent) => {
-      if (!isTextInput(e.target)) return;
-      // Pre-shrink with the cached estimate so iOS auto-scroll doesn't
-      // get a chance to fire on the first vv.resize.
-      setKbVar(cachedKb);
-      setKeyboardOpen(true);
-    };
-
-    const onFocusOut = () => {
-      setKbVar(0);
-      setKeyboardOpen(false);
-    };
-
-    const onVvResize = () => {
-      const profileHeight = profileHeightRef.current;
-      const innerH = window.innerHeight;
-      const kb = Math.max(0, innerH - vv.height);
-      if (kb > 100) {
-        // Real keyboard
-        setKbVar(kb);
-        cachedKb = kb;
-        try {
-          localStorage.setItem(KB_CACHE_KEY, String(kb));
-        } catch {
-          /* ignore quota errors */
-        }
-        setKeyboardOpen(true);
-      } else {
-        // No keyboard (or just URL-bar shrink — still show safe-area)
-        setKbVar(0);
-        const open = vv.height > 0 && vv.height < profileHeight - 100;
-        setKeyboardOpen(open);
-      }
-    };
-
-    onVvResize();
-    window.addEventListener('focusin', onFocusIn);
-    window.addEventListener('focusout', onFocusOut);
-    vv.addEventListener('resize', onVvResize);
-
-    return () => {
-      window.removeEventListener('focusin', onFocusIn);
-      window.removeEventListener('focusout', onFocusOut);
-      vv.removeEventListener('resize', onVvResize);
-    };
-  }, []);
 
   const metrics = getSpringboardMetrics(viewportProfile.sizeTier);
   const perfSnapshot = usePerformanceMonitor(perfEnabled);
@@ -383,28 +254,25 @@ export function Device() {
   const rootStyle: ShellStyle = {
     '--safe-top': 'env(safe-area-inset-top, 0px)',
     '--safe-right': 'env(safe-area-inset-right, 0px)',
-    '--safe-bottom': 'env(safe-area-inset-bottom, 0px)',
+    // Fullscreen mode: the hiPhone IS the phone, so the OS-level home
+    // indicator safe area should not push content up — the simulator
+    // handles its own bottom chrome (Dock, tab bars). Without this,
+    // adding a PWA manifest causes Safari to inflate safe-area-inset-bottom
+    // and leave a visible black gap at the bottom of the screen.
+    '--safe-bottom': viewportProfile.shellMode === 'fullscreen'
+      ? '0px'
+      : 'env(safe-area-inset-bottom, 0px)',
     '--safe-left': 'env(safe-area-inset-left, 0px)',
     '--shell-side-padding': `${metrics.sidePadding}px`,
     '--status-top-padding': 'max(12px, calc(var(--safe-top) + 6px))',
     '--status-bar-height': 'calc(var(--status-top-padding) + 36px)',
     '--app-safe-top': 'var(--status-bar-height)',
-    // When the keyboard is up, hide the bottom safe-area inset; the input's
-    // own padding + the keyboard itself now own that space.
-    '--app-safe-bottom': keyboardOpen
-      ? '8px'
-      : 'max(12px, calc(var(--safe-bottom) + 8px))',
-    // Initial value for the keyboard-height var. Updated imperatively by
-    // the focusin/focusout/vv.resize listeners above so the assignment
-    // bypasses React's batching during iOS keyboard animation.
-    '--keyboard-height': '0px',
+    '--app-safe-bottom': 'max(12px, calc(var(--safe-bottom) + 8px))',
     '--lock-actions-bottom': 'max(24px, calc(var(--safe-bottom) + 12px))',
     '--springboard-top-padding': `${metrics.springboardTopPadding}px`,
-    // NOTE: width / height / minHeight / maxHeight / maxWidth / transform are
-    // applied imperatively by `applyGeometry()` to bypass React batching
-    // during iOS keyboard animation — DO NOT add them here, otherwise React
-    // re-renders will fight the imperative updates and reintroduce the
-    // brief black flash on focus.
+    // NOTE: width / height / minHeight / maxHeight / maxWidth are
+    // applied imperatively by `applyGeometry()` — DO NOT add them here,
+    // otherwise React re-renders will fight the imperative updates.
     transformOrigin: '0 0',
     borderRadius: 0,
   };

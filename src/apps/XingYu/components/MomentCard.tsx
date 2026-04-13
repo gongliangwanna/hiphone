@@ -5,6 +5,7 @@ import { getIdol, formatTime, ME, DEFAULT_AVATAR } from '../data';
 import type { Moment } from '../data';
 import { useXYData } from '../xingYuDataStore';
 import { useXYNav } from '../xingYuNavStore';
+import { useCharacterStore } from '@/platform/stores/characterStore';
 import { Avatar } from './Avatar';
 import { CommentInput } from './CommentInput';
 import { T, springs } from '../theme';
@@ -27,10 +28,21 @@ export function MomentCard({ moment, disableAvatarNav, onImageClick }: MomentCar
 
   const userSettings = useXYData((s) => s.userSettings);
 
+  const characters = useCharacterStore((s) => s.characters);
+
   const isMe = moment.idolId === 'me';
   const author = isMe
     ? { name: userSettings.nickname || ME.name, avatar: userSettings.avatarUrl || DEFAULT_AVATAR, ringIndex: 0 }
     : (() => {
+        // char-xxx → characterStore lookup (heartbeat-posted moments)
+        if (moment.idolId.startsWith('char-')) {
+          const charId = moment.idolId.slice(5);
+          const char = characters.find((c) => c.id === charId);
+          return char
+            ? { name: char.name, avatar: char.avatar?.trim() || DEFAULT_AVATAR, ringIndex: 0 }
+            : { name: '???', avatar: '', ringIndex: 0 };
+        }
+        // Legacy idol lookup
         const idol = getIdol(moment.idolId);
         return idol
           ? { name: idol.name, avatar: idol.avatar, ringIndex: idol.ringIndex }
@@ -39,7 +51,12 @@ export function MomentCard({ moment, disableAvatarNav, onImageClick }: MomentCar
 
   const handleAvatarTap = () => {
     if (disableAvatarNav || isMe) return;
-    openIdol(moment.idolId);
+    // char-xxx moments: navigate to the character's profile using the characterId
+    if (moment.idolId.startsWith('char-')) {
+      openIdol(moment.idolId.slice(5));
+    } else {
+      openIdol(moment.idolId);
+    }
   };
 
   const visibleComments = showAllComments ? moment.comments : moment.comments.slice(0, 3);
@@ -151,7 +168,11 @@ export function MomentCard({ moment, disableAvatarNav, onImageClick }: MomentCar
         >
           {visibleComments.map((c, i) => {
             const isCommentFromMe = c.userId === 'me';
-            const commenter = isCommentFromMe ? { name: userSettings.nickname } : getIdol(c.userId);
+            const commenter = isCommentFromMe
+              ? { name: userSettings.nickname }
+              : c.userId.startsWith('char-')
+                ? characters.find((ch) => ch.id === c.userId.slice(5))
+                : getIdol(c.userId);
             return (
               <p key={i} style={{ fontSize: 12, color: T.textSecondary, marginBottom: 3, lineHeight: 1.5 }}>
                 <span style={{ fontWeight: 600, color: T.accent }}>{commenter?.name ?? '???'}</span>
