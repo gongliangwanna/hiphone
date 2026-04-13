@@ -1,13 +1,14 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { idbStorage } from '@/platform/storage/idbStorage';
+import { loadAllMessages, loadAllMoments } from '@/platform/storage/idbRecordStorage';
+import { startXYDataSync } from '@/platform/storage/zustandIdbSync';
 import type { Conversation, Message, Moment } from './data';
 import {
   SEED_CONVS,
   SEED_MSGS,
   SEED_MOMENTS,
   IDOL_REPLY_POOL,
-  IDOLS,
   getIdol,
 } from './data';
 import { useCharacterStore } from '@/platform/stores/characterStore';
@@ -872,53 +873,31 @@ export const useXYData = create<XingYuDataState>()(
     }),
     {
       name: 'hiPhone-xingyu',
-      version: 2,
-      migrate: (persisted: unknown, version: number) => {
-        const state = persisted as {
-          conversations?: Conversation[];
-          messages?: Message[];
-          moments?: Moment[];
-          userSettings?: UserSettings;
-          characterSignatures?: Record<string, CharacterSignatureData>;
-          userSignatureHistory?: SignatureRecord[];
-        };
-
-        let conversations = state.conversations ?? [];
-        let messages = state.messages ?? [];
-        let moments = state.moments ?? [];
-
-        // v0 → v1: strip legacy mock-idol data
-        if (version < 1) {
-          const idolIds = new Set(IDOLS.map((i) => i.id));
-          conversations = conversations.filter(
-            (c) => c.characterId || !idolIds.has(c.idolId),
-          );
-          const keepConvIds = new Set(conversations.map((c) => c.id));
-          messages = messages.filter((m) => keepConvIds.has(m.convId));
-          moments = moments.filter(
-            (m) => m.idolId === 'me' || !idolIds.has(m.idolId),
-          );
-        }
-
-        // v1 → v2: initialize signature fields
-        return {
-          ...state,
-          conversations,
-          messages,
-          moments,
-          characterSignatures: state.characterSignatures ?? {},
-          userSignatureHistory: state.userSignatureHistory ?? [],
-        };
-      },
+      // messages & moments are persisted per-record via idbRecordStorage,
+      // NOT in this KV blob. Only config-like fields go here.
       partialize: (s) => ({
         conversations: s.conversations,
-        messages: s.messages,
-        moments: s.moments,
         userSettings: s.userSettings,
         characterSignatures: s.characterSignatures,
         userSignatureHistory: s.userSignatureHistory,
       }),
       storage: idbStorage,
+      onRehydrateStorage: () => {
+        return async (_state, error) => {
+          if (error) {
+            console.warn('[xingyu] rehydration error:', error);
+            return;
+          }
+          // Load per-record data from IndexedDB object stores
+          const [messages, moments] = await Promise.all([
+            loadAllMessages(),
+            loadAllMoments(),
+          ]);
+          useXYData.setState({ messages, moments });
+          // Start write-through sync (subscribe to future changes)
+          startXYDataSync(useXYData);
+        };
+      },
     },
   ),
 );

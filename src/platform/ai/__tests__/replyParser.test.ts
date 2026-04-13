@@ -108,4 +108,28 @@ describe('parseReply', () => {
       { type: 'sticker', content: '[表情]', stickerId: 'stk-456' },
     ]);
   });
+
+  it('parses multiple JSON arrays separated by </string> tags', () => {
+    const input =
+      '[{"type":"text","content":"你问我？"}]</string>\n' +
+      '[{"type":"text","content":"而且你这问号什么意思"}]</string>\n' +
+      '[{"type":"text","content":"气得踢脚"}]</string>';
+    const result = parseReply(input);
+    expect(result).toEqual([
+      { type: 'text', content: '你问我？' },
+      { type: 'text', content: '而且你这问号什么意思' },
+      { type: 'text', content: '气得踢脚' },
+    ]);
+  });
+
+  it('parses multiple separate JSON arrays without tags', () => {
+    const input =
+      '[{"type":"text","content":"第一条"}]\n' +
+      '[{"type":"text","content":"第二条"}]';
+    const result = parseReply(input);
+    expect(result).toEqual([
+      { type: 'text', content: '第一条' },
+      { type: 'text', content: '第二条' },
+    ]);
+  });
 });

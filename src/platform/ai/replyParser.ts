@@ -80,8 +80,57 @@ export function parseReply(raw: string): ReplyItem[] {
     if (inner) return inner;
   }
 
+  // Attempt 5: multiple JSON arrays/objects scattered in the text
+  // e.g. [{"type":"text","content":"A"}]</string>\n[{"type":"text","content":"B"}]
+  const jsonBlocks = extractJsonBlocks(trimmed);
+  if (jsonBlocks.length > 1) {
+    const merged: ReplyItem[] = [];
+    for (const block of jsonBlocks) {
+      const items = tryParseItems(block);
+      if (items) merged.push(...items);
+    }
+    if (merged.length > 0) return merged;
+  }
+
   // Fallback: treat entire raw text as a single text message
   return [{ type: 'text', content: trimmed }];
+}
+
+/**
+ * Extract top-level JSON blocks ([...] or {...}) from text using bracket depth tracking.
+ * Handles cases where multiple JSON fragments are separated by non-JSON text like `</string>`.
+ */
+function extractJsonBlocks(text: string): string[] {
+  const blocks: string[] = [];
+  let i = 0;
+  while (i < text.length) {
+    if (text[i] === '[' || text[i] === '{') {
+      const open = text[i]!;
+      const close = open === '[' ? ']' : '}';
+      let depth = 1;
+      let j = i + 1;
+      let inString = false;
+      let escape = false;
+      while (j < text.length && depth > 0) {
+        const ch = text[j]!;
+        if (escape) { escape = false; }
+        else if (ch === '\\' && inString) { escape = true; }
+        else if (ch === '"') { inString = !inString; }
+        else if (!inString) {
+          if (ch === open) depth++;
+          else if (ch === close) depth--;
+        }
+        j++;
+      }
+      if (depth === 0) {
+        blocks.push(text.slice(i, j));
+        i = j;
+        continue;
+      }
+    }
+    i++;
+  }
+  return blocks;
 }
 
 function tryParseItems(text: string): ReplyItem[] | null {

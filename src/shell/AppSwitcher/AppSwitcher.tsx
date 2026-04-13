@@ -47,12 +47,30 @@ export function AppSwitcher() {
   const focusAppInSwitcher = useAppRuntimeStore((s) => s.focusAppInSwitcher);
   const [activatingId, setActivatingId] = useState<string | null>(null);
   const [flyingAwayId, setFlyingAwayId] = useState<string | null>(null);
+  const [exitAnimating, setExitAnimating] = useState(false);
   const intent = useGestureIntent();
   const viewportProfile = useViewportProfile();
   const deviceCornerRadius = getDeviceCornerRadius(viewportProfile.sizeTier);
   const scrollRef = useRef<HTMLDivElement>(null);
   const hasScrolledRef = useRef(false);
   const visible = intent === 'switcher-active';
+
+  // Keep the switcher mounted briefly after activation so cards can fade out
+  // while AppHost's morph animation (z-index 18) expands on top.
+  useEffect(() => {
+    if (!visible && activatingId) {
+      setExitAnimating(true);
+      const timer = setTimeout(() => {
+        setExitAnimating(false);
+        setActivatingId(null);
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+    if (visible) {
+      setExitAnimating(false);
+    }
+  }, [visible, activatingId]);
+
   const selectedId = switcherAppId ?? activeAppId ?? recentApps[0]?.id ?? null;
 
   const vw = viewportProfile.width;
@@ -122,14 +140,20 @@ export function AppSwitcher() {
     requestAnimationFrame(() => setFlyingAwayId(null));
   }, []);
 
-  if (!visible || recentApps.length === 0) return null;
+  if ((!visible && !exitAnimating) || recentApps.length === 0) return null;
 
   return (
     <div
       className="absolute inset-0"
-      style={{ zIndex: 16 }}
+      style={{
+        zIndex: 16,
+        pointerEvents: exitAnimating ? 'none' : undefined,
+        opacity: exitAnimating ? 0 : 1,
+        transition: exitAnimating ? 'opacity 250ms ease-out' : undefined,
+      }}
       data-testid="app-switcher"
       onClick={(e) => {
+        if (exitAnimating) return;
         if (e.target === e.currentTarget) {
           useAppRuntimeStore.getState().goHome();
         }
@@ -153,7 +177,6 @@ export function AppSwitcher() {
               cardWidth={cardWidth}
               marginLeft={i === 0 ? spacerWidth + CARD_GAP : CARD_GAP}
               isFlyingAway={task.id === flyingAwayId}
-              isActivating={task.id === activatingId}
               isActivatingOther={activatingId !== null && task.id !== activatingId}
               deviceCornerRadius={deviceCornerRadius}
               onActivate={(payload) => {
@@ -196,7 +219,6 @@ interface SwitcherCardProps {
   cardWidth: number;
   marginLeft: number;
   isFlyingAway: boolean;
-  isActivating: boolean;
   isActivatingOther: boolean;
   deviceCornerRadius: number;
   onActivate: (payload: CardActivatePayload | null) => void;
@@ -210,7 +232,6 @@ function SwitcherCard({
   cardWidth,
   marginLeft,
   isFlyingAway,
-  isActivating,
   isActivatingOther,
   deviceCornerRadius,
   onActivate,
@@ -401,11 +422,12 @@ function SwitcherCard({
         width: wrapperWidth,
         marginLeft: wrapperMargin,
         scrollSnapAlign: isFlyingAway ? undefined : 'center',
-        visibility: isActivating ? 'hidden' : 'visible',
         y: dragY,
         // Only apply scale during active drag, not during fly-away.
         scale: isFlyingAway ? 1 : scaleFromDrag,
-        opacity: isActivating || isActivatingOther ? 0 : 1,
+        // Activating card stays visible — AppHost (z-18) covers it.
+        // Other cards fade out via the parent container's opacity transition.
+        opacity: isActivatingOther ? 0 : 1,
         // Prevent overflowing content during gap collapse
         overflow: isFlyingAway ? 'hidden' : undefined,
       }}

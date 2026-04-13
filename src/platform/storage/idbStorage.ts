@@ -14,8 +14,12 @@
 // ---------------------------------------------------------------------------
 
 const DB_NAME = 'hiPhone-storage';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'kv';
+
+// Per-record object stores (added in v2)
+export const MESSAGES_STORE = 'messages';
+export const MOMENTS_STORE = 'moments';
 
 // ---------------------------------------------------------------------------
 // Cached connection — one IDBDatabase instance shared across all stores
@@ -23,17 +27,33 @@ const STORE_NAME = 'kv';
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
-function getDB(): Promise<IDBDatabase> {
+export function getDB(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
+      // v1: KV store for Zustand persist blobs
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME);
       }
+      // v2: Per-record stores for high-frequency data
+      if (!db.objectStoreNames.contains(MESSAGES_STORE)) {
+        const msgStore = db.createObjectStore(MESSAGES_STORE, { keyPath: 'id' });
+        msgStore.createIndex('convId', 'convId', { unique: false });
+      }
+      if (!db.objectStoreNames.contains(MOMENTS_STORE)) {
+        db.createObjectStore(MOMENTS_STORE, { keyPath: 'id' });
+      }
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      // Close connection when another tab upgrades the DB version
+      req.result.onversionchange = () => {
+        req.result.close();
+        dbPromise = null;
+      };
+      resolve(req.result);
+    };
     req.onerror = () => {
       dbPromise = null; // allow retry
       reject(req.error);
@@ -77,7 +97,7 @@ function idbDelete(db: IDBDatabase, key: string): Promise<void> {
 // Fallback: localStorage adapter (for test environments without IndexedDB)
 // ---------------------------------------------------------------------------
 
-const hasIDB = typeof indexedDB !== 'undefined';
+export const hasIDB = typeof indexedDB !== 'undefined';
 
 const localStorageFallback = {
   getItem: (name: string) => {

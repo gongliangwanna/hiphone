@@ -464,6 +464,11 @@ function tick() {
   const hbStore = useHeartbeatStore.getState();
   if (!hbStore.globalEnabled) return;
 
+  // Wait for xingYuDataStore to finish loading messages/moments from IDB
+  // before running heartbeats (otherwise we'd read empty/seed data).
+  const xyPersist = useXYData.persist;
+  if (!xyPersist.hasHydrated()) return;
+
   const now = Date.now();
   const characters = useCharacterStore.getState().characters;
 

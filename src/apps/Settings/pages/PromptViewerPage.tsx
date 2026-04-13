@@ -1,12 +1,13 @@
-import { useMemo, useState } from 'react';
-import { ChevronRight, Brain, Cpu, MessageSquare, Clock, FileText } from 'lucide-react';
+import { useMemo, useState, useCallback } from 'react';
+import { ChevronRight, Brain, Cpu, MessageSquare, Clock, FileText, Archive, Loader2 } from 'lucide-react';
 import { useCharacterStore } from '@/platform/stores/characterStore';
 import { useAIConfigStore } from '@/platform/stores/aiConfigStore';
 import { usePersonaStore } from '@/platform/stores/personaStore';
 import { useWorldBookStore } from '@/platform/stores/worldBookStore';
-import { useXYData, collectCharacterHistory } from '@/apps/XingYu/xingYuDataStore';
+import { useXYData, collectCharacterHistory, triggerCompression } from '@/apps/XingYu/xingYuDataStore';
 import { useStickerStore } from '@/apps/XingYu/stickerStore';
 import { buildDeviceContext } from '@/platform/ai/deviceContext';
+import { getAdapter } from '@/platform/ai/providers';
 import { inspectPrompt, type PromptSection } from '@/platform/ai/promptAssembly';
 
 // ---------------------------------------------------------------------------
@@ -149,6 +150,7 @@ function SectionDetail({
 
 export function PromptViewerPage() {
   const [activeSection, setActiveSection] = useState<PromptSection | null>(null);
+  const [compressing, setCompressing] = useState(false);
 
   const characters = useCharacterStore((s) => s.characters);
   const activeCharId = useCharacterStore((s) => s.activeCharacterId);
@@ -218,6 +220,36 @@ export function PromptViewerPage() {
       senderNames,
     });
   }, [char, characters, conversations, messages, aiConfig, persona, worldBookChunk]);
+
+  const convId = char ? `c-char-${char.id}` : '';
+  const conv = useXYData((s) => s.conversations.find((c) => c.id === convId));
+  const msgCount = useXYData((s) => s.messages.filter((m) => m.convId === convId).length);
+
+  const handleCompress = useCallback(() => {
+    if (!char || compressing) return;
+    const ai = useAIConfigStore.getState();
+    if (!ai.apiKey) return;
+    const adapter = getAdapter(ai.provider);
+    if (!adapter) return;
+    const endpoint = ai.apiEndpoint || adapter.defaultEndpoint;
+    const prevTs = conv?.summaryUpToTimestamp;
+
+    setCompressing(true);
+    triggerCompression(convId, endpoint, {
+      apiKey: ai.apiKey,
+      model: ai.model,
+      provider: ai.provider,
+    });
+    // Poll for summary change (triggerCompression is fire-and-forget)
+    const check = setInterval(() => {
+      const c = useXYData.getState().conversations.find((x) => x.id === convId);
+      if (c?.summaryUpToTimestamp !== prevTs) {
+        setCompressing(false);
+        clearInterval(check);
+      }
+    }, 500);
+    setTimeout(() => { setCompressing(false); clearInterval(check); }, 30_000);
+  }, [char, convId, conv?.summaryUpToTimestamp, compressing]);
 
   if (!char || !inspection) {
     return (
@@ -311,6 +343,78 @@ export function PromptViewerPage() {
             <SectionRow section={section} onTap={() => setActiveSection(section)} />
           </div>
         ))}
+      </div>
+
+      {/* Memory compression */}
+      <div
+        className="px-4 pb-1"
+        style={{
+          fontSize: 'var(--font-size-footnote)',
+          color: 'var(--color-secondaryLabel)',
+          textTransform: 'uppercase',
+        }}
+      >
+        记忆压缩
+      </div>
+
+      <div
+        className="mx-4 mb-1 overflow-hidden"
+        style={{
+          backgroundColor: 'var(--color-tertiarySystemBackground)',
+          borderRadius: 'var(--radius-group)',
+        }}
+      >
+        {/* Stats row */}
+        <div className="flex justify-between px-4" style={{ height: 36, alignItems: 'center', borderBottom: '0.5px solid var(--color-separator)' }}>
+          <span style={{ fontSize: 13, color: 'var(--color-secondaryLabel)' }}>消息总数</span>
+          <span style={{ fontSize: 13, color: 'var(--color-label)', fontVariantNumeric: 'tabular-nums' }}>{msgCount}</span>
+        </div>
+        <div className="flex justify-between px-4" style={{ height: 36, alignItems: 'center', borderBottom: '0.5px solid var(--color-separator)' }}>
+          <span style={{ fontSize: 13, color: 'var(--color-secondaryLabel)' }}>摘要状态</span>
+          <span style={{ fontSize: 13, color: conv?.summary ? 'var(--color-systemBlue)' : 'var(--color-tertiaryLabel)', fontVariantNumeric: 'tabular-nums' }}>
+            {conv?.summary ? `${conv.summary.length}字` : '无摘要'}
+          </span>
+        </div>
+        {conv?.summaryUpToTimestamp && (
+          <div className="flex justify-between px-4" style={{ height: 36, alignItems: 'center', borderBottom: '0.5px solid var(--color-separator)' }}>
+            <span style={{ fontSize: 13, color: 'var(--color-secondaryLabel)' }}>覆盖至</span>
+            <span style={{ fontSize: 13, color: 'var(--color-label)' }}>
+              {(() => {
+                const d = new Date(conv.summaryUpToTimestamp);
+                return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+              })()}
+            </span>
+          </div>
+        )}
+
+        {/* Compress button */}
+        <div
+          onClick={compressing ? undefined : handleCompress}
+          className="flex items-center justify-center gap-2 px-4"
+          style={{
+            height: 44,
+            cursor: compressing ? 'default' : 'pointer',
+            color: compressing ? 'var(--color-tertiaryLabel)' : 'var(--color-systemBlue)',
+            fontSize: 15,
+            fontWeight: 500,
+          }}
+        >
+          {compressing ? (
+            <>
+              <Loader2 size={16} strokeWidth={2} className="animate-spin" />
+              压缩中...
+            </>
+          ) : (
+            <>
+              <Archive size={16} strokeWidth={2} />
+              {conv?.summary ? '重新压缩' : '立即压缩'}
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="px-4 pt-1 pb-2" style={{ fontSize: 12, color: 'var(--color-secondaryLabel)', lineHeight: 1.5 }}>
+        将历史消息压缩为摘要，释放上下文空间。最近 {useAIConfigStore.getState().keepRecentMessages} 条消息不受影响。
       </div>
 
       <div style={{ height: 40 }} />

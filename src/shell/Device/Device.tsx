@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect, useLayoutEffect, type CSSProperties } from 'react';
+import { useState, useRef, useCallback, useEffect, useLayoutEffect, type CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { StatusBar } from '../StatusBar/StatusBar';
 import { AssistiveTouch } from '../AssistiveTouch/AssistiveTouch';
@@ -48,6 +48,7 @@ function StatusBarPlaceholder() {
 export function Device() {
   const isLocked = useSystemStore((s) => s.isLocked);
   const wallpaperId = useSystemStore((s) => s.wallpaperId);
+  const customWallpapers = useSystemStore((s) => s.customWallpapers);
   const unlock = useSystemStore((s) => s.unlock);
   const perfEnabled = usePerfDebugStore((s) => s.enabled);
   const disableWallpaper = usePerfDebugStore((s) => s.disableWallpaper);
@@ -135,7 +136,23 @@ export function Device() {
     recentApps.length > 0 &&
     presentationMode === 'switcher';
 
-  const showSwitcherBg = presentationMode === 'switcher';
+  const switcherBgActive = presentationMode === 'switcher';
+  // Fade out the blur background when transitioning from switcher to foreground
+  // instead of instantly unmounting it.
+  const [switcherBgFading, setSwitcherBgFading] = useState(false);
+  const prevSwitcherBgRef = useRef(switcherBgActive);
+  useEffect(() => {
+    if (prevSwitcherBgRef.current && !switcherBgActive) {
+      setSwitcherBgFading(true);
+      const timer = setTimeout(() => setSwitcherBgFading(false), 350);
+      return () => clearTimeout(timer);
+    }
+    if (switcherBgActive) {
+      setSwitcherBgFading(false);
+    }
+    prevSwitcherBgRef.current = switcherBgActive;
+  }, [switcherBgActive]);
+  const showSwitcherBg = switcherBgActive || switcherBgFading;
 
   useEffect(() => {
     if (isLocked) {
@@ -148,7 +165,10 @@ export function Device() {
     }
   }, [activeAppId, closeOverlay, isLocked, overlay, presentationMode]);
 
-  const wallpaper = wallpapers.find((w) => w.id === wallpaperId) ?? wallpapers[0]!;
+  const wallpaper =
+    customWallpapers.find((w) => w.id === wallpaperId) ??
+    wallpapers.find((w) => w.id === wallpaperId) ??
+    wallpapers[0]!;
 
   const handleDragProgress = useCallback((progress: number) => {
     const el = desktopRef.current;
@@ -321,6 +341,8 @@ export function Device() {
                 transform: 'scale(1.12) translateZ(0)',
                 willChange: 'transform',
                 zIndex: 1,
+                opacity: switcherBgFading ? 0 : 1,
+                transition: switcherBgFading ? 'opacity 300ms ease-out' : undefined,
               }}
               data-perf-layer="wallpaper-gesture-overlay"
             />

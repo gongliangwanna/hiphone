@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   assemblePrompt,
+  inspectPrompt,
   type PromptInput,
   type PromptCharacter,
   type PromptPersona,
@@ -552,5 +553,76 @@ describe('assemblePrompt - summary injection', () => {
     const longResult = assemblePrompt(makeInput({ history: longHistory }));
 
     expect(longResult.historyTokenRatio).toBeGreaterThan(shortResult.historyTokenRatio);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// inspectPrompt — chat history display
+// ---------------------------------------------------------------------------
+
+describe('inspectPrompt - chat history display order', () => {
+  it('does not duplicate trigger message when there are messages after it', () => {
+    // Simulate: user sends a message, then the AI character follows up with
+    // multiple messages (e.g., heartbeat agent). The trigger (last non-self
+    // message) should not appear twice in the displayed history.
+    const history: HistoryMessage[] = [
+      makeTextMsg('之前的消息', 'me', 1000),
+      makeTextMsg('角色回复', 'char-nani', 2000),
+      makeTextMsg('用户最新消息', 'me', 3000),          // trigger
+      makeTextMsg('角色跟进消息1', 'char-nani', 4000),  // after trigger
+      makeTextMsg('角色跟进消息2', 'char-nani', 5000),  // after trigger
+    ];
+
+    const input = makeInput({
+      history,
+      characterSenderId: 'char-nani',
+    });
+
+    const inspection = inspectPrompt(input);
+    const chatSection = inspection.sections.find((s) => s.label.includes('聊天历史'));
+    expect(chatSection).toBeDefined();
+
+    // Count occurrences of the trigger message text
+    const triggerOccurrences = chatSection!.content
+      .split('\n')
+      .filter((line: string) => line.includes('用户最新消息'));
+    expect(triggerOccurrences.length).toBe(1);
+  });
+
+  it('preserves chronological order when trigger has follow-up messages', () => {
+    const base = new Date('2026-04-12T21:33:00').getTime();
+    const history: HistoryMessage[] = [
+      makeTextMsg('Luna早期消息', 'luna', base),
+      makeTextMsg('我的回复', 'char-nani', base + 30_000),
+      makeTextMsg('Luna最新消息', 'luna', base + 60_000),       // 21:34 trigger
+      makeTextMsg('我的跟进1', 'char-nani', base + 90_000),     // 21:34:30
+      makeTextMsg('我的跟进2', 'char-nani', base + 120_000),    // 21:35
+    ];
+
+    const input = makeInput({
+      history,
+      characterSenderId: 'char-nani',
+      senderNames: { luna: 'Luna' },
+    });
+
+    const inspection = inspectPrompt(input);
+    const chatSection = inspection.sections.find((s) => s.label.includes('聊天历史'));
+    expect(chatSection).toBeDefined();
+
+    const lines = chatSection!.content
+      .split('\n')
+      .filter((line: string) => line.startsWith('['));
+
+    // The last line should be the character's follow-up, not the trigger
+    expect(lines[lines.length - 1]).toContain('我的跟进2');
+
+    // Verify no line appears after a later-timestamped line with an earlier time
+    for (let i = 1; i < lines.length; i++) {
+      const prevTime = lines[i - 1]!.match(/\[(\d{2}:\d{2})\]/)?.[1];
+      const currTime = lines[i]!.match(/\[(\d{2}:\d{2})\]/)?.[1];
+      if (prevTime && currTime) {
+        expect(currTime >= prevTime).toBe(true);
+      }
+    }
   });
 });

@@ -7,7 +7,7 @@ import { wallpapers } from '@/shell/Springboard/apps.data';
 
 describe('WallpaperPage', () => {
   beforeEach(() => {
-    useSystemStore.setState({ wallpaperId: 'ios-26-stock-01' });
+    useSystemStore.setState({ wallpaperId: 'ios-26-stock-01', customWallpapers: [] });
   });
 
   it('renders all 7 wallpaper thumbnails', () => {
@@ -50,5 +50,66 @@ describe('WallpaperPage', () => {
     const check = screen.getByTestId('wallpaper-check');
     const thumb04 = screen.getByTestId('wallpaper-thumb-ios-26-stock-04');
     expect(thumb04.contains(check)).toBe(true);
+  });
+
+  it('renders upload button', () => {
+    render(<WallpaperPage />);
+    expect(screen.getByTestId('wallpaper-upload-btn')).toBeTruthy();
+  });
+
+  it('renders custom wallpapers from store', () => {
+    useSystemStore.setState({
+      customWallpapers: [
+        { id: 'custom-1', src: 'data:image/jpeg;base64,abc' },
+        { id: 'custom-2', src: 'data:image/jpeg;base64,def' },
+      ],
+    });
+    render(<WallpaperPage />);
+
+    expect(screen.getByTestId('wallpaper-thumb-custom-1')).toBeTruthy();
+    expect(screen.getByTestId('wallpaper-thumb-custom-2')).toBeTruthy();
+  });
+
+  it('clicking a custom wallpaper selects it', async () => {
+    useSystemStore.setState({
+      customWallpapers: [{ id: 'custom-1', src: 'data:image/jpeg;base64,abc' }],
+    });
+    render(<WallpaperPage />);
+
+    await userEvent.click(screen.getByTestId('wallpaper-thumb-custom-1'));
+    expect(useSystemStore.getState().wallpaperId).toBe('custom-1');
+  });
+
+  it('shows checkmark on selected custom wallpaper', () => {
+    useSystemStore.setState({
+      wallpaperId: 'custom-1',
+      customWallpapers: [{ id: 'custom-1', src: 'data:image/jpeg;base64,abc' }],
+    });
+    render(<WallpaperPage />);
+
+    const check = screen.getByTestId('wallpaper-check');
+    const thumb = screen.getByTestId('wallpaper-thumb-custom-1');
+    expect(thumb.contains(check)).toBe(true);
+  });
+
+  it('delete button removes custom wallpaper', async () => {
+    useSystemStore.setState({
+      customWallpapers: [{ id: 'custom-1', src: 'data:image/jpeg;base64,abc' }],
+    });
+    render(<WallpaperPage />);
+
+    await userEvent.click(screen.getByTestId('wallpaper-delete-custom-1'));
+    expect(useSystemStore.getState().customWallpapers).toHaveLength(0);
+  });
+
+  it('deleting active custom wallpaper resets to default', async () => {
+    useSystemStore.setState({
+      wallpaperId: 'custom-1',
+      customWallpapers: [{ id: 'custom-1', src: 'data:image/jpeg;base64,abc' }],
+    });
+    render(<WallpaperPage />);
+
+    await userEvent.click(screen.getByTestId('wallpaper-delete-custom-1'));
+    expect(useSystemStore.getState().wallpaperId).toBe('ios-26-stock-01');
   });
 });

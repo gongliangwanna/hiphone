@@ -623,8 +623,12 @@ export function inspectPrompt(input: PromptInput): PromptInspection {
   if (historyBlock) {
     const blockText = contentToText(historyBlock.content);
     const triggerMsg = chatMsgs.find((m) => m.role === 'user');
-    const combined = triggerMsg
-      ? `${blockText}\n${contentToText(triggerMsg.content)}`
+    const triggerText = triggerMsg ? contentToText(triggerMsg.content) : '';
+    // Only append trigger if it's not already in the block (when there are
+    // messages after the trigger, buildLabeledHistory includes it in the
+    // system block — appending again would duplicate it out of order).
+    const combined = triggerMsg && !blockText.includes(triggerText)
+      ? `${blockText}\n${triggerText}`
       : blockText;
     const lineCount = combined.split('\n').length - 1; // subtract header
     sections.push({

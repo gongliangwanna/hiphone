@@ -65,7 +65,7 @@ export function AppHost() {
         width: '100%',
         height: '100%',
         borderRadius: deviceCornerRadius,
-        opacity: 0.85,
+        opacity: 1,
         scale: switcherCardOrigin!.width / switcherCardViewport!.width,
         x:
           switcherCardOrigin!.x +
