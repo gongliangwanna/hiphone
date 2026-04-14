@@ -438,7 +438,7 @@ function SearchSuggestions({ editText, onSelect }: { editText: string; onSelect:
         </div>
         <div className="min-w-0 flex-1 text-left">
           <p className="truncate text-[16px]" style={{ color: 'var(--color-label)' }}>{trimmed}</p>
-          <p className="text-[12px]" style={{ color: 'var(--color-secondaryLabel)' }}>DuckDuckGo 搜索</p>
+          <p className="text-[12px]" style={{ color: 'var(--color-secondaryLabel)' }}>百度搜索</p>
         </div>
         <ChevronRight size={16} strokeWidth={2} style={{ color: 'var(--color-quaternaryLabel)' }} />
       </button>

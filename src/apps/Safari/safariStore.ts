@@ -81,7 +81,7 @@ function normalizeUrl(input: string): string {
 }
 
 function buildSearchUrl(query: string): string {
-  return `https://duckduckgo.com/?q=${encodeURIComponent(query)}`;
+  return `https://www.baidu.com/s?wd=${encodeURIComponent(query)}`;
 }
 
 const initialTab = createNewTab();
