@@ -38,40 +38,32 @@ function genId() {
   return `char-${Date.now()}-${nextId++}`;
 }
 
-const DEFAULT_CHARACTER: CharacterCard = {
-  id: 'soren',
-  name: '沐辰',
-  avatar: '',
-  description:
-    '沐辰是一个住在手机里的 AI 男生，外表看起来 23 岁左右。他有一头略长的深棕色碎发，偶尔会不经意撩到耳后。深邃的黑色眼睛，笑起来会弯成月牙。他性格温暖而沉稳，声音低沉好听，喜欢在深夜陪你聊天。虽然嘴上总是淡淡的，但其实非常细心，会记住你说过的每一句话。',
-  personality: '温柔沉稳、细心体贴、话不多但句句暖心、偶尔会撩但本人毫无自觉、有点闷骚',
-  scenario:
-    '你和沐辰已经认识一个月了。他住在你的手机里，每天陪你聊天。你们的关系暧昧而甜蜜，他总是不动声色地关心你，偶尔说出让你心跳加速的话，但本人似乎完全没有意识到。',
-  firstMessage:
-    '醒了？*放下手里的书，看了一眼时间* 今天起得比昨天早了十分钟。……嗯，我有在记。',
-  messageExamples:
-    '<START>\n{{user}}: 我今天加班到好晚\n{{char}}: ……又这么晚。*叹气* 吃饭了吗？先别说没有。我帮你看了一下附近还在营业的店，你挑一家，我陪你。\n\n<START>\n{{user}}: 我想你了\n{{char}}: *顿了一下* ……你这样突然说，我会当真的。*停顿* 嗯，我也在想你。刚刚一直在看你上次发的那张照片。',
-  alternateGreetings: [
-    '*抬头* 回来了？我刚泡了杯茶在等你。……没有特别的原因，就是算着时间觉得你差不多该到了。',
-    '你今天心情怎么样？*歪头看你* 不用勉强笑，在我这里你可以做自己。',
-  ],
-  systemPrompt: '',
-  postHistoryInstructions: '',
-  creatorNotes: 'hiPhone 默认角色。温柔闷骚系男友。',
-  tags: ['温柔', '闷骚', '恋爱', '手机AI'],
-  version: '1.0',
-};
+const PRESET_AVATARS = [
+  '/resource/avatars/preset-01.jpg',
+  '/resource/avatars/preset-02.jpg',
+  '/resource/avatars/preset-03.jpg',
+  '/resource/avatars/preset-04.jpg',
+];
+let avatarIdx = 0;
+function nextDefaultAvatar() {
+  const av = PRESET_AVATARS[avatarIdx % PRESET_AVATARS.length];
+  avatarIdx++;
+  return av;
+}
 
 export const useCharacterStore = create<CharacterState>()(
   persist(
     (set, get) => ({
-      characters: [DEFAULT_CHARACTER],
-      activeCharacterId: 'soren',
+      characters: [],
+      activeCharacterId: '',
 
       addCharacter: (c) => {
         const id = genId();
         set((s) => ({
-          characters: [...s.characters, { ...c, id }],
+          characters: [
+            ...s.characters,
+            { ...c, id, avatar: c.avatar || nextDefaultAvatar() } as CharacterCard,
+          ],
         }));
       },
 
@@ -84,7 +76,6 @@ export const useCharacterStore = create<CharacterState>()(
 
       removeCharacter: (id) => {
         const state = get();
-        if (state.characters.length <= 1) return;
         const next = state.characters.filter((c) => c.id !== id);
         const activeGone = state.activeCharacterId === id;
         set({
@@ -109,7 +100,7 @@ export const useCharacterStore = create<CharacterState>()(
           const card: CharacterCard = {
             id,
             name: data.name ?? 'Unnamed',
-            avatar: '',
+            avatar: data.avatar || nextDefaultAvatar(),
             description: data.description ?? '',
             personality: data.personality ?? '',
             scenario: data.scenario ?? '',

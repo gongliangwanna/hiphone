@@ -9,8 +9,10 @@
 import { useXYData } from '@/apps/XingYu/xingYuDataStore';
 import { useCharacterStore } from '@/platform/stores/characterStore';
 import { useHeartbeatStore } from '@/platform/stores/heartbeatStore';
+import { notesRegistry, type NotesDataState } from '@/apps/Notes/notesDataStore';
 import { runAIChat } from './aiChatEngine';
 import type { Message, Moment } from '@/apps/XingYu/data';
+import type { StoreApi, UseBoundStore } from 'zustand';
 
 // ---------------------------------------------------------------------------
 // UID helper (same as xingYuDataStore)
@@ -82,6 +84,26 @@ export function buildHeartbeatTools(userName: string): ToolDef[] {
       params: '{"text": "新签名"}',
     },
     {
+      name: 'view_notes',
+      description: '分页查看自己的备忘录，每页5条',
+      params: '{"page": 1}',
+    },
+    {
+      name: 'create_note',
+      description: '创建一条备忘录（可以用来写日记、记录想法等）',
+      params: '{"title": "标题", "body": "内容"}',
+    },
+    {
+      name: 'view_unread_messages',
+      description: `查看${userName}发给你的未回复消息`,
+      params: '{}',
+    },
+    {
+      name: 'view_unread_interactions',
+      description: '查看你的动态收到的互动通知（谁赞了/评论了你的动态）',
+      params: '{}',
+    },
+    {
       name: 'view_characters',
       description: '查看可以聊天的其他角色列表',
       params: '{}',
@@ -111,10 +133,17 @@ const aiChatUsedThisHeartbeat = new Set<string>();
 /** Short-ID → real-ID mappings, keyed by characterId. Reset each heartbeat. */
 const momentAliases = new Map<string, Map<string, string>>(); // charId → (m1 → realId)
 const characterAliases = new Map<string, Map<string, string>>(); // charId → (c1 → realId)
+const noteAliases = new Map<string, Map<string, string>>(); // charId → (n1 → realId)
 
 function getMomentAlias(characterId: string): Map<string, string> {
   let m = momentAliases.get(characterId);
   if (!m) { m = new Map(); momentAliases.set(characterId, m); }
+  return m;
+}
+
+function getNoteAlias(characterId: string): Map<string, string> {
+  let m = noteAliases.get(characterId);
+  if (!m) { m = new Map(); noteAliases.set(characterId, m); }
   return m;
 }
 
@@ -136,6 +165,7 @@ export function resetHeartbeatLimits(characterId: string) {
   aiChatUsedThisHeartbeat.delete(characterId);
   momentAliases.delete(characterId);
   characterAliases.delete(characterId);
+  noteAliases.delete(characterId);
 }
 
 // ---------------------------------------------------------------------------
@@ -166,12 +196,20 @@ export async function executeTool(
       return execLikeMoment(input, characterId);
     case 'comment_moment':
       return execCommentMoment(input, characterId);
+    case 'view_unread_messages':
+      return execViewUnreadMessages(characterId);
+    case 'view_unread_interactions':
+      return execViewUnreadInteractions(characterId);
     case 'view_user_signature':
       return execViewUserSignature();
     case 'view_user_signature_history':
       return execViewUserSignatureHistory();
     case 'update_signature':
       return execUpdateSignature(input, characterId);
+    case 'view_notes':
+      return execViewNotes(input, characterId);
+    case 'create_note':
+      return execCreateNote(input, characterId);
     case 'view_characters':
       return execViewCharacters(characterId);
     case 'chat_with_character':
@@ -265,8 +303,7 @@ function execPostMoment(
     id: uid(),
     idolId: `char-${characterId}`,
     text,
-    likes: 0,
-    liked: false,
+    likedBy: [],
     timestamp: Date.now(),
     comments: [],
   };
@@ -322,8 +359,8 @@ function execViewMoments(input: Record<string, unknown>, characterId: string): T
     aliases.set(alias, m.id);
 
     const authorName = nameOf(m.idolId);
-    const likedStr = m.liked ? '（你已赞）' : '';
-    const header = `[${alias}] [${authorName}] ${m.text.slice(0, 80)} — ${m.likes}赞${likedStr}, ${m.comments.length}评论`;
+    const likedStr = m.likedBy.includes(`char-${characterId}`) ? '（你已赞）' : '';
+    const header = `[${alias}] [${authorName}] ${m.text.slice(0, 80)} — ${m.likedBy.length}赞${likedStr}, ${m.comments.length}评论`;
 
     if (m.comments.length === 0) return header;
 
@@ -353,11 +390,12 @@ function execLikeMoment(input: Record<string, unknown>, characterId: string): To
   if (!moment) {
     return { observation: `找不到动态 ${rawId}。先用 view_moments 查看。`, done: false };
   }
-  if (moment.liked) {
+  const charUserId = `char-${characterId}`;
+  if (moment.likedBy.includes(charUserId)) {
     return { observation: '已经点过赞了。', done: false };
   }
 
-  useXYData.getState().toggleLike(momentId);
+  useXYData.getState().toggleLike(momentId, charUserId);
 
   return { observation: '已点赞。', done: false };
 }
@@ -382,16 +420,9 @@ function execCommentMoment(
     return { observation: `找不到动态 ${momentId}。`, done: false };
   }
 
-  // Write comment with character userId
+  // Write comment via centralized addComment (also generates interaction records)
   const commentUserId = `char-${characterId}`;
-  const currentState = useXYData.getState();
-  useXYData.setState({
-    moments: currentState.moments.map((m) =>
-      m.id === momentId
-        ? { ...m, comments: [...m.comments, { userId: commentUserId, text }] }
-        : m,
-    ),
-  });
+  useXYData.getState().addComment(momentId, text, commentUserId);
 
   useHeartbeatStore.getState().pushLog({
     characterId,
@@ -447,6 +478,79 @@ function execUpdateSignature(
   });
 
   return { observation: '签名已更新。', done: false };
+}
+
+// ---------------------------------------------------------------------------
+// Hydration helper for lazily-created entity stores
+// ---------------------------------------------------------------------------
+
+async function ensureHydrated(store: UseBoundStore<StoreApi<NotesDataState>>) {
+  if (!(store as unknown as { persist: { hasHydrated: () => boolean } }).persist.hasHydrated()) {
+    await new Promise<void>((resolve) => {
+      const unsub = (store as unknown as { persist: { onFinishHydration: (cb: () => void) => () => void } }).persist.onFinishHydration(() => {
+        unsub();
+        resolve();
+      });
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Notes tools
+// ---------------------------------------------------------------------------
+
+async function execViewNotes(input: Record<string, unknown>, characterId: string): Promise<ToolResult> {
+  const store = notesRegistry.getStore(characterId);
+  await ensureHydrated(store);
+
+  const page = Math.max(1, Math.floor(Number(input.page) || 1));
+  const allNotes = [...store.getState().notes].sort((a, b) => b.updatedAt - a.updatedAt);
+  const totalPages = Math.max(1, Math.ceil(allNotes.length / PAGE_SIZE));
+
+  if (allNotes.length === 0) {
+    return { observation: '你还没有写过备忘录。', done: false };
+  }
+
+  const start = (page - 1) * PAGE_SIZE;
+  const slice = allNotes.slice(start, start + PAGE_SIZE);
+
+  if (slice.length === 0) {
+    return { observation: `第${page}页没有更多备忘录了（共${totalPages}页）。`, done: false };
+  }
+
+  const aliases = getNoteAlias(characterId);
+  const lines = slice.map((n, i) => {
+    const alias = `n${start + i + 1}`;
+    aliases.set(alias, n.id);
+    const d = new Date(n.updatedAt);
+    const dateStr = `${d.getMonth() + 1}/${d.getDate()}`;
+    return `[${alias}] ${n.title || '无标题'} — ${n.body.slice(0, 60)} (${dateStr})`;
+  });
+
+  lines.push(`--- 第${page}/${totalPages}页，共${allNotes.length}条 ---`);
+
+  return { observation: lines.join('\n'), done: false };
+}
+
+async function execCreateNote(input: Record<string, unknown>, characterId: string): Promise<ToolResult> {
+  const title = String(input.title ?? '').trim();
+  const body = String(input.body ?? '').trim();
+  if (!title && !body) {
+    return { observation: '标题和内容不能都为空。', done: false };
+  }
+
+  const store = notesRegistry.getStore(characterId);
+  await ensureHydrated(store);
+
+  store.getState().addNote(title, body);
+
+  useHeartbeatStore.getState().pushLog({
+    characterId,
+    action: 'create_note',
+    detail: (title || body).slice(0, 40),
+  });
+
+  return { observation: '备忘录已创建。', done: false };
 }
 
 function execViewCharacters(selfCharacterId: string): ToolResult {
@@ -532,4 +636,98 @@ async function execChatWithCharacter(
     .join('\n');
 
   return { observation: `和${target.name}的聊天记录：\n${transcript}`, done: false };
+}
+
+// ---------------------------------------------------------------------------
+// Unread messages & interactions tools
+// ---------------------------------------------------------------------------
+
+function execViewUnreadMessages(characterId: string): ToolResult {
+  const state = useXYData.getState();
+  const ownConvId = `c-char-${characterId}`;
+  const lastReadTs = state.characterLastReadMsgTs[characterId] ?? 0;
+
+  const unreadMsgs = state.messages
+    .filter(
+      (m) =>
+        m.convId === ownConvId &&
+        m.type !== 'heartbeat_log' &&
+        m.senderId === 'me' &&
+        m.timestamp > lastReadTs,
+    )
+    .sort((a, b) => a.timestamp - b.timestamp);
+
+  const userName = state.userSettings.nickname || '用户';
+
+  // Mark as read
+  useXYData.getState().markCharacterMsgRead(characterId);
+
+  if (unreadMsgs.length === 0) {
+    return { observation: '没有未读消息。', done: false };
+  }
+
+  const preview = unreadMsgs
+    .slice(-5)
+    .map((m) => `  「${m.text?.slice(0, 60) ?? '[非文本]'}」`)
+    .join('\n');
+
+  return {
+    observation: `${userName}发了${unreadMsgs.length}条未读消息：\n${preview}`,
+    done: false,
+  };
+}
+
+function execViewUnreadInteractions(characterId: string): ToolResult {
+  const state = useXYData.getState();
+  const characters = useCharacterStore.getState().characters;
+  const charSenderId = `char-${characterId}`;
+  const seenCount = state.characterSeenInteractionCount[characterId] ?? 0;
+
+  // Compute all interactions on this character's moments (likes + comments from others)
+  const allInteractions: { type: 'like' | 'comment'; userId: string; momentText: string; commentText?: string }[] = [];
+
+  for (const mo of state.moments) {
+    if (mo.idolId !== charSenderId) continue;
+    for (const likerId of mo.likedBy) {
+      if (likerId !== charSenderId) {
+        allInteractions.push({ type: 'like', userId: likerId, momentText: mo.text.slice(0, 30) });
+      }
+    }
+    for (const c of mo.comments) {
+      if (c.userId !== charSenderId) {
+        allInteractions.push({ type: 'comment', userId: c.userId, momentText: mo.text.slice(0, 30), commentText: c.text });
+      }
+    }
+  }
+
+  const totalCount = allInteractions.length;
+  const newCount = totalCount - seenCount;
+
+  // Mark all as read
+  useXYData.getState().markCharacterInteractionRead(characterId, totalCount);
+
+  if (newCount <= 0) {
+    return { observation: '没有新的互动通知。', done: false };
+  }
+
+  const nameOf = (userId: string): string => {
+    if (userId === 'me') return state.userSettings.nickname || '用户';
+    if (userId.startsWith('char-')) {
+      const char = characters.find((c) => c.id === userId.slice(5));
+      return char?.name ?? '???';
+    }
+    return userId;
+  };
+
+  // Show the newest interactions (last N items are the "new" ones)
+  const newItems = allInteractions.slice(-newCount);
+  const lines = newItems.slice(0, 10).map((i) => {
+    const who = nameOf(i.userId);
+    if (i.type === 'like') {
+      return `❤️ ${who} 赞了你的动态「${i.momentText}」`;
+    }
+    return `💬 ${who} 评论了你的动态「${i.momentText}」：「${i.commentText?.slice(0, 40) ?? ''}」`;
+  });
+
+  return { observation: `${newCount}条新互动：\n${lines.join('\n')}`, done: false };
 }

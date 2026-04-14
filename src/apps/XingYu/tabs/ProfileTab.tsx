@@ -1,10 +1,12 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useMemo } from 'react';
 import { motion, useScroll, useTransform, AnimatePresence } from 'motion/react';
 import { Star, Heart, Clock, ChevronRight, Settings, Image as ImageIcon, Smile, Settings2 } from 'lucide-react';
 import { useXYNav } from '../xingYuNavStore';
 import { useXYData } from '../xingYuDataStore';
 import { useStickerStore } from '../stickerStore';
 import { DEFAULT_COVER, DEFAULT_AVATAR } from '../data';
+import { useCharacterStore } from '@/platform/stores/characterStore';
+import { usePerspective } from '@/platform/hooks/usePerspective';
 import { T, springs } from '../theme';
 
 const DEFAULT_SIGNATURE = '还没有个性签名';
@@ -17,9 +19,34 @@ export function ProfileTab() {
   const conversations = useXYData((s) => s.conversations);
   const moments = useXYData((s) => s.moments);
   const userSignatureHistory = useXYData((s) => s.userSignatureHistory);
+  const characterSignatures = useXYData((s) => s.characterSignatures);
+  const characters = useCharacterStore((s) => s.characters);
+  const { phoneOwnerId, selfSenderId } = usePerspective();
   const [showHistory, setShowHistory] = useState(false);
 
-  const myMomentsCount = moments.filter((m) => m.idolId === 'me').length;
+  // 查手机模式: 显示 AI 角色的资料
+  const displayProfile = useMemo(() => {
+    if (!phoneOwnerId) {
+      return {
+        nickname: settings.nickname,
+        bio: settings.bio,
+        avatarUrl: settings.avatarUrl,
+        coverUrl: settings.coverUrl,
+        signatureHistory: userSignatureHistory,
+      };
+    }
+    const char = characters.find((c) => c.id === phoneOwnerId);
+    const sig = characterSignatures[phoneOwnerId];
+    return {
+      nickname: char?.name || '???',
+      bio: sig?.current || char?.personality?.slice(0, 60) || '',
+      avatarUrl: char?.avatar || '',
+      coverUrl: '',
+      signatureHistory: sig?.history || [],
+    };
+  }, [phoneOwnerId, settings, characters, characterSignatures, userSignatureHistory]);
+
+  const myMomentsCount = moments.filter((m) => m.idolId === selfSenderId).length;
   const totalChats = conversations.length;
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -59,7 +86,7 @@ export function ProfileTab() {
         {/* 封面图 - 正常文档流，随滚动走 */}
         <div className="relative w-full overflow-hidden" style={{ height: 200 }}>
           <img
-            src={settings.coverUrl || DEFAULT_COVER}
+            src={displayProfile.coverUrl || DEFAULT_COVER}
             alt=""
             className="absolute inset-0 h-full w-full object-cover"
           />
@@ -99,14 +126,14 @@ export function ProfileTab() {
               }}
             >
               <img
-                src={settings.avatarUrl || DEFAULT_AVATAR}
+                src={displayProfile.avatarUrl || DEFAULT_AVATAR}
                 alt=""
                 style={{ width: 88, height: 88, borderRadius: '50%', objectFit: 'cover' }}
               />
             </div>
 
             <span style={{ fontSize: 22, fontWeight: 700, color: T.textPrimary }}>
-              {settings.nickname}
+              {displayProfile.nickname}
             </span>
             <span
               style={{
@@ -115,14 +142,14 @@ export function ProfileTab() {
                 marginTop: 6,
                 textAlign: 'center',
                 lineHeight: 1.4,
-                fontStyle: settings.bio ? 'normal' : 'italic',
+                fontStyle: displayProfile.bio ? 'normal' : 'italic',
               }}
             >
-              {settings.bio || DEFAULT_SIGNATURE}
+              {displayProfile.bio || DEFAULT_SIGNATURE}
             </span>
 
             {/* 签名历史 */}
-            {userSignatureHistory.length > 0 && (
+            {displayProfile.signatureHistory.length > 0 && (
               <>
                 <motion.button
                   className="mt-2 flex items-center gap-1"
@@ -131,7 +158,7 @@ export function ProfileTab() {
                 >
                   <Clock size={11} strokeWidth={2} color={T.textMuted} />
                   <span style={{ fontSize: 11, color: T.textMuted, fontWeight: 500 }}>
-                    {showHistory ? '收起' : `历史签名 (${userSignatureHistory.length})`}
+                    {showHistory ? '收起' : `历史签名 (${displayProfile.signatureHistory.length})`}
                   </span>
                 </motion.button>
                 <AnimatePresence>
@@ -143,7 +170,7 @@ export function ProfileTab() {
                       exit={{ opacity: 0, height: 0 }}
                       style={{ overflow: 'hidden' }}
                     >
-                      {userSignatureHistory.slice(0, 20).map((record, i) => (
+                      {displayProfile.signatureHistory.slice(0, 20).map((record, i) => (
                         <div
                           key={`${record.timestamp}-${i}`}
                           className="flex items-baseline justify-between gap-2"

@@ -33,6 +33,15 @@ export interface Message {
   streaming?: boolean;
   /** 心跳 agent 主动发出的消息（非用户触发） */
   proactive?: boolean;
+  /** 分享的备忘录引用 — 存在时聊天气泡渲染为卡片 */
+  noteRef?: { noteId: string; title: string; body: string };
+  /** 分享的歌曲引用 — 存在时聊天气泡渲染为音乐卡片 */
+  songRef?: {
+    songId: string;
+    title: string;
+    artist: string;
+    artworkUrl: string;
+  };
 }
 
 export interface Conversation {
@@ -64,10 +73,20 @@ export interface Moment {
   idolId: string;
   text: string;
   imageUrl?: string;
-  likes: number;
-  liked: boolean;
+  /** Per-user like tracking: array of userIds who liked this moment */
+  likedBy: string[];
   timestamp: number;
   comments: { userId: string; text: string }[];
+}
+
+export interface MomentInteraction {
+  id: string;
+  type: 'like' | 'comment';
+  momentId: string;
+  momentTextSnippet: string;
+  userId: string;
+  commentText?: string;
+  timestamp: number;
 }
 
 /* ── Helpers ── */

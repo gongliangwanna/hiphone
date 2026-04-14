@@ -1,13 +1,13 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BOARD_SIZE, useGomokuStore, type Stone } from './gomokuStore';
 
 const CELL_SIZE = 22; // px per cell
-const STONE_R = 9.5;    // stone radius in px
-const PADDING = 18;   // board padding
+const STONE_R = 9.8;    // stone radius in px
+const PADDING = 20;   // board padding
 const BOARD_PX = CELL_SIZE * (BOARD_SIZE - 1) + PADDING * 2;
 
-/** Single stone with spring-in animation */
+/** Single stone */
 function StoneView({
   row,
   col,
@@ -27,15 +27,14 @@ function StoneView({
   const cy = PADDING + row * CELL_SIZE;
 
   return (
-    <motion.g
-      initial={{ scale: 0, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      exit={{ scale: 0, opacity: 0 }}
-      transition={{ type: 'spring', stiffness: 500, damping: 25 }}
-      style={{ originX: `${cx}px`, originY: `${cy}px` }}
+    <motion.g 
+      style={{ transformOrigin: `${cx}px ${cy}px` }}
+      initial={{ scale: 1.5, opacity: 0, y: -20 }}
+      animate={{ scale: 1, opacity: 1, y: 0 }}
+      transition={{ type: 'spring', stiffness: 450, damping: 25 }}
     >
       {/* Shadow */}
-      <circle cx={cx} cy={cy + 1.5} r={STONE_R} fill="rgba(0,0,0,0.15)" filter="url(#stoneShadow)" />
+      <circle cx={cx + 1} cy={cy + 2} r={STONE_R} fill="rgba(0,0,0,0.3)" filter="url(#stoneShadow)" />
       
       {/* Stone body */}
       <circle
@@ -43,29 +42,27 @@ function StoneView({
         cy={cy}
         r={STONE_R}
         fill={stone === 'black' ? 'url(#blackStone)' : 'url(#whiteStone)'}
-        stroke={stone === 'white' ? 'rgba(0,0,0,0.04)' : 'none'}
-        strokeWidth={stone === 'white' ? 0.5 : 0}
+        stroke={stone === 'white' ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.05)'}
+        strokeWidth={0.5}
       />
       
-      {/* Highlight on stone to make it glossy */}
-      <circle
-        cx={cx - 2.5}
-        cy={cy - 2.5}
-        r={STONE_R * 0.8}
+      {/* Highlight on stone to make it glossy (Yunzi/Shell effect) */}
+      <ellipse
+        cx={cx - 2}
+        cy={cy - 3}
+        rx={STONE_R * 0.6}
+        ry={STONE_R * 0.4}
         fill={stone === 'black' ? 'url(#blackHighlight)' : 'url(#whiteHighlight)'}
-        opacity={0.8}
+        transform={`rotate(-30 ${cx - 2} ${cy - 3})`}
       />
 
       {/* Last move indicator */}
       {isLast && !isWinStone && (
-        <motion.circle
+        <circle
           cx={cx}
           cy={cy}
           r={2.5}
           fill={stone === 'black' ? '#ff4757' : '#ff6b81'}
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ type: 'spring', stiffness: 500, damping: 20 }}
         />
       )}
       
@@ -74,13 +71,14 @@ function StoneView({
         <motion.circle
           cx={cx}
           cy={cy}
-          r={STONE_R + 3}
+          r={STONE_R + 4}
           fill="none"
-          stroke="#FF9F43"
-          strokeWidth={2}
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: [0.3, 0.8, 0.3], scale: [1, 1.05, 1] }}
-          transition={{ duration: 1.5, repeat: Infinity }}
+          stroke="#FFD700"
+          strokeWidth={2.5}
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: [1, 1.2, 1], opacity: [0.8, 0.4, 0.8] }}
+          transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+          style={{ filter: 'drop-shadow(0 0 4px rgba(255,215,0,0.8))' }}
         />
       )}
     </motion.g>
@@ -92,40 +90,72 @@ export function GomokuBoard() {
   const moves = useGomokuStore((s) => s.moves);
   const result = useGomokuStore((s) => s.result);
   const placeStone = useGomokuStore((s) => s.placeStone);
+  const currentPlayer = useGomokuStore((s) => s.currentPlayer);
+  const mode = useGomokuStore((s) => s.mode);
   const svgRef = useRef<SVGSVGElement>(null);
+  const [hoverCell, setHoverCell] = useState<{row: number, col: number} | null>(null);
 
   const lastMove = moves.length > 0 ? moves[moves.length - 1] : null;
   const winSet = new Set(result?.line.map(([r, c]) => `${r},${c}`) ?? []);
+  const isAITurn = mode === 'pve' && currentPlayer === 'white' && !result;
+
+  const getCellFromEvent = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    if (!svgRef.current) return null;
+    const rect = svgRef.current.getBoundingClientRect();
+    const scaleX = BOARD_PX / rect.width;
+    const scaleY = BOARD_PX / rect.height;
+
+    let clientX: number, clientY: number;
+    if ('touches' in e) {
+      const touch = e.touches[0] ?? e.changedTouches[0];
+      if (!touch) return null;
+      clientX = touch.clientX;
+      clientY = touch.clientY;
+    } else {
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+
+    const x = (clientX - rect.left) * scaleX;
+    const y = (clientY - rect.top) * scaleY;
+
+    const col = Math.round((x - PADDING) / CELL_SIZE);
+    const row = Math.round((y - PADDING) / CELL_SIZE);
+
+    if (row < 0 || row >= BOARD_SIZE || col < 0 || col >= BOARD_SIZE) return null;
+    return { row, col };
+  }, []);
 
   const handleClick = useCallback(
     (e: React.MouseEvent<SVGSVGElement> | React.TouchEvent<SVGSVGElement>) => {
-      if (!svgRef.current) return;
-      const rect = svgRef.current.getBoundingClientRect();
-      const scaleX = BOARD_PX / rect.width;
-      const scaleY = BOARD_PX / rect.height;
-
-      let clientX: number, clientY: number;
-      if ('touches' in e) {
-        const touch = e.touches[0] ?? e.changedTouches[0];
-        if (!touch) return;
-        clientX = touch.clientX;
-        clientY = touch.clientY;
-      } else {
-        clientX = e.clientX;
-        clientY = e.clientY;
+      if (isAITurn || result) return;
+      const cell = getCellFromEvent(e);
+      if (cell) {
+        // Haptic feedback
+        if (navigator.vibrate) navigator.vibrate(10);
+        placeStone(cell.row, cell.col);
+        setHoverCell(null);
       }
-
-      const x = (clientX - rect.left) * scaleX;
-      const y = (clientY - rect.top) * scaleY;
-
-      const col = Math.round((x - PADDING) / CELL_SIZE);
-      const row = Math.round((y - PADDING) / CELL_SIZE);
-
-      if (row < 0 || row >= BOARD_SIZE || col < 0 || col >= BOARD_SIZE) return;
-      placeStone(row, col);
     },
-    [placeStone],
+    [placeStone, getCellFromEvent, isAITurn, result],
   );
+
+  const handlePointerMove = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    if (isAITurn || result) {
+      setHoverCell(null);
+      return;
+    }
+    const cell = getCellFromEvent(e);
+    if (cell && !board[cell.row]?.[cell.col]) {
+      setHoverCell(cell);
+    } else {
+      setHoverCell(null);
+    }
+  }, [getCellFromEvent, board, isAITurn, result]);
+
+  const handlePointerLeave = useCallback(() => {
+    setHoverCell(null);
+  }, []);
 
   // Grid lines
   const gridLines: React.JSX.Element[] = [];
@@ -139,9 +169,10 @@ export function GomokuBoard() {
         y1={pos}
         x2={PADDING + (BOARD_SIZE - 1) * CELL_SIZE}
         y2={pos}
-        stroke="#D4C8B2"
-        strokeWidth={1}
-        strokeLinecap="round"
+        stroke="#5C4033"
+        strokeWidth={0.8}
+        strokeOpacity={0.6}
+        strokeLinecap="square"
       />,
     );
     // vertical
@@ -152,9 +183,10 @@ export function GomokuBoard() {
         y1={PADDING}
         x2={pos}
         y2={PADDING + (BOARD_SIZE - 1) * CELL_SIZE}
-        stroke="#D4C8B2"
-        strokeWidth={1}
-        strokeLinecap="round"
+        stroke="#5C4033"
+        strokeWidth={0.8}
+        strokeOpacity={0.6}
+        strokeLinecap="square"
       />,
     );
   }
@@ -173,92 +205,125 @@ export function GomokuBoard() {
       y1={PADDING + winLine[0][0] * CELL_SIZE}
       x2={PADDING + winLine[winLine.length - 1]![1] * CELL_SIZE}
       y2={PADDING + winLine[winLine.length - 1]![0] * CELL_SIZE}
-      stroke="#FF9F43"
-      strokeWidth={3}
+      stroke="url(#winGradient)"
+      strokeWidth={6}
       strokeLinecap="round"
       initial={{ pathLength: 0, opacity: 0 }}
-      animate={{ pathLength: 1, opacity: 0.9 }}
-      transition={{ duration: 0.6, ease: 'easeOut' }}
+      animate={{ pathLength: 1, opacity: 0.8 }}
+      transition={{ duration: 0.8, ease: 'easeOut' }}
+      style={{ filter: 'drop-shadow(0 0 6px rgba(255,215,0,0.6))' }}
     />
   ) : null;
 
   return (
-    <div className="flex w-full items-center justify-center">
-      <svg
-        ref={svgRef}
-        viewBox={`0 0 ${BOARD_PX} ${BOARD_PX}`}
-        className="w-full max-w-[360px] touch-none select-none"
+    <div className="flex w-full items-center justify-center p-2">
+      <div 
+        className="relative w-full max-w-[360px]"
         style={{
-          aspectRatio: '1 / 1',
-          borderRadius: 16,
-          background: 'linear-gradient(180deg, #FDFBF7 0%, #EBE5D9 100%)',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.08), inset 0 2px 4px rgba(255,255,255,0.8)',
+          borderRadius: 20,
+          background: 'linear-gradient(135deg, #a46d33 0%, #824b17 100%)', // Wood border color
+          boxShadow: '0 12px 32px rgba(0,0,0,0.2), inset 0 2px 5px rgba(255,255,255,0.1)',
+          padding: 6, // Border thickness
         }}
-        onClick={handleClick}
       >
-        <defs>
-          <filter id="stoneShadow" x="-20%" y="-20%" width="140%" height="140%">
-            <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#000" floodOpacity="0.25" />
-          </filter>
-          
-          <radialGradient id="blackStone" cx="35%" cy="30%" r="60%">
-            <stop offset="0%" stopColor="#4A4A4A" />
-            <stop offset="40%" stopColor="#222222" />
-            <stop offset="100%" stopColor="#0A0A0A" />
-          </radialGradient>
-          
-          <radialGradient id="whiteStone" cx="35%" cy="30%" r="60%">
-            <stop offset="0%" stopColor="#FFFFFF" />
-            <stop offset="70%" stopColor="#F0F0F0" />
-            <stop offset="100%" stopColor="#D4D4D4" />
-          </radialGradient>
+        <svg
+          ref={svgRef}
+          viewBox={`0 0 ${BOARD_PX} ${BOARD_PX}`}
+          className="w-full h-full touch-none select-none block"
+          style={{
+            borderRadius: 14,
+            background: 'linear-gradient(135deg, #DEB887 0%, #C89445 100%)', // Inner wood board color
+            boxShadow: 'inset 0 2px 6px rgba(255,255,255,0.4), inset 0 -4px 10px rgba(0,0,0,0.1)',
+          }}
+          onClick={handleClick}
+          onMouseMove={handlePointerMove}
+          onTouchMove={handlePointerMove}
+          onMouseLeave={handlePointerLeave}
+          onTouchEnd={handlePointerLeave}
+        >
+          <defs>
+            <filter id="stoneShadow" x="-30%" y="-30%" width="160%" height="160%">
+              <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="#000" floodOpacity="0.4" />
+            </filter>
+            
+            <radialGradient id="blackStone" cx="30%" cy="30%" r="70%">
+              <stop offset="0%" stopColor="#4A4A4A" />
+              <stop offset="30%" stopColor="#222222" />
+              <stop offset="70%" stopColor="#0A0A0A" />
+              <stop offset="100%" stopColor="#050505" />
+            </radialGradient>
+            
+            <radialGradient id="whiteStone" cx="30%" cy="30%" r="70%">
+              <stop offset="0%" stopColor="#FFFFFF" />
+              <stop offset="40%" stopColor="#F8F8F8" />
+              <stop offset="80%" stopColor="#E0E0E0" />
+              <stop offset="100%" stopColor="#C8C8C8" />
+            </radialGradient>
 
-          <radialGradient id="blackHighlight" cx="30%" cy="30%" r="50%">
-            <stop offset="0%" stopColor="rgba(255,255,255,0.25)" />
-            <stop offset="100%" stopColor="rgba(255,255,255,0)" />
-          </radialGradient>
-          
-          <radialGradient id="whiteHighlight" cx="30%" cy="30%" r="50%">
-            <stop offset="0%" stopColor="rgba(255,255,255,0.8)" />
-            <stop offset="100%" stopColor="rgba(255,255,255,0)" />
-          </radialGradient>
-        </defs>
+            <linearGradient id="blackHighlight" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="rgba(255,255,255,0.25)" />
+              <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+            </linearGradient>
+            
+            <linearGradient id="whiteHighlight" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="rgba(255,255,255,0.9)" />
+              <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+            </linearGradient>
 
-        {/* Grid */}
-        {gridLines}
+            <linearGradient id="winGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stopColor="#FFD700" />
+              <stop offset="50%" stopColor="#FFA500" />
+              <stop offset="100%" stopColor="#FF8C00" />
+            </linearGradient>
+          </defs>
 
-        {/* Star points */}
-        {starPoints.map(([r, c]) => (
-          <circle
-            key={`star-${r}-${c}`}
-            cx={PADDING + c * CELL_SIZE}
-            cy={PADDING + r * CELL_SIZE}
-            r={3}
-            fill="#B3A387"
-          />
-        ))}
+          {/* Grid */}
+          {gridLines}
 
-        {/* Win line */}
-        {winLineElement}
+          {/* Star points */}
+          {starPoints.map(([r, c]) => (
+            <circle
+              key={`star-${r}-${c}`}
+              cx={PADDING + c * CELL_SIZE}
+              cy={PADDING + r * CELL_SIZE}
+              r={3.5}
+              fill="#6b4c2a"
+            />
+          ))}
 
-        {/* Stones */}
-        <AnimatePresence>
-          {board.map((row, ri) =>
-            row.map((cell, ci) =>
-              cell ? (
-                <StoneView
-                  key={`${ri}-${ci}`}
-                  row={ri}
-                  col={ci}
-                  stone={cell}
-                  isLast={lastMove?.row === ri && lastMove?.col === ci}
-                  isWinStone={winSet.has(`${ri},${ci}`)}
-                />
-              ) : null,
-            ),
+          {/* Win line */}
+          {winLineElement}
+
+          {/* Hover indicator */}
+          {hoverCell && !isAITurn && !result && (
+            <circle
+              cx={PADDING + hoverCell.col * CELL_SIZE}
+              cy={PADDING + hoverCell.row * CELL_SIZE}
+              r={STONE_R}
+              fill={currentPlayer === 'black' ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.4)'}
+              style={{ transition: 'all 0.1s ease-out' }}
+            />
           )}
-        </AnimatePresence>
-      </svg>
+
+          {/* Stones */}
+          <AnimatePresence>
+            {board.map((row, ri) =>
+              row.map((cell, ci) =>
+                cell ? (
+                  <StoneView
+                    key={`${ri}-${ci}`}
+                    row={ri}
+                    col={ci}
+                    stone={cell}
+                    isLast={lastMove?.row === ri && lastMove?.col === ci}
+                    isWinStone={winSet.has(`${ri},${ci}`)}
+                  />
+                ) : null,
+              ),
+            )}
+          </AnimatePresence>
+        </svg>
+      </div>
     </div>
   );
 }

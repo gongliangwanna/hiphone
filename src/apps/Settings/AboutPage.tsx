@@ -5,8 +5,8 @@ export function AboutPage() {
     <div data-testid="about-page" className="h-full">
       <List>
         <ListSection>
-          <ListRow title="名称" detail="hiPhone" chevron />
-          <ListRow title="iOS 版本" detail="hiPhoneOS 1.0" />
+          <ListRow title="名称" detail="mini机" chevron />
+          <ListRow title="系统版本" detail="miniOS 1.0" />
           <ListRow title="型号名称" detail="Web Simulator" />
           <ListRow title="型号号码" detail="WEB-001" />
           <ListRow title="序列号" detail="HI2026APR08" />

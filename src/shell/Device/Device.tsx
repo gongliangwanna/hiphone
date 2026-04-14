@@ -10,6 +10,7 @@ import { AppSwitcher } from '../AppSwitcher/AppSwitcher';
 import { WidgetDrawer } from '../WidgetDrawer/WidgetDrawer';
 import { PerformanceHUD } from '../PerformanceHUD/PerformanceHUD';
 import { Toast } from '@/system/Toast/Toast';
+import { PhoneOwnerBanner } from '../PhoneOwnerBanner/PhoneOwnerBanner';
 import {
   PERF_DEBUG_STORAGE_KEY,
   parsePerfDebugStorage,
@@ -397,6 +398,7 @@ export function Device() {
       <AssistiveTouch />
 
       <StatusBar />
+      <PhoneOwnerBanner />
       <Toast />
 
       {!isLocked && !activeAppId && presentationMode === 'foreground' && (

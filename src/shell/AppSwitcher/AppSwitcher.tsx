@@ -154,7 +154,9 @@ export function AppSwitcher() {
       data-testid="app-switcher"
       onClick={(e) => {
         if (exitAnimating) return;
-        if (e.target === e.currentTarget) {
+        // 点击卡片之外的空白区域 → 回到主屏幕
+        const target = e.target as HTMLElement;
+        if (!target.closest('[data-switcher-card]')) {
           useAppRuntimeStore.getState().goHome();
         }
       }}

@@ -7,6 +7,8 @@ import { getIdol, formatTime } from '../data';
 import type { Conversation } from '../data';
 import { Avatar } from '../components/Avatar';
 import { useCharacterStore } from '@/platform/stores/characterStore';
+import { usePersonaStore } from '@/platform/stores/personaStore';
+import { usePerspective } from '@/platform/hooks/usePerspective';
 import { T, springs } from '../theme';
 
 /** 展开后红色删除按钮的宽度 (也是 x 的终止位置 abs 值) */
@@ -37,16 +39,24 @@ export function ChatListTab() {
   const allMessages = useXYData((s) => s.messages);
   const deleteConversation = useXYData((s) => s.deleteConversation);
   const openChat = useXYNav((s) => s.openChat);
+  const { phoneOwnerId } = usePerspective();
   const [query, setQuery] = useState('');
   /** 当前处于"展开-露出删除按钮"状态的 conv id; 同一时刻只允许一行展开 */
   const [openRowId, setOpenRowId] = useState<string | null>(null);
 
-  // 按时间倒序排列 — 不再有 pinned 置顶逻辑
-  // AI-AI 会话暂不展示（后续"查看AI手机"功能再开放）
-  const sorted = useMemo(
-    () => [...conversations].filter((c) => !c.aiChatParticipants).sort((a, b) => b.lastTime - a.lastTime),
-    [conversations],
-  );
+  // 按时间倒序排列,根据视角过滤对话:
+  // 玩家手机 → 过滤掉 AI-AI 对话
+  // AI 手机 → 只显示该 AI 参与的对话
+  const sorted = useMemo(() => {
+    const filtered = phoneOwnerId === null
+      ? conversations.filter((c) => !c.aiChatParticipants)
+      : conversations.filter(
+          (c) =>
+            c.characterId === phoneOwnerId ||
+            c.aiChatParticipants?.includes(phoneOwnerId),
+        );
+    return [...filtered].sort((a, b) => b.lastTime - a.lastTime);
+  }, [conversations, phoneOwnerId]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return sorted;
@@ -209,6 +219,9 @@ function ConvRow({ conv, isOpen, onOpen, onCloseRequest, onTap, onDelete }: Conv
   /** 横向位移 motion value — 每帧 60fps 不走 React state (src/CLAUDE.md 踩坑 3) */
   const x = useMotionValue(0);
   const characters = useCharacterStore((s) => s.characters);
+  const { phoneOwnerId } = usePerspective();
+  const persona = usePersonaStore((s) => s.getActivePersona());
+  const userSettings = useXYData((s) => s.userSettings);
 
   /** 手势瞬态状态 — 全部用 ref,避免 React 异步 state 在 panEnd 读到过期值 (src/CLAUDE.md 踩坑 4) */
   /** panStart 时的 x 位置,支持"半展开再拖"场景 */
@@ -221,6 +234,7 @@ function ConvRow({ conv, isOpen, onOpen, onCloseRequest, onTap, onDelete }: Conv
   const lastPanEndAtRef = useRef(0);
 
   // 兼容 mock idol、character、用户自建群聊、AI-AI 会话
+  // 查手机模式下需要视角化: AI-AI 会话显示对方 AI, AI-玩家会话显示玩家
   const peer: ConvPeer | null = useMemo(() => {
     // AI-to-AI 会话
     if (conv.aiChatParticipants) {
@@ -228,6 +242,19 @@ function ConvRow({ conv, isOpen, onOpen, onCloseRequest, onTap, onDelete }: Conv
       const ch1 = characters.find((c) => c.id === id1);
       const ch2 = characters.find((c) => c.id === id2);
       if (!ch1 || !ch2) return null;
+      // 查手机模式: 显示对方角色名
+      if (phoneOwnerId) {
+        const otherId = id1 === phoneOwnerId ? id2 : id1;
+        const other = characters.find((c) => c.id === otherId);
+        if (!other) return null;
+        return {
+          name: other.name,
+          avatar: other.avatar?.trim() || CHAR_FALLBACK_AVATAR,
+          ringIndex: 0,
+          online: true,
+          isGroup: false,
+        };
+      }
       return {
         name: `${ch1.name} & ${ch2.name}`,
         avatar: ch1.avatar?.trim() || CHAR_FALLBACK_AVATAR,
@@ -248,6 +275,16 @@ function ConvRow({ conv, isOpen, onOpen, onCloseRequest, onTap, onDelete }: Conv
       };
     }
     if (conv.characterId) {
+      // 查手机模式: AI 的对话对方是玩家
+      if (phoneOwnerId && conv.characterId === phoneOwnerId) {
+        return {
+          name: persona?.name || '用户',
+          avatar: persona?.avatar || userSettings.avatarUrl || CHAR_FALLBACK_AVATAR,
+          ringIndex: 0,
+          online: true,
+          isGroup: false,
+        };
+      }
       const ch = characters.find((c) => c.id === conv.characterId);
       if (!ch) return null;
       return {
@@ -268,7 +305,7 @@ function ConvRow({ conv, isOpen, onOpen, onCloseRequest, onTap, onDelete }: Conv
       isGroup: idol.isGroup ?? false,
       memberCount: idol.memberCount,
     };
-  }, [conv.characterId, conv.idolId, conv.groupName, conv.groupMemberIds, conv.aiChatParticipants, characters]);
+  }, [conv.characterId, conv.idolId, conv.groupName, conv.groupMemberIds, conv.aiChatParticipants, characters, phoneOwnerId, persona, userSettings]);
 
   // 外部 isOpen 变化时 (例如别的行被展开触发本行收起) 同步动画。
   // 跳过首次 mount 的 0→0 动画,避免和后续 pan 的 x 更新抢夺控制权。

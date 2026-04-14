@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { Plus, X } from 'lucide-react';
+import { Check, Plus, X } from 'lucide-react';
 import { useSystemStore } from '@/platform/stores/systemStore';
 import { wallpapers } from '@/shell/Springboard/apps.data';
 import { List, ListSection } from '@/system';
@@ -38,28 +38,53 @@ function CheckMark() {
   return (
     <div
       data-testid="wallpaper-check"
+      className="absolute bottom-1.5 right-1.5 flex h-5 w-5 items-center justify-center rounded-full"
+      style={{ backgroundColor: 'var(--color-systemBlue)' }}
+    >
+      <Check size={12} strokeWidth={3} color="white" />
+    </div>
+  );
+}
+
+function WallpaperThumb({
+  id,
+  src,
+  isSelected,
+  onSelect,
+  onDelete,
+}: {
+  id: string;
+  src: string;
+  isSelected: boolean;
+  onSelect: () => void;
+  onDelete?: (e: React.MouseEvent) => void;
+}) {
+  return (
+    <div
+      data-testid={`wallpaper-thumb-${id}`}
+      onClick={onSelect}
+      className="relative cursor-pointer overflow-hidden bg-cover bg-center"
       style={{
-        position: 'absolute',
-        bottom: 8,
-        right: 8,
-        width: 24,
-        height: 24,
-        borderRadius: '50%',
-        backgroundColor: 'var(--color-systemBlue)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
+        aspectRatio: '9 / 19.5',
+        borderRadius: 'var(--radius-button)',
+        backgroundImage: `url(${src})`,
+        outline: isSelected ? '3px solid var(--color-systemBlue)' : 'none',
+        outlineOffset: '-1px',
       }}
     >
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-        <path
-          d="M2 7L5.5 10.5L12 4"
-          stroke="white"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
+      {onDelete && (
+        <div
+          data-testid={`wallpaper-delete-${id}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(e);
+          }}
+          className="absolute top-1 right-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-black/50"
+        >
+          <X size={12} color="white" />
+        </div>
+      )}
+      {isSelected && <CheckMark />}
     </div>
   );
 }
@@ -84,27 +109,10 @@ export function WallpaperPage() {
     e.target.value = '';
   };
 
-  const handleRemove = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    removeCustomWallpaper(id);
-  };
-
-  const gridStyle = {
-    padding: 'var(--spacing-3)',
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: 'var(--spacing-3)',
-  };
-
-  const thumbStyle = {
-    position: 'relative' as const,
-    aspectRatio: '9 / 16',
-    borderRadius: 'var(--radius-chip)',
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    cursor: 'pointer',
-    overflow: 'hidden' as const,
-  };
+  const currentWallpaper =
+    customWallpapers.find((w) => w.id === wallpaperId) ??
+    wallpapers.find((w) => w.id === wallpaperId) ??
+    wallpapers[0]!;
 
   return (
     <div data-testid="wallpaper-page" className="h-full">
@@ -117,81 +125,73 @@ export function WallpaperPage() {
         data-testid="wallpaper-file-input"
       />
 
-      {/* Custom wallpapers section — always shown so user can upload */}
       <List>
-        <ListSection title="自定义壁纸">
-          <div style={gridStyle}>
-            {/* Upload button */}
+        {/* Compact current wallpaper preview */}
+        <ListSection title="当前壁纸">
+          <div className="flex justify-center px-3 py-4">
+            <div
+              data-testid="wallpaper-preview"
+              className="relative overflow-hidden bg-cover bg-center shadow-lg"
+              style={{
+                width: '40%',
+                aspectRatio: '9 / 19.5',
+                borderRadius: 'var(--radius-card)',
+                backgroundImage: `url(${currentWallpaper.src})`,
+              }}
+            >
+              <div
+                className="pointer-events-none absolute inset-0"
+                style={{
+                  borderRadius: 'var(--radius-card)',
+                  boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.1)',
+                }}
+              />
+            </div>
+          </div>
+        </ListSection>
+
+        {/* Custom wallpapers with upload */}
+        <ListSection title="我的壁纸">
+          <div className="grid grid-cols-3 gap-3 p-3">
             <div
               data-testid="wallpaper-upload-btn"
               onClick={handleUpload}
+              className="flex cursor-pointer items-center justify-center overflow-hidden"
               style={{
-                ...thumbStyle,
+                aspectRatio: '9 / 19.5',
+                borderRadius: 'var(--radius-button)',
                 backgroundColor: 'var(--color-tertiarySystemBackground)',
                 border: '2px dashed var(--color-separator)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
               }}
             >
-              <Plus size={32} color="var(--color-secondaryLabel)" />
+              <Plus size={28} color="var(--color-secondaryLabel)" />
             </div>
 
-            {/* Custom wallpaper thumbnails */}
-            {customWallpapers.map((w) => {
-              const isSelected = w.id === wallpaperId;
-              return (
-                <div
-                  key={w.id}
-                  data-testid={`wallpaper-thumb-${w.id}`}
-                  onClick={() => setWallpaper(w.id)}
-                  style={{ ...thumbStyle, backgroundImage: `url(${w.src})` }}
-                >
-                  {/* Delete button */}
-                  <div
-                    data-testid={`wallpaper-delete-${w.id}`}
-                    onClick={(e) => handleRemove(e, w.id)}
-                    style={{
-                      position: 'absolute',
-                      top: 4,
-                      right: 4,
-                      width: 22,
-                      height: 22,
-                      borderRadius: '50%',
-                      backgroundColor: 'rgba(0,0,0,0.5)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      zIndex: 1,
-                    }}
-                  >
-                    <X size={14} color="white" />
-                  </div>
-                  {isSelected && <CheckMark />}
-                </div>
-              );
-            })}
+            {customWallpapers.map((w) => (
+              <WallpaperThumb
+                key={w.id}
+                id={w.id}
+                src={w.src}
+                isSelected={w.id === wallpaperId}
+                onSelect={() => setWallpaper(w.id)}
+                onDelete={() => removeCustomWallpaper(w.id)}
+              />
+            ))}
           </div>
         </ListSection>
-      </List>
 
-      {/* Stock wallpapers section */}
-      <List>
-        <ListSection title="选取新壁纸">
-          <div style={gridStyle}>
-            {wallpapers.map((w) => {
-              const isSelected = w.id === wallpaperId;
-              return (
-                <div
-                  key={w.id}
-                  data-testid={`wallpaper-thumb-${w.id}`}
-                  onClick={() => setWallpaper(w.id)}
-                  style={{ ...thumbStyle, backgroundImage: `url(${w.src})` }}
-                >
-                  {isSelected && <CheckMark />}
-                </div>
-              );
-            })}
+        {/* System default wallpapers */}
+        <ListSection title="系统壁纸">
+          <div className="grid grid-cols-3 gap-3 p-3">
+            {wallpapers.map((w) => (
+              <WallpaperThumb
+                key={w.id}
+                id={w.id}
+                src={w.src}
+                isSelected={w.id === wallpaperId}
+                onSelect={() => setWallpaper(w.id)}
+              />
+            ))}
           </div>
         </ListSection>
       </List>

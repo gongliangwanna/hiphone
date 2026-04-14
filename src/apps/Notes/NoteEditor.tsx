@@ -1,18 +1,21 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNotesDataStore } from './notesDataStore';
+import { useActiveNotesStore, useNotesDataStore } from './notesDataStore';
 import { useNotesNavStore } from './notesNavStore';
+import { usePerspective } from '@/platform/hooks/usePerspective';
 import { Material } from '@/system';
 import { format } from 'date-fns';
+import { Grid3X3, ALargeSmall, ListChecks, Camera, PenTool } from 'lucide-react';
 
 const AUTO_SAVE_DELAY = 500;
 
 export function NoteEditor() {
+  const { isViewingOther } = usePerspective();
   const activeNoteId = useNotesNavStore((s) => s.activeNoteId);
   const setActiveNoteId = useNotesNavStore((s) => s.setActiveNoteId);
-  const addNote = useNotesDataStore((s) => s.addNote);
-  const updateNote = useNotesDataStore((s) => s.updateNote);
+  const addNote = useActiveNotesStore((s) => s.addNote);
+  const updateNote = useActiveNotesStore((s) => s.updateNote);
 
-  const existingNote = useNotesDataStore((s) =>
+  const existingNote = useActiveNotesStore((s) =>
     activeNoteId ? s.notes.find((n) => n.id === activeNoteId) : undefined,
   );
 
@@ -22,15 +25,16 @@ export function NoteEditor() {
   const noteIdRef = useRef(activeNoteId);
   const savedRef = useRef(false);
 
-  // Auto-focus title on new note
+  // Auto-focus title on new note (skip in read-only mode)
   useEffect(() => {
-    if (!activeNoteId) {
+    if (!activeNoteId && !isViewingOther) {
       titleRef.current?.focus();
     }
-  }, [activeNoteId]);
+  }, [activeNoteId, isViewingOther]);
 
-  // Auto-save with debounce
+  // Auto-save with debounce (skip in read-only mode)
   useEffect(() => {
+    if (isViewingOther) return;
     if (localTitle === '' && localBody === '') return;
 
     const timer = setTimeout(() => {
@@ -45,14 +49,15 @@ export function NoteEditor() {
     }, AUTO_SAVE_DELAY);
 
     return () => clearTimeout(timer);
-  }, [localTitle, localBody, addNote, updateNote, setActiveNoteId]);
+  }, [localTitle, localBody, addNote, updateNote, setActiveNoteId, isViewingOther]);
 
-  // Clean up empty note on unmount (back navigation)
-  const cleanupRef = useRef({ localTitle, localBody });
-  cleanupRef.current = { localTitle, localBody };
+  // Clean up empty note on unmount (back navigation) — skip in read-only mode
+  const cleanupRef = useRef({ localTitle, localBody, isViewingOther });
+  cleanupRef.current = { localTitle, localBody, isViewingOther };
 
   useEffect(() => {
     return () => {
+      if (cleanupRef.current.isViewingOther) return;
       const { localTitle: t, localBody: b } = cleanupRef.current;
       const id = noteIdRef.current;
       if (id && t === '' && b === '') {
@@ -86,6 +91,7 @@ export function NoteEditor() {
           type="text"
           placeholder="标题"
           value={localTitle}
+          readOnly={isViewingOther}
           onChange={(e) => setLocalTitle(e.target.value)}
           className="w-full bg-transparent outline-none"
           style={{
@@ -100,6 +106,7 @@ export function NoteEditor() {
         <textarea
           placeholder="正文"
           value={localBody}
+          readOnly={isViewingOther}
           onChange={(e) => setLocalBody(e.target.value)}
           className="w-full flex-1 resize-none bg-transparent outline-none"
           style={{
@@ -113,22 +120,24 @@ export function NoteEditor() {
         />
       </div>
 
-      {/* Bottom toolbar */}
-      <Material
-        variant="chrome"
-        className="flex items-center justify-around shrink-0 relative"
-        style={{
-          height: 49,
-          paddingBottom: 'var(--app-safe-bottom, 0px)',
-          borderTop: '0.5px solid var(--color-separator)',
-        }}
-      >
-        <ToolbarButton icon={<TableIcon />} />
-        <ToolbarButton icon={<FormatIcon />} />
-        <ToolbarButton icon={<ChecklistIcon />} />
-        <ToolbarButton icon={<AttachIcon />} />
-        <ToolbarButton icon={<MarkupIcon />} />
-      </Material>
+      {/* Bottom toolbar (hidden in read-only mode) */}
+      {!isViewingOther && (
+        <Material
+          variant="chrome"
+          className="flex items-center justify-around shrink-0 relative"
+          style={{
+            height: 49,
+            paddingBottom: 'var(--app-safe-bottom, 0px)',
+            borderTop: '0.5px solid var(--color-separator)',
+          }}
+        >
+          <ToolbarButton icon={<Grid3X3 size={22} strokeWidth={1.5} />} />
+          <ToolbarButton icon={<ALargeSmall size={22} strokeWidth={1.5} />} />
+          <ToolbarButton icon={<ListChecks size={22} strokeWidth={1.5} />} />
+          <ToolbarButton icon={<Camera size={22} strokeWidth={1.5} />} />
+          <ToolbarButton icon={<PenTool size={22} strokeWidth={1.5} />} />
+        </Material>
+      )}
     </div>
   );
 }
@@ -151,56 +160,3 @@ function ToolbarButton({ icon }: { icon: React.ReactNode }) {
   );
 }
 
-/** SF Symbol: tablecells */
-function TableIcon() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="5" width="18" height="14" rx="2" />
-      <path d="M3 12h18M12 5v14" />
-    </svg>
-  );
-}
-
-/** SF Symbol: textformat (Aa) */
-function FormatIcon() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 19L8.5 7h1.5L14.5 19" />
-      <path d="M6 15h7" />
-      <circle cx="18" cy="16.5" r="2.5" />
-      <path d="M20.5 14v5" />
-    </svg>
-  );
-}
-
-/** SF Symbol: checkmark.circle */
-function ChecklistIcon() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="9" />
-      <path d="M8 12l3 3 5-6" />
-    </svg>
-  );
-}
-
-/** SF Symbol: camera */
-function AttachIcon() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h4l2 3h4a2 2 0 0 1 2 2z" />
-      <circle cx="12" cy="13" r="4" />
-    </svg>
-  );
-}
-
-/** SF Symbol: pencil.tip.crop.circle */
-function MarkupIcon() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <path d="M12 4l-3 7v6h6v-6z" />
-      <path d="M12 4v13" />
-      <path d="M9 11h6" />
-    </svg>
-  );
-}

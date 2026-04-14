@@ -1,11 +1,15 @@
 import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback, memo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, Phone, Send, Image, Smile, Search, X, Palette, MoreHorizontal } from 'lucide-react';
+import { ChevronLeft, Phone, Send, Image, Smile, Search, X, Palette, MoreHorizontal, FileText, Music } from 'lucide-react';
 import { useXYNav } from '../xingYuNavStore';
 import { useXYData } from '../xingYuDataStore';
 import { getIdol, formatChatTime, DEFAULT_AVATAR } from '../data';
 import type { Message } from '../data';
 import { useCharacterStore } from '@/platform/stores/characterStore';
+import { usePersonaStore } from '@/platform/stores/personaStore';
+import { usePerspective } from '@/platform/hooks/usePerspective';
+import { useAppRuntimeStore } from '@/platform/stores/appRuntimeStore';
+import { useNotesNavStore } from '@/apps/Notes/notesNavStore';
 
 /** Character 对话头像兜底路径,和 ContactsTab 保持一致 */
 const CHAR_FALLBACK_AVATAR = '/resource/avatars/preset-01.jpg';
@@ -82,8 +86,12 @@ export function ChatDetail() {
     [conversations, activeChatId],
   );
   const characters = useCharacterStore((s) => s.characters);
+  const { phoneOwnerId, isViewingOther } = usePerspective();
+  const persona = usePersonaStore((s) => s.getActivePersona());
+  const userSettings = useXYData((s) => s.userSettings);
 
   // 对话对端:character 优先,fallback 到 legacy mock idol
+  // 查手机模式下需要视角化: AI 的对方是玩家
   const peer = useMemo<ChatPeer | undefined>(() => {
     if (!conv) return undefined;
     // AI-to-AI 会话
@@ -91,6 +99,19 @@ export function ChatDetail() {
       const [id1, id2] = conv.aiChatParticipants;
       const ch1 = characters.find((c) => c.id === id1);
       const ch2 = characters.find((c) => c.id === id2);
+      // 查手机模式: 对方是另一个 AI
+      if (phoneOwnerId) {
+        const otherId = id1 === phoneOwnerId ? id2 : id1;
+        const other = characters.find((c) => c.id === otherId);
+        return {
+          id: otherId,
+          name: other?.name ?? '?',
+          avatar: other?.avatar?.trim() || CHAR_FALLBACK_AVATAR,
+          ringIndex: 0,
+          online: true,
+          isGroup: false,
+        };
+      }
       return {
         id: id1,
         name: `${ch1?.name ?? '?'} & ${ch2?.name ?? '?'}`,
@@ -113,6 +134,17 @@ export function ChatDetail() {
       };
     }
     if (conv.characterId) {
+      // 查手机模式: AI 的对话对方是玩家
+      if (phoneOwnerId && conv.characterId === phoneOwnerId) {
+        return {
+          id: 'me',
+          name: persona?.name || userSettings.nickname || '用户',
+          avatar: persona?.avatar || userSettings.avatarUrl || CHAR_FALLBACK_AVATAR,
+          ringIndex: 0,
+          online: true,
+          isGroup: false,
+        };
+      }
       const ch = characters.find((c) => c.id === conv.characterId);
       if (!ch) return undefined;
       return {
@@ -135,9 +167,10 @@ export function ChatDetail() {
       isGroup: idol.isGroup ?? false,
       memberCount: idol.memberCount,
     };
-  }, [conv, characters]);
+  }, [conv, characters, phoneOwnerId, persona, userSettings]);
 
   // AI-AI 会话：构造双方 peer 信息供 MsgBubble 区分左右
+  // 查手机模式下 phone owner 在右侧（自己的消息靠右）
   const aiChatPeers = useMemo<AIChatPeers | undefined>(() => {
     if (!conv?.aiChatParticipants) return undefined;
     const [id1, id2] = conv.aiChatParticipants;
@@ -145,14 +178,18 @@ export function ChatDetail() {
     const ch2 = characters.find((c) => c.id === id2);
     const s1 = `char-${id1}`;
     const s2 = `char-${id2}`;
+    // 查手机模式: phone owner 在右侧
+    const rightSenderId = phoneOwnerId
+      ? (id1 === phoneOwnerId ? s1 : s2)
+      : s2; // 默认 second participant on right
     return {
-      rightSenderId: s2, // second participant renders on the right
+      rightSenderId,
       peers: {
         [s1]: { avatar: ch1?.avatar?.trim() || CHAR_FALLBACK_AVATAR, ringIndex: 0 },
         [s2]: { avatar: ch2?.avatar?.trim() || CHAR_FALLBACK_AVATAR, ringIndex: 0 },
       },
     };
-  }, [conv, characters]);
+  }, [conv, characters, phoneOwnerId]);
 
   const allConvMessages = useMemo(
     () =>
@@ -542,10 +579,10 @@ export function ChatDetail() {
         })()}
       </div>
 
-      {/* ── Input (hidden for AI-AI observer mode) ── */}
-      {conv?.aiChatParticipants ? (
+      {/* ── Input (hidden for observer/read-only modes) ── */}
+      {conv?.aiChatParticipants || isViewingOther ? (
         <div className="flex shrink-0 items-center justify-center px-3" style={{ minHeight: 44, paddingBottom: 20, opacity: 0.5, fontSize: 13, color: T.textSecondary }}>
-          旁观模式 — AI 角色间的私聊
+          {isViewingOther ? '只读模式 — 正在查看对方手机' : '旁观模式 — AI 角色间的私聊'}
         </div>
       ) : <div
         className="flex shrink-0 items-center gap-2 px-3"
@@ -742,12 +779,14 @@ const MsgBubble = memo(function MsgBubble({
   /** For AI-AI conversations: provides both peers and which side each goes */
   aiChatPeers?: AIChatPeers;
 }) {
+  const { isSelf: perspectiveIsSelf, phoneOwnerId } = usePerspective();
   const isMine = aiChatPeers
     ? msg.senderId === aiChatPeers.rightSenderId
-    : msg.senderId === 'me';
+    : perspectiveIsSelf(msg.senderId);
   const showTime = !prevMsg || msg.timestamp - prevMsg.timestamp > 15 * 60_000;
   const [imgLoaded, setImgLoaded] = useState(false);
   const userSettings = useXYData((s) => s.userSettings);
+  const characters = useCharacterStore((s) => s.characters);
 
   // AI 流式回复的占位 message 在开始的瞬间只有 streaming=true 还没有任何内容,
   // 如果照常渲染会出现一个"孤儿头像"(没有气泡),再叠加外层 TypingDots 的头像,
@@ -842,7 +881,132 @@ const MsgBubble = memo(function MsgBubble({
             </div>
           )}
 
-          {msg.type === 'text' && msg.text && (
+          {msg.type === 'text' && msg.noteRef ? (
+            <button
+              type="button"
+              className="w-full text-left"
+              onClick={() => {
+                useAppRuntimeStore.getState().openApp('notes', { x: 0, y: 0, width: 60, height: 60 });
+                setTimeout(() => {
+                  useNotesNavStore.getState().reset();
+                  useNotesNavStore.getState().push('editor', msg.noteRef!.noteId);
+                }, 50);
+              }}
+              style={{
+                borderRadius: 12,
+                borderTopRightRadius: isMine ? 4 : 12,
+                borderTopLeftRadius: isMine ? 12 : 4,
+                background: T.card,
+                boxShadow: T.shadow1,
+                border: `1px solid ${T.border}`,
+                overflow: 'hidden',
+                width: 220,
+              }}
+            >
+              {/* 主体: 图标 + 标题/摘要 */}
+              <div className="flex items-center gap-2.5" style={{ padding: '10px 12px' }}>
+                <div
+                  className="flex shrink-0 items-center justify-center"
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 8,
+                    background: 'linear-gradient(135deg, #FFCC00 0%, #FF9500 100%)',
+                  }}
+                >
+                  <FileText size={18} strokeWidth={2} color="#fff" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div
+                    className="truncate"
+                    style={{ fontSize: 14, fontWeight: 600, color: T.textPrimary, lineHeight: 1.3 }}
+                  >
+                    {msg.noteRef.title || '无标题备忘录'}
+                  </div>
+                  <div
+                    className="truncate"
+                    style={{ fontSize: 12, color: T.textSecondary, lineHeight: 1.3, marginTop: 2 }}
+                  >
+                    {msg.noteRef.body?.slice(0, 30) || '无内容'}
+                  </div>
+                </div>
+              </div>
+              {/* 底栏: 来源标识 */}
+              <div
+                className="flex items-center gap-1 px-3"
+                style={{
+                  height: 24,
+                  borderTop: `0.5px solid ${T.separator}`,
+                  fontSize: 10,
+                  color: T.textMuted,
+                }}
+              >
+                <FileText size={10} strokeWidth={2} />
+                <span>备忘录</span>
+              </div>
+            </button>
+          ) : msg.type === 'text' && msg.songRef ? (
+            <button
+              type="button"
+              className="w-full text-left"
+              onClick={() => {
+                useAppRuntimeStore.getState().openApp('music', { x: 0, y: 0, width: 60, height: 60 });
+              }}
+              style={{
+                borderRadius: 12,
+                borderTopRightRadius: isMine ? 4 : 12,
+                borderTopLeftRadius: isMine ? 12 : 4,
+                background: T.card,
+                boxShadow: T.shadow1,
+                border: `1px solid ${T.border}`,
+                overflow: 'hidden',
+                width: 220,
+              }}
+            >
+              {/* 主体: 封面 + 歌名/歌手 */}
+              <div className="flex items-center gap-2.5" style={{ padding: 10 }}>
+                <div
+                  className="shrink-0 overflow-hidden"
+                  style={{ width: 44, height: 44, borderRadius: 6 }}
+                >
+                  <img
+                    src={msg.songRef.artworkUrl}
+                    alt=""
+                    className="block h-full w-full"
+                    style={{ objectFit: 'cover' }}
+                    draggable={false}
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div
+                    className="truncate"
+                    style={{ fontSize: 14, fontWeight: 600, color: T.textPrimary, lineHeight: 1.3 }}
+                  >
+                    {msg.songRef.title}
+                  </div>
+                  <div
+                    className="truncate"
+                    style={{ fontSize: 12, color: T.textSecondary, lineHeight: 1.3, marginTop: 2 }}
+                  >
+                    {msg.songRef.artist}
+                  </div>
+                </div>
+              </div>
+              {/* 底栏来源 */}
+              <div
+                className="flex items-center gap-1 px-3"
+                style={{
+                  height: 24,
+                  borderTop: `0.5px solid ${T.separator}`,
+                  fontSize: 10,
+                  color: T.textMuted,
+                }}
+              >
+                <Music size={10} strokeWidth={2} />
+                <span>音乐</span>
+              </div>
+            </button>
+          ) : msg.type === 'text' && msg.text && (
             <div
               style={{
                 padding: '10px 14px',
@@ -865,13 +1029,22 @@ const MsgBubble = memo(function MsgBubble({
 
         {isMine && (() => {
           const aiP = aiChatPeers?.peers[msg.senderId];
+          // 查手机模式 (non-AI-AI conv): isMine = phone owner (AI) sent this message
+          // → show the AI character's avatar, not the player's userSettings avatar
+          const ownerChar = phoneOwnerId
+            ? characters.find((c) => c.id === phoneOwnerId)
+            : null;
+          const selfAvatar = aiP?.avatar
+            || ownerChar?.avatar?.trim()
+            || userSettings.avatarUrl
+            || DEFAULT_AVATAR;
           return (
           <motion.button
             className="ml-2 shrink-0"
-            onClick={() => onAvatarTap?.(aiP ? peer.id : 'me')}
+            onClick={() => onAvatarTap?.(aiP ? peer.id : phoneOwnerId || 'me')}
             whileTap={{ scale: 0.9 }}
           >
-            <Avatar src={aiP?.avatar ?? userSettings.avatarUrl ?? DEFAULT_AVATAR} size={28} ringIndex={aiP?.ringIndex ?? 0} />
+            <Avatar src={selfAvatar} size={28} ringIndex={aiP?.ringIndex ?? 0} />
           </motion.button>
           );
         })()}

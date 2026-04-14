@@ -28,8 +28,8 @@ function genId() {
 
 const DEFAULT_PERSONA: Persona = {
   id: 'default',
-  name: '用户',
-  avatar: '',
+  name: '小星星',
+  avatar: '/resource/avatars/cute.png',
   description: '',
   isDefault: true,
 };

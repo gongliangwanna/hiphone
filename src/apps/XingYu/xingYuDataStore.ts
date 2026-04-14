@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 import { idbStorage } from '@/platform/storage/idbStorage';
 import { loadAllMessages, loadAllMoments } from '@/platform/storage/idbRecordStorage';
 import { startXYDataSync } from '@/platform/storage/zustandIdbSync';
-import type { Conversation, Message, Moment } from './data';
+import type { Conversation, Message, Moment, MomentInteraction } from './data';
 import {
   SEED_CONVS,
   SEED_MSGS,
@@ -113,8 +113,18 @@ interface XingYuDataState {
   characterSignatures: Record<string, CharacterSignatureData>;
   /** 用户个性签名历史 */
   userSignatureHistory: SignatureRecord[];
+  /** 朋友圈互动通知 — 仅收录别人给"我"(player)的点赞/评论 */
+  interactions: MomentInteraction[];
+  /** 玩家未读互动数 */
+  unreadInteractionCount: number;
+  /** AI 角色上次查看消息的时间戳, key = characterId */
+  characterLastReadMsgTs: Record<string, number>;
+  /** AI 角色已看过的互动总数, key = characterId */
+  characterSeenInteractionCount: Record<string, number>;
 
   sendMessage: (convId: string, text: string) => void;
+  sendNoteMessage: (convId: string, noteRef: { noteId: string; title: string; body: string }) => void;
+  sendSongMessage: (convId: string, songRef: { songId: string; title: string; artist: string; artworkUrl: string }, lyricsText?: string) => void;
   sendImageMessage: (convId: string, imageUrl: string) => void;
   sendStickerMessage: (convId: string, stickerUrl: string, stickerDesc: string) => void;
   markRead: (convId: string) => void;
@@ -123,9 +133,12 @@ interface XingYuDataState {
    * 并中断正在进行的 AI 流 / 取消待发的 mock 回复 timer。
    */
   deleteConversation: (convId: string) => void;
-  toggleLike: (momentId: string) => void;
+  toggleLike: (momentId: string, userId?: string) => void;
   addMoment: (text: string, imageUrl?: string) => void;
-  addComment: (momentId: string, text: string) => void;
+  addComment: (momentId: string, text: string, userId?: string) => void;
+  markInteractionsRead: () => void;
+  markCharacterMsgRead: (characterId: string) => void;
+  markCharacterInteractionRead: (characterId: string, count: number) => void;
   updateSettings: (settings: Partial<UserSettings>) => void;
   /** 更新角色个性签名（AI 调用或手动） */
   updateCharacterSignature: (characterId: string, text: string) => void;
@@ -568,12 +581,16 @@ export const useXYData = create<XingYuDataState>()(
       moments: SEED_MOMENTS,
       characterSignatures: {},
       userSignatureHistory: [],
+      interactions: [],
+      unreadInteractionCount: 0,
+      characterLastReadMsgTs: {},
+      characterSeenInteractionCount: {},
 
       userSettings: {
         nickname: '小星星',
         bio: '',
         accentColor: '#007AFF',
-        avatarUrl: '',
+        avatarUrl: '/resource/avatars/cute.png',
         coverUrl: '',
       },
 
@@ -584,6 +601,37 @@ export const useXYData = create<XingYuDataState>()(
           conversations: s.conversations.map((c) =>
             c.id === convId
               ? { ...c, lastMsg: text, lastTime: Date.now(), unread: 0 }
+              : c,
+          ),
+        }));
+        scheduleIdolReply(convId, get);
+      },
+
+      sendNoteMessage: (convId, noteRef) => {
+        const previewTitle = noteRef.title || '无标题';
+        const text = `[备忘录分享] ${previewTitle}\n${noteRef.body}`;
+        const msg = createUserMsg(convId, 'text', { text, noteRef });
+        set((s) => ({
+          messages: [...s.messages, msg],
+          conversations: s.conversations.map((c) =>
+            c.id === convId
+              ? { ...c, lastMsg: `[备忘录] ${previewTitle}`, lastTime: Date.now(), unread: 0 }
+              : c,
+          ),
+        }));
+        scheduleIdolReply(convId, get);
+      },
+
+      sendSongMessage: (convId, songRef, lyricsText) => {
+        const parts = [`[音乐分享] ${songRef.title} - ${songRef.artist}`];
+        if (lyricsText) parts.push(`\n歌词:\n${lyricsText}`);
+        const text = parts.join('');
+        const msg = createUserMsg(convId, 'text', { text, songRef });
+        set((s) => ({
+          messages: [...s.messages, msg],
+          conversations: s.conversations.map((c) =>
+            c.id === convId
+              ? { ...c, lastMsg: `[音乐] ${songRef.title}`, lastTime: Date.now(), unread: 0 }
               : c,
           ),
         }));
@@ -642,15 +690,38 @@ export const useXYData = create<XingYuDataState>()(
         }));
       },
 
-      toggleLike: (momentId) =>
-        set((s) => ({
-          moments: s.moments.map((mo) =>
-            mo.id === momentId
-              ? { ...mo, liked: !mo.liked, likes: mo.liked ? mo.likes - 1 : mo.likes + 1 }
-              : mo,
-          ),
-        })),
-
+      toggleLike: (momentId, userId = 'me') =>
+        set((s) => {
+          const mo = s.moments.find((m) => m.id === momentId);
+          if (!mo) return s;
+          const alreadyLiked = mo.likedBy.includes(userId);
+          const newMoments = s.moments.map((m) =>
+            m.id === momentId
+              ? {
+                  ...m,
+                  likedBy: alreadyLiked
+                    ? m.likedBy.filter((id) => id !== userId)
+                    : [...m.likedBy, userId],
+                }
+              : m,
+          );
+          // Generate interaction only when someone else likes the player's moment
+          let newInteractions = s.interactions;
+          let newUnread = s.unreadInteractionCount;
+          if (!alreadyLiked && mo.idolId === 'me' && userId !== 'me') {
+            const interaction: MomentInteraction = {
+              id: uid(),
+              type: 'like',
+              momentId,
+              momentTextSnippet: mo.text.slice(0, 30),
+              userId,
+              timestamp: Date.now(),
+            };
+            newInteractions = [interaction, ...s.interactions].slice(0, 200);
+            newUnread += 1;
+          }
+          return { moments: newMoments, interactions: newInteractions, unreadInteractionCount: newUnread };
+        }),
 
       addMoment: (text, imageUrl) => {
         const moment: Moment = {
@@ -658,21 +729,49 @@ export const useXYData = create<XingYuDataState>()(
           idolId: 'me',
           text,
           imageUrl,
-          likes: 0,
-          liked: false,
+          likedBy: [],
           timestamp: Date.now(),
           comments: [],
         };
         set((s) => ({ moments: [moment, ...s.moments] }));
       },
 
-      addComment: (momentId, text) =>
+      addComment: (momentId, text, userId = 'me') =>
+        set((s) => {
+          const mo = s.moments.find((m) => m.id === momentId);
+          if (!mo) return s;
+          const newMoments = s.moments.map((m) =>
+            m.id === momentId
+              ? { ...m, comments: [...m.comments, { userId, text }] }
+              : m,
+          );
+          // Generate interaction only when someone else comments on the player's moment
+          let newInteractions = s.interactions;
+          let newUnread = s.unreadInteractionCount;
+          if (mo.idolId === 'me' && userId !== 'me') {
+            const interaction: MomentInteraction = {
+              id: uid(),
+              type: 'comment',
+              momentId,
+              momentTextSnippet: mo.text.slice(0, 30),
+              userId,
+              commentText: text,
+              timestamp: Date.now(),
+            };
+            newInteractions = [interaction, ...s.interactions].slice(0, 200);
+            newUnread += 1;
+          }
+          return { moments: newMoments, interactions: newInteractions, unreadInteractionCount: newUnread };
+        }),
+
+      markInteractionsRead: () => set({ unreadInteractionCount: 0 }),
+      markCharacterMsgRead: (characterId) =>
         set((s) => ({
-          moments: s.moments.map((mo) =>
-            mo.id === momentId
-              ? { ...mo, comments: [...mo.comments, { userId: 'me', text }] }
-              : mo,
-          ),
+          characterLastReadMsgTs: { ...s.characterLastReadMsgTs, [characterId]: Date.now() },
+        })),
+      markCharacterInteractionRead: (characterId, count) =>
+        set((s) => ({
+          characterSeenInteractionCount: { ...s.characterSeenInteractionCount, [characterId]: count },
         })),
 
       updateSettings: (settings) =>
@@ -880,6 +979,10 @@ export const useXYData = create<XingYuDataState>()(
         userSettings: s.userSettings,
         characterSignatures: s.characterSignatures,
         userSignatureHistory: s.userSignatureHistory,
+        interactions: s.interactions,
+        unreadInteractionCount: s.unreadInteractionCount,
+        characterLastReadMsgTs: s.characterLastReadMsgTs,
+        characterSeenInteractionCount: s.characterSeenInteractionCount,
       }),
       storage: idbStorage,
       onRehydrateStorage: () => {
@@ -889,10 +992,20 @@ export const useXYData = create<XingYuDataState>()(
             return;
           }
           // Load per-record data from IndexedDB object stores
-          const [messages, moments] = await Promise.all([
+          const [messages, rawMoments] = await Promise.all([
             loadAllMessages(),
             loadAllMoments(),
           ]);
+          // Migrate old moments: {liked, likes} → {likedBy}
+          const moments = (rawMoments as (Moment & { liked?: boolean; likes?: number })[]).map(
+            (m) => {
+              if ('likedBy' in m && Array.isArray(m.likedBy)) return m as Moment;
+              return {
+                ...m,
+                likedBy: (m as { liked?: boolean }).liked ? ['me'] : [],
+              } as Moment;
+            },
+          );
           useXYData.setState({ messages, moments });
           // Start write-through sync (subscribe to future changes)
           startXYDataSync(useXYData);

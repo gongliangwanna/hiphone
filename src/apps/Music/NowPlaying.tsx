@@ -11,7 +11,7 @@ import {
   Volume1,
   Volume2,
   MessageSquareText,
-  Airplay,
+  Share2,
   ListMusic,
   Shuffle,
   Repeat,
@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { PlayIcon, PauseIcon, SkipNextIcon, SkipPrevIcon } from './PlaybackIcons';
 import { LyricsView } from './LyricsView';
+import { MusicShareSheet } from './MusicShareSheet';
 import { AnimatePresence } from 'motion/react';
 
 /** Dismiss threshold: drag distance (px) or velocity (px/ms) to trigger close. */
@@ -28,6 +29,7 @@ const DISMISS_VEL = 0.5; // px/ms ≈ 500 px/s
 export function NowPlaying() {
   const currentSong = useCurrentSong();
   const [showLyrics, setShowLyrics] = useState(false);
+  const [showShareSheet, setShowShareSheet] = useState(false);
   const isPlaying = useMusicDataStore((s) => s.isPlaying);
   const isBuffering = useMusicDataStore((s) => s.isBuffering);
   const failedSongName = useMusicDataStore((s) => s.failedSongName);
@@ -346,8 +348,13 @@ export function NowPlaying() {
             >
               <MessageSquareText size={20} color={showLyrics ? '#fff' : 'currentColor'} />
             </motion.button>
-            <motion.button whileTap={{ scale: 0.8 }} className="flex items-center justify-center" style={{ width: 44, height: 44 }}>
-              <Airplay size={20} color="currentColor" />
+            <motion.button
+              whileTap={{ scale: 0.8 }}
+              className="flex items-center justify-center"
+              style={{ width: 44, height: 44 }}
+              onClick={() => setShowShareSheet(true)}
+            >
+              <Share2 size={20} color="currentColor" />
             </motion.button>
             <motion.button whileTap={{ scale: 0.8 }} className="flex items-center justify-center" style={{ width: 44, height: 44 }}>
               <ListMusic size={20} color="currentColor" />
@@ -382,6 +389,13 @@ export function NowPlaying() {
           )}
         </AnimatePresence>
       </div>{/* end content */}
+
+      {/* Share sheet */}
+      <AnimatePresence>
+        {showShareSheet && (
+          <MusicShareSheet onClose={() => setShowShareSheet(false)} />
+        )}
+      </AnimatePresence>
       </div>{/* end contentRef */}
     </motion.div>
   );

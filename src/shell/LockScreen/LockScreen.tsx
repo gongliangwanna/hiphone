@@ -106,7 +106,7 @@ export function LockScreen({ onUnlock, visible, wallpaper, onDragProgress }: Loc
               paddingInline: 'var(--shell-side-padding)',
             }}
           >
-            <span className="text-[15px] font-normal text-white">中国电信</span>
+            <span className="text-[15px] font-normal text-white">第二月亮</span>
             <StatusIcons />
           </div>
 

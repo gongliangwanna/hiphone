@@ -1,13 +1,38 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { motion, useScroll, useTransform, AnimatePresence } from 'motion/react';
+import { Heart } from 'lucide-react';
 import { useXYData } from '../xingYuDataStore';
+import { useXYNav } from '../xingYuNavStore';
 import { MomentCard } from '../components/MomentCard';
 import { DEFAULT_AVATAR, DEFAULT_COVER } from '../data';
+import { useCharacterStore } from '@/platform/stores/characterStore';
+import { usePerspective } from '@/platform/hooks/usePerspective';
 import { T, springs } from '../theme';
 
 export function MomentsTab() {
   const moments = useXYData((s) => s.moments);
   const userSettings = useXYData((s) => s.userSettings);
+  const unreadInteractionCount = useXYData((s) => s.unreadInteractionCount);
+  const openInteractions = useXYNav((s) => s.openInteractions);
+  const characters = useCharacterStore((s) => s.characters);
+  const { phoneOwnerId } = usePerspective();
+
+  // 查手机模式: 显示角色的资料
+  const displayProfile = useMemo(() => {
+    if (!phoneOwnerId) {
+      return {
+        nickname: userSettings.nickname,
+        avatarUrl: userSettings.avatarUrl,
+        coverUrl: userSettings.coverUrl,
+      };
+    }
+    const char = characters.find((c) => c.id === phoneOwnerId);
+    return {
+      nickname: char?.name || '???',
+      avatarUrl: char?.avatar || '',
+      coverUrl: '', // AI characters don't have cover images yet
+    };
+  }, [phoneOwnerId, userSettings, characters]);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const { scrollY } = useScroll({ container: scrollRef });
@@ -54,7 +79,7 @@ export function MomentsTab() {
             whileTap={{ opacity: 0.8 }}
           >
             <img
-              src={userSettings.coverUrl || DEFAULT_COVER}
+              src={displayProfile.coverUrl || DEFAULT_COVER}
               alt=""
               className="absolute inset-0 h-full w-full object-cover"
             />
@@ -68,38 +93,76 @@ export function MomentsTab() {
 
           {/* 名字和头像悬浮层 */}
           <div className="absolute right-4 bottom-[-20px] flex items-end gap-4 z-10">
-            <span 
-              style={{ 
-                fontSize: 20, 
-                fontWeight: 700, 
-                color: '#fff', 
+            <span
+              style={{
+                fontSize: 20,
+                fontWeight: 700,
+                color: '#fff',
                 textShadow: '0 1px 3px rgba(0,0,0,0.3)',
                 marginBottom: 30
               }}
             >
-              {userSettings.nickname}
+              {displayProfile.nickname}
             </span>
-            <motion.button 
-              style={{ 
-                padding: 3, 
-                backgroundColor: '#fff', 
+            <motion.button
+              style={{
+                padding: 3,
+                backgroundColor: '#fff',
                 borderRadius: '20%', // 微信风格的圆角矩形
                 boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
               }}
-              onClick={() => setViewingImage(userSettings.avatarUrl || DEFAULT_AVATAR)}
+              onClick={() => setViewingImage(displayProfile.avatarUrl || DEFAULT_AVATAR)}
               whileTap={{ scale: 0.95 }}
             >
               <img
-                src={userSettings.avatarUrl || DEFAULT_AVATAR}
-                alt="" 
-                style={{ width: 68, height: 68, borderRadius: '15%', objectFit: 'cover' }} 
+                src={displayProfile.avatarUrl || DEFAULT_AVATAR}
+                alt=""
+                style={{ width: 68, height: 68, borderRadius: '15%', objectFit: 'cover' }}
               />
             </motion.button>
           </div>
         </div>
 
+        {/* 互动通知入口 — 仅在有未读互动时显示 */}
+        {unreadInteractionCount > 0 && (
+          <motion.button
+            className="mx-auto mt-8 flex items-center gap-3 px-5 py-3"
+            style={{
+              borderRadius: T.r.md,
+              backgroundColor: T.card,
+              boxShadow: T.shadow2,
+            }}
+            onClick={openInteractions}
+            whileTap={{ scale: 0.98 }}
+            transition={springs.press}
+          >
+            <div
+              className="flex items-center justify-center"
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: T.r.sm,
+                background: T.accentGrad,
+              }}
+            >
+              <Heart size={18} color="#fff" fill="#fff" />
+            </div>
+            <span style={{ fontSize: 15, fontWeight: 500, color: T.textPrimary }}>
+              {unreadInteractionCount} 条新互动
+            </span>
+            <div
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                backgroundColor: T.rose,
+              }}
+            />
+          </motion.button>
+        )}
+
         {/* 动态列表 */}
-        <div className="px-4 pt-12 pb-4">
+        <div className="px-4 pt-4 pb-4">
           {moments.map((mo, i) => (
             <motion.div
               key={mo.id}
@@ -129,7 +192,7 @@ export function MomentsTab() {
           >
             {viewingImage === 'cover' ? (
               <motion.img
-                src={userSettings.coverUrl || DEFAULT_COVER}
+                src={displayProfile.coverUrl || DEFAULT_COVER}
                 alt=""
                 className="w-full"
                 style={{ maxHeight: '80%', objectFit: 'contain' }}

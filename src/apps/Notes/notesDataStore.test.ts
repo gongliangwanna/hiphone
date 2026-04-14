@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useNotesDataStore, selectFilteredNotes } from './notesDataStore';
+import { useNotesDataStore, notesRegistry, selectFilteredNotes } from './notesDataStore';
 
 function resetStore() {
   useNotesDataStore.setState({
@@ -86,5 +86,37 @@ describe('selectFilteredNotes', () => {
     useNotesDataStore.getState().setSearchQuery('zzzzz');
     const result = selectFilteredNotes(useNotesDataStore.getState());
     expect(result).toHaveLength(0);
+  });
+});
+
+describe('notesRegistry (EntityStoreRegistry)', () => {
+  it('player store is the same as useNotesDataStore', () => {
+    const playerStore = notesRegistry.getStore(null);
+    expect(playerStore).toBe(useNotesDataStore);
+  });
+
+  it('AI character store is separate from player store', () => {
+    const aiStore = notesRegistry.getStore('soren');
+    expect(aiStore).not.toBe(useNotesDataStore);
+  });
+
+  it('AI store starts with empty notes', () => {
+    const aiStore = notesRegistry.getStore('test-ai-empty');
+    expect(aiStore.getState().notes).toHaveLength(0);
+  });
+
+  it('stores are isolated — adding to one does not affect the other', () => {
+    const storeA = notesRegistry.getStore('char-a');
+    const storeB = notesRegistry.getStore('char-b');
+
+    storeA.getState().addNote('A note', 'A body');
+    expect(storeA.getState().notes.length).toBeGreaterThan(0);
+    expect(storeB.getState().notes).toHaveLength(0);
+  });
+
+  it('same entity always returns the same store instance', () => {
+    const s1 = notesRegistry.getStore('same-id');
+    const s2 = notesRegistry.getStore('same-id');
+    expect(s1).toBe(s2);
   });
 });

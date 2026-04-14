@@ -149,6 +149,8 @@ const ACTION_LABELS: Record<string, (p: ParsedAction, selfId: string) => string>
   update_signature: (p) => `更新了个性签名：「${String((p.actionInput as Record<string, unknown>).text ?? '').slice(0, 50)}」`,
   view_user_signature: () => '查看了用户的个性签名',
   view_user_signature_history: () => '查看了用户的历史签名',
+  view_notes: () => '查看了自己的备忘录',
+  create_note: (p) => `写了一条备忘录：「${String((p.actionInput as Record<string, unknown>).title ?? '').slice(0, 50)}」`,
   view_characters: () => '查看了其他角色列表',
   chat_with_character: (p, selfId) => {
     const inp = p.actionInput as Record<string, unknown>;
@@ -353,7 +355,7 @@ async function runHeartbeat(
 
   // ── Insert heartbeat activity log into chat history ──
   // Filter to write operations only (exclude send_message per user request, and all read-only actions)
-  const READ_ONLY_ACTIONS = new Set(['view_moments', 'view_user_signature', 'view_user_signature_history', 'view_characters', 'done']);
+  const READ_ONLY_ACTIONS = new Set(['view_moments', 'view_user_signature', 'view_user_signature_history', 'view_characters', 'view_notes', 'view_unread_messages', 'view_unread_interactions', 'done']);
   const writeActions = actionsTaken.filter((a) => a.action !== 'send_message' && !READ_ONLY_ACTIONS.has(a.action));
 
   if (thoughts.length > 0 || actionsTaken.length > 0) {

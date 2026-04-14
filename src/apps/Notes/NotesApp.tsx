@@ -1,11 +1,14 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useNotesNavStore } from './notesNavStore';
-import { useNotesDataStore } from './notesDataStore';
+import { useActiveNotesStore } from './notesDataStore';
+import { usePerspective } from '@/platform/hooks/usePerspective';
 import { useAppRuntimeStore, wasAppKilled, clearAppKilled } from '@/platform/stores/appRuntimeStore';
 import { NotesList } from './NotesList';
 import { NoteEditor } from './NoteEditor';
 import { AppScreen, NavBar } from '@/system';
+import { Share, EllipsisVertical, Trash2 } from 'lucide-react';
+import { ShareSheet } from './ShareSheet';
 
 const PAGE_COMPONENTS: Record<string, React.ComponentType> = {
   list: NotesList,
@@ -17,13 +20,16 @@ const SLIDE_MS = 350;
 const SLIDE_EASE = [0.32, 0.72, 0, 1] as const;
 
 export function NotesApp() {
+  const { isViewingOther } = usePerspective();
   const stack = useNotesNavStore((s) => s.stack);
   const activeNoteId = useNotesNavStore((s) => s.activeNoteId);
+  const shareSheetOpen = useNotesNavStore((s) => s.shareSheetOpen);
   const pop = useNotesNavStore((s) => s.pop);
   const reset = useNotesNavStore((s) => s.reset);
   const goHome = useAppRuntimeStore((s) => s.goHome);
-  const deleteNote = useNotesDataStore((s) => s.deleteNote);
+  const deleteNote = useActiveNotesStore((s) => s.deleteNote);
   const prevLengthRef = useRef(stack.length);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     if (wasAppKilled('notes')) {
@@ -49,11 +55,17 @@ export function NotesApp() {
   }, [stack.length, reset, goHome, pop]);
 
   const handleDelete = useCallback(() => {
+    setMenuOpen(false);
     if (activeNoteId) {
       deleteNote(activeNoteId);
     }
     pop();
   }, [activeNoteId, deleteNote, pop]);
+
+  // Close menu when navigating away from editor
+  useEffect(() => {
+    if (currentPage !== 'editor') setMenuOpen(false);
+  }, [currentPage]);
 
   const PageComponent = PAGE_COMPONENTS[currentPage] ?? NotesList;
 
@@ -66,15 +78,15 @@ export function NotesApp() {
         showBack
         onBack={handleBack}
         backLabel="备忘录"
-        rightButtons={[
+        rightButtons={isViewingOther ? [] : [
           {
-            icon: <ShareIcon />,
-            onClick: () => {},
+            icon: <Share size={20} strokeWidth={1.6} />,
+            onClick: () => useNotesNavStore.getState().openShareSheet(),
             testId: 'notes-share-btn',
           },
           {
-            icon: <EllipsisIcon />,
-            onClick: handleDelete,
+            icon: <EllipsisVertical size={22} strokeWidth={1.5} />,
+            onClick: () => setMenuOpen((v) => !v),
             testId: 'notes-more-btn',
           },
         ]}
@@ -106,41 +118,58 @@ export function NotesApp() {
             </div>
           </motion.div>
         </AnimatePresence>
+
+        {/* Ellipsis dropdown menu */}
+        <AnimatePresence>
+          {menuOpen && (
+            <>
+              <div
+                className="absolute inset-0 z-40"
+                onClick={() => setMenuOpen(false)}
+              />
+              <motion.div
+                className="absolute z-50"
+                style={{
+                  top: 44,
+                  right: 8,
+                  backgroundColor: 'var(--color-secondarySystemBackground)',
+                  borderRadius: 14,
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
+                  overflow: 'hidden',
+                  minWidth: 200,
+                }}
+                initial={{ opacity: 0, scale: 0.85, y: -8 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.85, y: -8 }}
+                transition={{ duration: 0.18 }}
+              >
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-3 px-4"
+                  style={{
+                    minHeight: 44,
+                    fontSize: 'var(--font-size-body)',
+                    color: '#FF3B30',
+                  }}
+                  onClick={handleDelete}
+                  data-testid="notes-delete-option"
+                >
+                  <Trash2 size={18} strokeWidth={1.8} />
+                  <span>删除备忘录</span>
+                </button>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+
+        {/* Share sheet */}
+        <AnimatePresence>
+          {shareSheetOpen && activeNoteId && (
+            <ShareSheet noteId={activeNoteId} />
+          )}
+        </AnimatePresence>
       </div>
     </AppScreen>
   );
 }
 
-/** SF Symbol: square.and.arrow.up */
-function ShareIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
-      <path
-        d="M7 8V18a1 1 0 001 1h8a1 1 0 001-1V8"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M11 2v10M8 5l3-3 3 3"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-/** SF Symbol: ellipsis.circle */
-function EllipsisIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-      <circle cx="11" cy="11" r="9" stroke="currentColor" strokeWidth="1.5" />
-      <circle cx="7" cy="11" r="1.2" fill="currentColor" />
-      <circle cx="11" cy="11" r="1.2" fill="currentColor" />
-      <circle cx="15" cy="11" r="1.2" fill="currentColor" />
-    </svg>
-  );
-}

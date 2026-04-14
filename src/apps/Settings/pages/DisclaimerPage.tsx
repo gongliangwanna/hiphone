@@ -63,7 +63,7 @@ const ITEMS = [
     icon: <Sparkles size={18} strokeWidth={2} />,
     iconColor: '#FF9500',
     title: '娱乐用途',
-    body: 'hiPhone 仅供娱乐与情感陪伴使用，不构成医疗、法律、金融等任何专业领域的建议或参考。',
+    body: 'mini机 仅供娱乐与情感陪伴使用，不构成医疗、法律、金融等任何专业领域的建议或参考。',
   },
   {
     icon: <Bot size={18} strokeWidth={2} />,
@@ -144,7 +144,7 @@ export function DisclaimerPage() {
             lineHeight: 1.5,
           }}
         >
-          在开始使用 hiPhone 之前，请花一分钟阅读以下内容
+          在开始使用 mini机 之前，请花一分钟阅读以下内容
         </div>
       </div>
 

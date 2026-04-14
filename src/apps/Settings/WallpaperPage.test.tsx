@@ -102,6 +102,30 @@ describe('WallpaperPage', () => {
     expect(useSystemStore.getState().customWallpapers).toHaveLength(0);
   });
 
+  it('renders current wallpaper preview section', () => {
+    render(<WallpaperPage />);
+    const preview = screen.getByTestId('wallpaper-preview');
+    expect(preview).toBeTruthy();
+    expect(preview.style.backgroundImage).toContain('ios-26-stock-01');
+  });
+
+  it('preview updates when wallpaper changes', () => {
+    useSystemStore.setState({ wallpaperId: 'ios-26-stock-03' });
+    render(<WallpaperPage />);
+    const preview = screen.getByTestId('wallpaper-preview');
+    expect(preview.style.backgroundImage).toContain('ios-26-stock-03');
+  });
+
+  it('preview shows custom wallpaper when selected', () => {
+    useSystemStore.setState({
+      wallpaperId: 'custom-1',
+      customWallpapers: [{ id: 'custom-1', src: 'data:image/jpeg;base64,abc' }],
+    });
+    render(<WallpaperPage />);
+    const preview = screen.getByTestId('wallpaper-preview');
+    expect(preview.style.backgroundImage).toContain('data:image/jpeg;base64,abc');
+  });
+
   it('deleting active custom wallpaper resets to default', async () => {
     useSystemStore.setState({
       wallpaperId: 'custom-1',
@@ -111,5 +135,20 @@ describe('WallpaperPage', () => {
 
     await userEvent.click(screen.getByTestId('wallpaper-delete-custom-1'));
     expect(useSystemStore.getState().wallpaperId).toBe('ios-26-stock-01');
+  });
+
+  it('selected wallpaper has outline style', () => {
+    useSystemStore.setState({ wallpaperId: 'ios-26-stock-02' });
+    render(<WallpaperPage />);
+
+    const selectedThumb = screen.getByTestId('wallpaper-thumb-ios-26-stock-02');
+    expect(selectedThumb.style.outline).toContain('var(--color-systemBlue)');
+  });
+
+  it('system wallpapers do not show delete button', () => {
+    render(<WallpaperPage />);
+    for (const w of wallpapers) {
+      expect(screen.queryByTestId(`wallpaper-delete-${w.id}`)).toBeNull();
+    }
   });
 });

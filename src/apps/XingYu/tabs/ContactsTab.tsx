@@ -1,6 +1,9 @@
+import { useMemo } from 'react';
 import { motion } from 'motion/react';
 import { ChevronRight } from 'lucide-react';
 import { useCharacterStore, type CharacterCard } from '@/platform/stores/characterStore';
+import { usePersonaStore } from '@/platform/stores/personaStore';
+import { usePerspective } from '@/platform/hooks/usePerspective';
 import { useXYNav } from '../xingYuNavStore';
 import { useXYData } from '../xingYuDataStore';
 import { Avatar } from '../components/Avatar';
@@ -13,7 +16,15 @@ export function ContactsTab() {
   const openChat = useXYNav((s) => s.openChat);
   const openIdol = useXYNav((s) => s.openIdol);
   const characters = useCharacterStore((s) => s.characters);
+  const persona = usePersonaStore((s) => s.getActivePersona());
+  const { phoneOwnerId, isViewingOther } = usePerspective();
   const ensureCharacterConversation = useXYData((s) => s.ensureCharacterConversation);
+
+  // 查手机模式: 联系人 = 玩家 + 其他 AI（排除手机主人自己）
+  const contactList = useMemo(() => {
+    if (!phoneOwnerId) return characters;
+    return characters.filter((c) => c.id !== phoneOwnerId);
+  }, [characters, phoneOwnerId]);
 
   const handleOpenCharacter = (id: string) => {
     const convId = ensureCharacterConversation(id);
@@ -27,7 +38,7 @@ export function ContactsTab() {
   return (
     <div className="flex h-full flex-col" style={{ backgroundColor: T.bg }}>
       <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-2">
-        {characters.length === 0 ? (
+        {contactList.length === 0 && !isViewingOther ? (
           <div
             className="flex flex-col items-center justify-center py-10"
             style={{ backgroundColor: T.card, borderRadius: 12 }}
@@ -41,18 +52,54 @@ export function ContactsTab() {
           <div
             style={{ backgroundColor: T.card, borderRadius: 12, overflow: 'hidden' }}
           >
-            {characters.map((character, i) => (
+            {/* 查手机模式: 玩家作为第一个联系人 */}
+            {isViewingOther && persona && (
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0, ...springs.gentle }}
+              >
+                <CharacterRow
+                  character={{
+                    id: 'player',
+                    name: persona.name || '用户',
+                    avatar: persona.avatar || FALLBACK_AVATAR,
+                    description: persona.description || '',
+                    personality: '',
+                    scenario: '',
+                    firstMessage: '',
+                    messageExamples: '',
+                    alternateGreetings: [],
+                    systemPrompt: '',
+                    postHistoryInstructions: '',
+                    creatorNotes: '',
+                    tags: [],
+                    version: '1.0',
+                  }}
+                  onTap={() => {
+                    // 查手机模式下打开与玩家的对话
+                    if (phoneOwnerId) {
+                      const convId = ensureCharacterConversation(phoneOwnerId);
+                      openChat(convId);
+                    }
+                  }}
+                  onAvatarTap={() => {}}
+                  isLast={contactList.length === 0}
+                />
+              </motion.div>
+            )}
+            {contactList.map((character, i) => (
               <motion.div
                 key={character.id}
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.04, ...springs.gentle }}
+                transition={{ delay: (isViewingOther ? i + 1 : i) * 0.04, ...springs.gentle }}
               >
                 <CharacterRow
                   character={character}
-                  onTap={() => handleOpenCharacter(character.id)}
-                  onAvatarTap={() => handleOpenCharacterProfile(character.id)}
-                  isLast={i === characters.length - 1}
+                  onTap={isViewingOther ? () => {} : () => handleOpenCharacter(character.id)}
+                  onAvatarTap={isViewingOther ? () => {} : () => handleOpenCharacterProfile(character.id)}
+                  isLast={i === contactList.length - 1}
                 />
               </motion.div>
             ))}

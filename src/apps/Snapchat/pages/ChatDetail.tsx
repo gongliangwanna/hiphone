@@ -3,6 +3,7 @@ import { ChevronLeft, Video, Phone, MoreHorizontal, Camera, Image, Smile, Sticke
 import { useSnapchatNavStore } from '../snapchatNavStore';
 import { useSnapchatDataStore } from '../snapchatDataStore';
 import { getUserById, formatTimeAgo } from '../data';
+import { usePerspective } from '@/platform/hooks/usePerspective';
 import type { ChatMessage } from '../data';
 
 const SENT_BUBBLE = '#007AFF';
@@ -201,7 +202,8 @@ export function ChatDetail() {
 /* ── Message Bubble ── */
 
 function MessageBubble({ msg, showTimestamp }: { msg: ChatMessage; showTimestamp: boolean }) {
-  const isMine = msg.senderId === 'me';
+  const { isSelf } = usePerspective();
+  const isMine = isSelf(msg.senderId);
   const sender = getUserById(msg.senderId);
   const [imgLoaded, setImgLoaded] = useState(false);
 

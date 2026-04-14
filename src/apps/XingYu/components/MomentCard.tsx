@@ -6,6 +6,7 @@ import type { Moment } from '../data';
 import { useXYData } from '../xingYuDataStore';
 import { useXYNav } from '../xingYuNavStore';
 import { useCharacterStore } from '@/platform/stores/characterStore';
+import { usePerspective } from '@/platform/hooks/usePerspective';
 import { Avatar } from './Avatar';
 import { CommentInput } from './CommentInput';
 import { T, springs } from '../theme';
@@ -29,25 +30,40 @@ export function MomentCard({ moment, disableAvatarNav, onImageClick }: MomentCar
   const userSettings = useXYData((s) => s.userSettings);
 
   const characters = useCharacterStore((s) => s.characters);
+  const { isSelf, isViewingOther, phoneOwnerId } = usePerspective();
 
-  const isMe = moment.idolId === 'me';
-  const author = isMe
-    ? { name: userSettings.nickname || ME.name, avatar: userSettings.avatarUrl || DEFAULT_AVATAR, ringIndex: 0 }
-    : (() => {
-        // char-xxx → characterStore lookup (heartbeat-posted moments)
-        if (moment.idolId.startsWith('char-')) {
-          const charId = moment.idolId.slice(5);
-          const char = characters.find((c) => c.id === charId);
-          return char
-            ? { name: char.name, avatar: char.avatar?.trim() || DEFAULT_AVATAR, ringIndex: 0 }
-            : { name: '???', avatar: '', ringIndex: 0 };
-        }
-        // Legacy idol lookup
-        const idol = getIdol(moment.idolId);
-        return idol
-          ? { name: idol.name, avatar: idol.avatar, ringIndex: idol.ringIndex }
-          : { name: '???', avatar: '', ringIndex: 0 };
-      })();
+  const selfId = phoneOwnerId ? `char-${phoneOwnerId}` : 'me';
+  const isLiked = moment.likedBy.includes(selfId);
+  const likeCount = moment.likedBy.length;
+
+  const isMe = isSelf(moment.idolId);
+  const author = (() => {
+    if (isMe && isViewingOther) {
+      // 查手机模式: "我的"动态 = phone owner (AI) 的动态,用角色数据
+      const char = phoneOwnerId ? characters.find((c) => c.id === phoneOwnerId) : null;
+      return {
+        name: char?.name || '???',
+        avatar: char?.avatar?.trim() || DEFAULT_AVATAR,
+        ringIndex: 0,
+      };
+    }
+    if (isMe) {
+      return { name: userSettings.nickname || ME.name, avatar: userSettings.avatarUrl || DEFAULT_AVATAR, ringIndex: 0 };
+    }
+    // char-xxx → characterStore lookup (heartbeat-posted moments)
+    if (moment.idolId.startsWith('char-')) {
+      const charId = moment.idolId.slice(5);
+      const char = characters.find((c) => c.id === charId);
+      return char
+        ? { name: char.name, avatar: char.avatar?.trim() || DEFAULT_AVATAR, ringIndex: 0 }
+        : { name: '???', avatar: '', ringIndex: 0 };
+    }
+    // Legacy idol lookup
+    const idol = getIdol(moment.idolId);
+    return idol
+      ? { name: idol.name, avatar: idol.avatar, ringIndex: idol.ringIndex }
+      : { name: '???', avatar: '', ringIndex: 0 };
+  })();
 
   const handleAvatarTap = () => {
     if (disableAvatarNav || isMe) return;
@@ -118,32 +134,34 @@ export function MomentCard({ moment, disableAvatarNav, onImageClick }: MomentCar
         </div>
       )}
 
-      {/* Actions */}
+      {/* Actions — read-only when viewing another phone */}
       <div
         className="flex items-center gap-5 px-4 pb-3"
         style={{ borderTop: `0.5px solid ${T.separator}`, paddingTop: 10 }}
       >
         <motion.button
           className="flex items-center gap-1.5"
-          onClick={() => toggleLike(moment.id)}
-          whileTap={{ scale: 0.88 }}
+          onClick={isViewingOther ? undefined : () => toggleLike(moment.id)}
+          whileTap={isViewingOther ? undefined : { scale: 0.88 }}
           transition={springs.press}
+          style={isViewingOther ? { opacity: 0.5 } : undefined}
         >
           <Heart
             size={17}
-            strokeWidth={moment.liked ? 0 : 1.6}
-            fill={moment.liked ? T.rose : 'none'}
-            color={moment.liked ? T.rose : T.textMuted}
+            strokeWidth={isLiked ? 0 : 1.6}
+            fill={isLiked ? T.rose : 'none'}
+            color={isLiked ? T.rose : T.textMuted}
           />
-          <span style={{ fontSize: 13, color: moment.liked ? T.rose : T.textMuted, fontWeight: 500 }}>
-            {moment.likes}
+          <span style={{ fontSize: 13, color: isLiked ? T.rose : T.textMuted, fontWeight: 500 }}>
+            {likeCount}
           </span>
         </motion.button>
         <motion.button
           className="flex items-center gap-1.5"
-          onClick={() => setShowCommentInput((p) => !p)}
-          whileTap={{ scale: 0.88 }}
+          onClick={isViewingOther ? undefined : () => setShowCommentInput((p) => !p)}
+          whileTap={isViewingOther ? undefined : { scale: 0.88 }}
           transition={springs.press}
+          style={isViewingOther ? { opacity: 0.5 } : undefined}
         >
           <MessageCircle
             size={17}

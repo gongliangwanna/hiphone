@@ -15,6 +15,7 @@ import { Settings } from './pages/Settings';
 import { ChatSettings } from './pages/ChatSettings';
 import { ComposeTab } from './tabs/ComposeTab';
 import { StickerManager } from './pages/StickerManager';
+import { InteractionList } from './pages/InteractionList';
 
 const SLIDE_MS = 350;
 const SLIDE_EASE = [0.32, 0.72, 0, 1] as const;
@@ -79,6 +80,7 @@ export function XingYuApp() {
               {page === 'settings' && <Settings />}
               {page === 'chat-settings' && <ChatSettings />}
               {page === 'sticker-manager' && <StickerManager />}
+              {page === 'interactions' && <InteractionList />}
             </motion.div>
           )}
         </AnimatePresence>

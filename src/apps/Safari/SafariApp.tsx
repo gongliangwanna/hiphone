@@ -1,6 +1,7 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { AppScreen } from '@/system';
+import { Material } from '@/system/Material/Material';
 import { useSafariStore, extractDomain } from './safariStore';
 import { wasAppKilled, clearAppKilled } from '@/platform/stores/appRuntimeStore';
 
@@ -153,41 +154,45 @@ function BrowseView() {
         {isEditing && (
           <motion.div
             className="absolute inset-0 z-50 flex flex-col"
-            style={{ backgroundColor: 'var(--color-systemBackground)' }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
+            style={{ backgroundColor: 'var(--color-systemGroupedBackground)' }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
           >
             {/* Top bar with input + cancel */}
-            <div
-              className="flex items-center gap-2 px-3"
+            <Material
+              variant="chrome"
+              className="flex items-center gap-2 px-4"
               style={{
-                paddingTop: 8,
+                paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)',
                 paddingBottom: 8,
                 borderBottom: '0.5px solid var(--color-separator)',
               }}
             >
-              <form onSubmit={handleSubmit} className="min-w-0 flex-1">
+              <form onSubmit={handleSubmit} className="min-w-0 flex-1 relative">
                 <input
                   ref={inputRef}
                   type="text"
                   value={editText}
                   onChange={(e) => setEditText(e.target.value)}
                   placeholder="搜索或输入网站名称"
-                  className="w-full rounded-lg border-0 px-3 py-2 text-sm outline-none"
+                  className="w-full rounded-xl border-0 py-2 pl-9 pr-3 outline-none"
                   style={{
                     backgroundColor: 'var(--color-tertiarySystemFill)',
                     color: 'var(--color-label)',
-                    fontSize: 16,
-                    height: 36,
+                    fontSize: 17,
+                    height: 40,
                   }}
                   data-testid="safari-url-input"
                 />
+                <div className="absolute left-3 top-0 bottom-0 flex items-center pointer-events-none">
+                  <SearchIcon size={16} />
+                </div>
               </form>
               <button
                 onClick={handleCancel}
-                className="shrink-0 px-1 text-base"
+                className="shrink-0 px-1 text-[17px]"
                 style={{
                   color: 'var(--color-systemBlue)',
                   minWidth: 44,
@@ -197,55 +202,64 @@ function BrowseView() {
               >
                 取消
               </button>
-            </div>
+            </Material>
 
             {/* Suggestions area (simple — show favorites) */}
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-3">
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-6">
               {editText.trim() ? (
                 <div
-                  className="flex items-center gap-3 rounded-lg px-3 py-3"
-                  style={{ backgroundColor: 'var(--color-secondarySystemBackground)' }}
+                  className="flex items-center gap-3 rounded-2xl px-4 py-3.5 shadow-sm"
+                  style={{ backgroundColor: 'var(--color-secondarySystemGroupedBackground)' }}
                   onClick={() => navigateTo(editText)}
                 >
-                  <SearchIcon size={18} />
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full" style={{ backgroundColor: 'var(--color-tertiarySystemFill)' }}>
+                    <SearchIcon size={16} />
+                  </div>
                   <span
-                    className="text-sm"
+                    className="text-[17px]"
                     style={{ color: 'var(--color-label)' }}
                   >
-                    搜索"{editText}"
+                    搜索 "{editText}"
                   </span>
                 </div>
               ) : (
-                <div>
+                <div className="mx-auto max-w-[500px]">
                   <p
-                    className="mb-3 text-xs font-semibold uppercase"
-                    style={{ color: 'var(--color-secondaryLabel)' }}
+                    className="mb-3 text-lg font-bold"
+                    style={{ color: 'var(--color-label)' }}
                   >
                     个人收藏
                   </p>
-                  {FAVORITES.map((fav) => (
-                    <button
-                      key={fav.url}
-                      className="flex w-full items-center gap-3 px-2 py-2.5"
-                      onClick={() => handleFavoriteClick(fav.url)}
-                    >
-                      <span className="text-lg">{fav.icon}</span>
-                      <div className="text-left">
-                        <p
-                          className="text-sm"
-                          style={{ color: 'var(--color-label)' }}
+                  <div
+                    className="grid grid-cols-4 gap-x-4 gap-y-6 rounded-2xl px-4 py-6"
+                    style={{ backgroundColor: 'var(--color-secondarySystemGroupedBackground)' }}
+                  >
+                    {FAVORITES.map((fav) => (
+                      <button
+                        key={fav.url}
+                        className="flex flex-col items-center gap-2"
+                        onClick={() => handleFavoriteClick(fav.url)}
+                      >
+                        <div
+                          className="flex items-center justify-center rounded-xl shadow-sm"
+                          style={{
+                            width: 56,
+                            height: 56,
+                            backgroundColor: 'var(--color-tertiarySystemGroupedBackground)',
+                            fontSize: 28,
+                          }}
                         >
-                          {fav.name}
-                        </p>
-                        <p
-                          className="text-xs"
+                          {fav.icon}
+                        </div>
+                        <span
+                          className="max-w-full truncate text-[11px]"
                           style={{ color: 'var(--color-secondaryLabel)' }}
                         >
-                          {extractDomain(fav.url)}
-                        </p>
-                      </div>
-                    </button>
-                  ))}
+                          {fav.name}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -254,47 +268,50 @@ function BrowseView() {
       </AnimatePresence>
 
       {/* ── Bottom bar: URL capsule + toolbar ── */}
-      <div
-        className="shrink-0"
+      <Material
+        variant="chrome"
+        className="shrink-0 flex flex-col"
         style={{
           borderTop: '0.5px solid var(--color-separator)',
-          backgroundColor: 'var(--color-secondarySystemBackground)',
           paddingBottom: 'env(safe-area-inset-bottom, 0px)',
         }}
       >
         {/* URL capsule bar */}
-        <div className="flex items-center justify-center px-4 py-1.5">
+        <div className="flex items-center justify-center px-4 pt-3 pb-2">
           <button
             onClick={handleUrlBarClick}
-            className="flex w-full items-center justify-center rounded-full px-4"
+            className="flex w-full items-center justify-center rounded-xl px-4 shadow-sm"
             style={{
-              height: 36,
-              backgroundColor: 'var(--color-tertiarySystemFill)',
-              maxWidth: 400,
+              height: 44,
+              backgroundColor: 'var(--color-systemBackground)',
+              maxWidth: 500,
             }}
             data-testid="safari-url-bar"
           >
             {showStartPage ? (
               <span
-                className="text-sm"
+                className="text-base"
                 style={{ color: 'var(--color-secondaryLabel)' }}
               >
                 搜索或输入网站名称
               </span>
             ) : (
-              <span
-                className="truncate text-sm"
-                style={{ color: 'var(--color-label)' }}
-              >
-                {displayDomain}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <LockIcon size={12} />
+                <span
+                  className="truncate text-[15px]"
+                  style={{ color: 'var(--color-label)' }}
+                >
+                  {displayDomain}
+                </span>
+              </div>
             )}
           </button>
         </div>
 
         {/* Toolbar */}
         <div
-          className="flex items-center justify-around px-4"
+          className="flex items-center justify-between px-6 pb-2"
           style={{ height: TOOLBAR_HEIGHT }}
         >
           <ToolbarButton
@@ -330,7 +347,7 @@ function BrowseView() {
             <TabsIcon />
           </ToolbarButton>
         </div>
-      </div>
+      </Material>
     </div>
   );
 }
@@ -346,63 +363,68 @@ function StartPage({
 }) {
   return (
     <div
-      className="h-full overflow-y-auto px-5 pt-8"
-      style={{ backgroundColor: 'var(--color-systemBackground)' }}
+      className="h-full overflow-y-auto px-5 pt-12 pb-24"
+      style={{ backgroundColor: 'var(--color-systemGroupedBackground)' }}
       data-testid="safari-start-page"
     >
-      {/* Favorites section */}
-      <p
-        className="mb-4 text-lg font-semibold"
-        style={{ color: 'var(--color-label)' }}
-      >
-        个人收藏
-      </p>
-      <div className="mb-8 grid grid-cols-4 gap-4">
-        {FAVORITES.map((fav) => (
-          <button
-            key={fav.url}
-            className="flex flex-col items-center gap-1.5"
-            onClick={() => onFavoriteClick(fav.url)}
-            data-testid={`safari-fav-${fav.name}`}
-          >
-            <div
-              className="flex items-center justify-center rounded-xl"
-              style={{
-                width: 52,
-                height: 52,
-                backgroundColor: 'var(--color-secondarySystemBackground)',
-                fontSize: 24,
-              }}
-            >
-              {fav.icon}
-            </div>
-            <span
-              className="max-w-full truncate text-xs"
-              style={{ color: 'var(--color-label)' }}
-            >
-              {fav.name}
-            </span>
-          </button>
-        ))}
-      </div>
-
-      {/* Frequently visited section */}
-      <p
-        className="mb-4 text-lg font-semibold"
-        style={{ color: 'var(--color-label)' }}
-      >
-        经常访问的网站
-      </p>
-      <div
-        className="flex items-center justify-center rounded-xl py-8"
-        style={{ backgroundColor: 'var(--color-secondarySystemBackground)' }}
-      >
-        <span
-          className="text-sm"
-          style={{ color: 'var(--color-secondaryLabel)' }}
+      <div className="mx-auto max-w-[500px]">
+        {/* Favorites section */}
+        <p
+          className="mb-3 text-lg font-bold"
+          style={{ color: 'var(--color-label)' }}
         >
-          暂无经常访问的网站
-        </span>
+          个人收藏
+        </p>
+        <div
+          className="mb-8 grid grid-cols-4 gap-x-4 gap-y-6 rounded-2xl px-4 py-6"
+          style={{ backgroundColor: 'var(--color-secondarySystemGroupedBackground)' }}
+        >
+          {FAVORITES.map((fav) => (
+            <button
+              key={fav.url}
+              className="flex flex-col items-center gap-2"
+              onClick={() => onFavoriteClick(fav.url)}
+              data-testid={`safari-fav-${fav.name}`}
+            >
+              <div
+                className="flex items-center justify-center rounded-xl shadow-sm"
+                style={{
+                  width: 56,
+                  height: 56,
+                  backgroundColor: 'var(--color-tertiarySystemGroupedBackground)',
+                  fontSize: 28,
+                }}
+              >
+                {fav.icon}
+              </div>
+              <span
+                className="max-w-full truncate text-[11px]"
+                style={{ color: 'var(--color-secondaryLabel)' }}
+              >
+                {fav.name}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {/* Frequently visited section */}
+        <p
+          className="mb-3 text-lg font-bold"
+          style={{ color: 'var(--color-label)' }}
+        >
+          经常访问的网站
+        </p>
+        <div
+          className="flex items-center justify-center rounded-2xl py-12"
+          style={{ backgroundColor: 'var(--color-secondarySystemGroupedBackground)' }}
+        >
+          <span
+            className="text-sm"
+            style={{ color: 'var(--color-tertiaryLabel)' }}
+          >
+            暂无经常访问的网站
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -415,31 +437,36 @@ function StartPage({
 function ErrorPage({ url }: { url: string }) {
   return (
     <div
-      className="flex h-full flex-col items-center justify-center px-8"
-      style={{ backgroundColor: 'var(--color-systemBackground)' }}
+      className="flex h-full flex-col items-center justify-center px-8 pb-20"
+      style={{ backgroundColor: 'var(--color-systemGroupedBackground)' }}
       data-testid="safari-error-page"
     >
-      <div className="mb-4" style={{ color: 'var(--color-secondaryLabel)' }}>
-        <GlobeIcon size={48} />
+      <div className="mb-6" style={{ color: 'var(--color-tertiaryLabel)' }}>
+        <GlobeIcon size={64} />
       </div>
       <p
-        className="mb-2 text-center text-base font-semibold"
+        className="mb-3 text-center text-xl font-bold"
         style={{ color: 'var(--color-label)' }}
       >
         无法打开页面
       </p>
       <p
-        className="mb-1 text-center text-sm"
+        className="mb-6 text-center text-[15px] leading-relaxed"
         style={{ color: 'var(--color-secondaryLabel)' }}
       >
         Safari 无法打开页面，因为此网站不允许在框架中显示。
       </p>
-      <p
-        className="text-center text-xs"
-        style={{ color: 'var(--color-tertiaryLabel)' }}
+      <div 
+        className="rounded-xl px-4 py-2"
+        style={{ backgroundColor: 'var(--color-secondarySystemGroupedBackground)' }}
       >
-        {extractDomain(url)}
-      </p>
+        <p
+          className="text-center text-sm font-medium"
+          style={{ color: 'var(--color-secondaryLabel)' }}
+        >
+          {extractDomain(url)}
+        </p>
+      </div>
     </div>
   );
 }
@@ -463,13 +490,16 @@ function TabGridView() {
   return (
     <div
       className="flex min-h-0 flex-1 flex-col"
+      style={{ backgroundColor: 'var(--color-systemGroupedBackground)' }}
       data-testid="safari-tab-grid"
     >
       {/* Header */}
-      <div
-        className="flex shrink-0 items-center justify-between px-4"
+      <Material
+        variant="chrome"
+        className="absolute top-0 z-10 flex w-full shrink-0 items-center justify-between px-4"
         style={{
           height: 52,
+          paddingTop: 'env(safe-area-inset-top, 0px)',
           borderBottom: '0.5px solid var(--color-separator)',
         }}
       >
@@ -493,7 +523,7 @@ function TabGridView() {
         </span>
         <button
           onClick={handleDone}
-          className="text-base"
+          className="text-base font-semibold"
           style={{
             color: 'var(--color-systemBlue)',
             minWidth: 44,
@@ -504,11 +534,17 @@ function TabGridView() {
         >
           完成
         </button>
-      </div>
+      </Material>
 
       {/* Grid */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-        <div className="grid grid-cols-2 gap-3">
+      <div
+        className="min-h-0 flex-1 overflow-y-auto px-4 py-4"
+        style={{
+          paddingTop: 'calc(52px + env(safe-area-inset-top, 0px) + 16px)',
+          paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 60px)',
+        }}
+      >
+        <div className="grid grid-cols-2 gap-4">
           {tabs.map((tab) => (
             <TabCard
               key={tab.id}
@@ -522,8 +558,9 @@ function TabGridView() {
       </div>
 
       {/* Bottom toolbar */}
-      <div
-        className="flex shrink-0 items-center justify-center px-4"
+      <Material
+        variant="chrome"
+        className="absolute bottom-0 z-10 flex w-full shrink-0 items-center justify-center px-4"
         style={{
           height: TOOLBAR_HEIGHT,
           borderTop: '0.5px solid var(--color-separator)',
@@ -541,7 +578,7 @@ function TabGridView() {
         >
           <PlusIcon />
         </button>
-      </div>
+      </Material>
     </div>
   );
 }
@@ -561,47 +598,47 @@ function TabCard({
 }) {
   return (
     <motion.div
-      className="relative overflow-hidden rounded-xl"
-      style={{
-        backgroundColor: 'var(--color-tertiarySystemBackground)',
-        border: isActive
-          ? '2.5px solid var(--color-systemBlue)'
-          : '0.5px solid var(--color-separator)',
-        boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
-      }}
+      className="relative overflow-visible"
       layout
       data-testid={`safari-tab-card-${tab.id}`}
     >
-      {/* Close button */}
+      {/* Close button - Top Right */}
       <button
         onClick={(e) => {
           e.stopPropagation();
           onClose();
         }}
-        className="absolute left-1 top-1 z-10 flex items-center justify-center rounded-full"
+        className="absolute -right-2 -top-2 z-20 flex items-center justify-center rounded-full shadow-md"
         style={{
-          width: 22,
-          height: 22,
-          backgroundColor: 'rgba(0,0,0,0.5)',
+          width: 24,
+          height: 24,
+          backgroundColor: 'var(--color-tertiarySystemGroupedBackground)',
+          border: '0.5px solid var(--color-separator)',
         }}
         data-testid={`safari-close-tab-${tab.id}`}
       >
-        <CloseIcon size={10} />
+        <CloseIcon size={10} color="var(--color-secondaryLabel)" />
       </button>
 
       {/* Card content (click to select) */}
       <button
         onClick={onSelect}
-        className="flex w-full flex-col"
+        className="flex w-full flex-col overflow-hidden rounded-2xl shadow-sm"
+        style={{
+          backgroundColor: 'var(--color-secondarySystemGroupedBackground)',
+          border: isActive
+            ? '2.5px solid var(--color-systemBlue)'
+            : '0.5px solid var(--color-separator)',
+        }}
       >
         {/* Title bar */}
         <div
-          className="flex items-center gap-2 px-3 py-2"
+          className="flex w-full items-center gap-2 px-3 py-2.5"
           style={{ borderBottom: '0.5px solid var(--color-separator)' }}
         >
           <GlobeIcon size={14} />
           <span
-            className="flex-1 truncate text-left text-xs"
+            className="flex-1 truncate text-left text-xs font-medium"
             style={{ color: 'var(--color-label)' }}
           >
             {tab.title}
@@ -610,12 +647,12 @@ function TabCard({
 
         {/* Preview area */}
         <div
-          className="flex items-center justify-center"
+          className="flex w-full items-center justify-center"
           style={{
-            height: 140,
+            height: 160,
             backgroundColor: tab.url
               ? 'var(--color-systemBackground)'
-              : 'var(--color-secondarySystemBackground)',
+              : 'var(--color-systemGroupedBackground)',
           }}
         >
           {tab.url ? (
@@ -636,8 +673,8 @@ function TabCard({
             )
           ) : (
             <span
-              className="text-2xl"
-              style={{ color: 'var(--color-tertiaryLabel)' }}
+              className="text-2xl font-bold"
+              style={{ color: 'var(--color-quaternaryLabel)' }}
             >
               起始页
             </span>
@@ -802,12 +839,12 @@ function PlusIcon() {
 }
 
 /** SF Symbol: xmark (small close) */
-function CloseIcon({ size = 12 }: { size?: number }) {
+function CloseIcon({ size = 12, color = 'white' }: { size?: number; color?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 12 12" fill="none">
       <path
         d="M2 2l8 8M10 2l-8 8"
-        stroke="white"
+        stroke={color}
         strokeWidth="1.6"
         strokeLinecap="round"
       />
@@ -851,6 +888,15 @@ function GlobeIcon({ size = 16 }: { size?: number }) {
       <path d="M2 11h18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       <path d="M4 6h14" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
       <path d="M4 16h14" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** SF Symbol: lock.fill */
+function LockIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 22 22" fill="currentColor">
+      <path d="M11 2C8.8 2 7 3.8 7 6v3H6c-1.1 0-2 .9-2 2v7c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2v-7c0-1.1-.9-2-2-2h-1V6c0-2.2-1.8-4-4-4zm0 2c1.1 0 2 .9 2 2v3H9V6c0-1.1.9-2 2-2zm0 10c-.8 0-1.5.7-1.5 1.5S10.2 17 11 17s1.5-.7 1.5-1.5S11.8 14 11 14z" />
     </svg>
   );
 }

@@ -1,4 +1,3 @@
-import { useRef } from 'react';
 import { motion } from 'motion/react';
 import { Upload, Check } from 'lucide-react';
 import { T } from '../theme';
@@ -18,8 +17,6 @@ export function PickerSheet({
   onClose: () => void;
   isAvatar?: boolean;
 }) {
-  const fileRef = useRef<HTMLInputElement>(null);
-
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -42,9 +39,9 @@ export function PickerSheet({
     >
       {/* 遮罩 */}
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      {/* 面板 */}
+      {/* 面板 — relative z-10 确保始终在遮罩之上（遮罩是 absolute z-auto） */}
       <motion.div
-        className="mt-auto flex flex-col"
+        className="relative z-10 mt-auto flex flex-col"
         style={{
           backgroundColor: T.bg,
           borderTopLeftRadius: 24,
@@ -82,28 +79,26 @@ export function PickerSheet({
               gap: 10,
             }}
           >
-            {/* 上传按钮 */}
-            <motion.button
-              className="flex flex-col items-center justify-center"
+            {/* 上传按钮 — 用 <label> 原生触发 file input，避免程序化 click 被浏览器拦截 */}
+            <motion.label
+              className="flex cursor-pointer flex-col items-center justify-center"
               style={{
                 aspectRatio: isAvatar ? '1' : '4/3',
                 borderRadius: isAvatar ? '50%' : 10,
-                border: `1.5px dashed ${T.border}`,
+                border: `1.5px dashed ${T.textMuted}`,
                 backgroundColor: T.card,
               }}
-              onClick={() => fileRef.current?.click()}
               whileTap={{ scale: 0.93 }}
             >
-              <Upload size={20} color={T.textMuted} strokeWidth={2} />
-              <span style={{ fontSize: 10, color: T.textMuted, marginTop: 4 }}>上传</span>
-            </motion.button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleUpload}
-            />
+              <input
+                type="file"
+                accept="image/*"
+                className="absolute h-0 w-0 overflow-hidden opacity-0"
+                onChange={handleUpload}
+              />
+              <Upload size={20} color={T.textSecondary} strokeWidth={2} />
+              <span style={{ fontSize: 10, color: T.textSecondary, marginTop: 4 }}>上传</span>
+            </motion.label>
 
             {/* 预设图片 */}
             {images.map((url) => {

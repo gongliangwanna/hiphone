@@ -23,6 +23,8 @@ interface XingYuNavState {
   closeStickerManager: () => void;
   openChatSettings: () => void;
   closeChatSettings: () => void;
+  openInteractions: () => void;
+  closeInteractions: () => void;
   reset: () => void;
 }
 
@@ -54,5 +56,7 @@ export const useXYNav = create<XingYuNavState>()((set, get) => ({
   },
   openChatSettings: () => set({ page: 'chat-settings' }),
   closeChatSettings: () => set({ page: 'chat-detail' }),
+  openInteractions: () => set({ page: 'interactions' }),
+  closeInteractions: () => set({ page: null }),
   reset: () => set({ activeTab: 'chat', page: null, activeChatId: null, activeIdolId: null, momentComposerOpen: false, stickerManagerOrigin: null }),
 }));
