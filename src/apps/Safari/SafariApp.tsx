@@ -5,7 +5,6 @@ import {
   ChevronRight,
   Share,
   BookOpen,
-  Layers,
   Plus,
   X,
   Search,
@@ -93,6 +92,8 @@ function BrowseView() {
   const goForward = useSafariStore((s) => s.goForward);
   const setView = useSafariStore((s) => s.setView);
   const setTabError = useSafariStore((s) => s.setTabError);
+  const isLoading = useSafariStore((s) => s.isLoading);
+  const setLoading = useSafariStore((s) => s.setLoading);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const canGoBack = activeTab?.url !== null;
@@ -131,6 +132,10 @@ function BrowseView() {
     }
   }, [activeTab, setTabError]);
 
+  const handleIframeLoad = useCallback(() => {
+    setLoading(false);
+  }, [setLoading]);
+
   const handleFavoriteClick = useCallback(
     (url: string) => {
       navigateTo(url);
@@ -157,6 +162,7 @@ function BrowseView() {
             sandbox="allow-scripts allow-same-origin allow-forms"
             title="Web content"
             onError={handleIframeError}
+            onLoad={handleIframeLoad}
             data-testid="safari-iframe"
           />
         )}
@@ -285,34 +291,38 @@ function BrowseView() {
         variant="chrome"
         className="shrink-0 flex flex-col"
         style={{
-          borderTop: '0.5px solid var(--color-separator)',
+          borderTop: '0.5px solid rgba(0, 0, 0, 0.06)',
           paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+          background: 'linear-gradient(to bottom, rgba(255,255,255,0.88), rgba(244,244,248,0.95))',
+          boxShadow: '0 -2px 20px rgba(0,0,0,0.04)',
         }}
       >
         {/* URL capsule bar */}
         <div className="flex items-center justify-center px-4 pt-3 pb-2">
           <button
             onClick={handleUrlBarClick}
-            className="flex w-full items-center justify-center rounded-xl px-4 shadow-sm"
+            className={`relative flex w-full items-center justify-center rounded-[14px] px-4 overflow-hidden ${
+              isLoading ? 'safari-url-capsule-loading' : ''
+            }`}
             style={{
               height: 44,
-              backgroundColor: 'var(--color-systemBackground)',
               maxWidth: 500,
+              background: 'linear-gradient(to bottom, #fafafa, #eeeff1)',
+              boxShadow: isLoading
+                ? undefined
+                : 'inset 0 1px 3px rgba(0,0,0,0.08), inset 0 0 0 0.5px rgba(0,0,0,0.04), 0 1px 2px rgba(255,255,255,0.8)',
             }}
             data-testid="safari-url-bar"
           >
             {showStartPage ? (
-              <span
-                className="text-base"
-                style={{ color: 'var(--color-secondaryLabel)' }}
-              >
+              <span className="relative z-[1] text-[15px]" style={{ color: 'var(--color-secondaryLabel)' }}>
                 搜索或输入网站名称
               </span>
             ) : (
-              <div className="flex items-center gap-1.5">
-                <Lock size={12} strokeWidth={2} />
+              <div className="relative z-[1] flex items-center gap-1.5">
+                <Lock size={12} strokeWidth={2} style={{ color: '#34c759' }} />
                 <span
-                  className="truncate text-[15px]"
+                  className="truncate text-[15px] font-medium tracking-wide"
                   style={{ color: 'var(--color-label)' }}
                 >
                   {displayDomain}
@@ -357,7 +367,18 @@ function BrowseView() {
             onClick={() => setView('tabs')}
             testId="safari-tabs-btn"
           >
-            <Layers size={20} strokeWidth={1.8} />
+            <span
+              className="flex items-center justify-center rounded-lg text-[13px] font-bold"
+              style={{
+                width: 28,
+                height: 26,
+                background: 'rgba(0, 122, 255, 0.07)',
+                border: '1.5px solid rgba(0, 122, 255, 0.2)',
+                color: 'var(--color-systemBlue)',
+              }}
+            >
+              {tabs.length}
+            </span>
           </ToolbarButton>
         </div>
       </Material>
@@ -717,10 +738,10 @@ function ToolbarButton({
     <button
       onClick={onClick}
       disabled={disabled}
-      className="flex items-center justify-center"
+      className="flex items-center justify-center rounded-[10px] transition-all duration-150 active:scale-[0.92] active:bg-black/[0.06]"
       style={{
         minWidth: 44,
-        minHeight: 44,
+        minHeight: 38,
         color: disabled
           ? 'var(--color-quaternaryLabel)'
           : 'var(--color-systemBlue)',
