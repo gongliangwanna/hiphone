@@ -213,7 +213,6 @@ export const useSafariStore = create<SafariState>()((set, get) => ({
     set((state) => ({
       tabs: [...state.tabs, newTab],
       activeTabId: newTab.id,
-      view: 'browse',
     }));
   },
 

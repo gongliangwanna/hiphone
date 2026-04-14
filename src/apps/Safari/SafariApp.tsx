@@ -18,20 +18,18 @@ import { useSafariStore, extractDomain } from './safariStore';
 import { wasAppKilled, clearAppKilled } from '@/platform/stores/appRuntimeStore';
 import './safari.css';
 
-/* ── Favorites for start page ── */
+/* ── Favorites for start page ──
+   Only sites that allow iframe embedding (no X-Frame-Options / CSP frame-ancestors restrictions). */
 const FAVORITES = [
-  { name: 'Apple', url: 'https://www.apple.com', gradient: 'linear-gradient(145deg, #555, #2d2d2d)', letter: '' },
-  { name: 'Google', url: 'https://www.google.com', gradient: 'linear-gradient(145deg, #4285f4, #2b6bcb)', letter: 'G' },
-  { name: 'Wikipedia', url: 'https://zh.wikipedia.org', gradient: 'linear-gradient(145deg, #737373, #4a4a4a)', letter: 'W' },
   { name: '百度', url: 'https://www.baidu.com', gradient: 'linear-gradient(145deg, #2932e1, #1a24b8)', letter: '百' },
-  { name: 'GitHub', url: 'https://github.com', gradient: 'linear-gradient(145deg, #3a3a3a, #1a1a1a)', letter: '' },
-  { name: 'YouTube', url: 'https://www.youtube.com', gradient: 'linear-gradient(145deg, #ff2020, #cc0000)', letter: '' },
+  { name: '维基百科', url: 'https://zh.wikipedia.org', gradient: 'linear-gradient(145deg, #737373, #4a4a4a)', letter: 'W' },
+  { name: '哔哩哔哩', url: 'https://www.bilibili.com', gradient: 'linear-gradient(145deg, #fb7299, #e84f7a)', letter: 'B' },
+  { name: '搜狗', url: 'https://www.sogou.com', gradient: 'linear-gradient(145deg, #ff6600, #e04d00)', letter: '搜' },
+  { name: '网易', url: 'https://www.163.com', gradient: 'linear-gradient(145deg, #d43c33, #b82e26)', letter: '网' },
+  { name: '新浪', url: 'https://sina.cn', gradient: 'linear-gradient(145deg, #e6162d, #c4102a)', letter: '新' },
 ];
 
-/* ── FavIcon — branded favicon with gradient background ──
-   Brand logos (Apple, GitHub, YouTube) use inline SVGs because lucide-react
-   does not include brand/corporate icons. Acknowledged exception to the
-   lucide-react-only icon rule. */
+/* ── FavIcon — branded favicon with gradient background ── */
 function FavIcon({ fav }: { fav: (typeof FAVORITES)[number] }) {
   return (
     <div
@@ -43,21 +41,7 @@ function FavIcon({ fav }: { fav: (typeof FAVORITES)[number] }) {
         boxShadow: '0 2px 8px rgba(0,0,0,0.12), inset 0 -1px 2px rgba(0,0,0,0.06)',
       }}
     >
-      {fav.letter ? (
-        <span className="text-[22px] font-bold">{fav.letter}</span>
-      ) : fav.name === 'Apple' ? (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
-          <path d="M18.7 19.5c-.9 1.1-1.9 2.1-3.4 2.1-1.5 0-2-.9-3.6-.9-1.7 0-2.3.9-3.7.9-1.5 0-2.6-1.1-3.5-2.2C2.4 16.6 1.2 12.3 3.5 9.5c1.1-1.4 2.8-2.2 4.5-2.2 1.5 0 2.6 1 3.5 1s2.2-1.2 3.9-1c.7 0 2.5.3 3.7 2.1-3.2 1.9-2.7 6.8.6 8.1zM14.5 5.3c.9-1.1 1.5-2.6 1.3-4.3-1.3.1-2.8.9-3.7 2-.8.9-1.5 2.5-1.3 3.9 1.4.1 2.8-.7 3.7-1.6z" />
-        </svg>
-      ) : fav.name === 'GitHub' ? (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
-          <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.564 9.564 0 0112 6.844a9.59 9.59 0 012.504.337c1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z" />
-        </svg>
-      ) : (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
-          <path d="M23 9.7s-.2-1.7-.9-2.4c-.8-.9-1.7-.9-2.2-.9C16.8 6 12 6 12 6s-4.8 0-7.9.4c-.4 0-1.4 0-2.2.9C1.2 8 1 9.7 1 9.7S.8 11.7.8 13.6v1.8c0 2 .2 3.9.2 3.9s.2 1.7.9 2.4c.8.9 1.9.8 2.4.9 1.7.2 7.7.2 7.7.2s4.8 0 7.9-.3c.4-.1 1.4-.1 2.2-.9.7-.7.9-2.4.9-2.4s.2-2 .2-3.9v-1.8c0-2-.2-3.9-.2-3.9zM9.5 16.2V8.8l6 3.7-6 3.7z" />
-        </svg>
-      )}
+      <span className="text-[22px] font-bold">{fav.letter}</span>
     </div>
   );
 }
