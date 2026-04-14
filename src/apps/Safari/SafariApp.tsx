@@ -681,7 +681,7 @@ function TabCard({
 }) {
   return (
     <motion.div
-      className="relative overflow-hidden rounded shadow-sm"
+      className="relative overflow-hidden rounded-2xl shadow-sm"
       layout
       style={{
         backgroundColor: 'var(--color-secondarySystemGroupedBackground)',
