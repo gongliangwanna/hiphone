@@ -68,6 +68,9 @@
   --color-systemBackground: #ffffff;
   --color-secondarySystemBackground: rgba(242, 242, 247, 1);
   --color-tertiarySystemBackground: rgba(255, 255, 255, 1);
+  --color-systemGroupedBackground: rgba(242, 242, 247, 1);
+  --color-secondarySystemGroupedBackground: rgba(255, 255, 255, 1);
+  --color-tertiarySystemGroupedBackground: rgba(242, 242, 247, 1);
   --color-systemFill: rgba(120, 120, 128, 0.2);
   --color-secondarySystemFill: rgba(120, 120, 128, 0.16);
   --color-tertiarySystemFill: rgba(118, 118, 128, 0.12);

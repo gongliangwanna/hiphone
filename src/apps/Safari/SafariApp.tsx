@@ -662,7 +662,7 @@ function TabGridView() {
         className="min-h-0 flex-1 overflow-y-auto px-4 py-4"
         style={{
           paddingTop: 'calc(52px + env(safe-area-inset-top, 0px) + 16px)',
-          paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 60px)',
+          paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)',
         }}
       >
         <div className="grid grid-cols-2 gap-4">
@@ -678,28 +678,6 @@ function TabGridView() {
         </div>
       </div>
 
-      {/* Bottom toolbar */}
-      <Material
-        variant="chrome"
-        className="absolute bottom-0 z-10 flex w-full shrink-0 items-center justify-center px-4"
-        style={{
-          height: TOOLBAR_HEIGHT,
-          borderTop: '0.5px solid var(--color-separator)',
-          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-        }}
-      >
-        <button
-          onClick={createTab}
-          className="flex items-center justify-center"
-          style={{
-            color: 'var(--color-systemBlue)',
-            minWidth: 44,
-            minHeight: 44,
-          }}
-        >
-          <Plus size={22} strokeWidth={2} />
-        </button>
-      </Material>
     </div>
   );
 }
@@ -719,92 +697,76 @@ function TabCard({
 }) {
   return (
     <motion.div
-      className="relative overflow-visible"
+      className="relative overflow-hidden rounded-2xl shadow-sm"
       layout
+      style={{
+        backgroundColor: 'var(--color-secondarySystemGroupedBackground)',
+        border: isActive
+          ? '2.5px solid var(--color-systemBlue)'
+          : '0.5px solid var(--color-separator)',
+      }}
       data-testid={`safari-tab-card-${tab.id}`}
     >
-      {/* Close button - Top Right */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onClose();
-        }}
-        className="absolute -right-4 -top-4 z-20 flex h-11 w-11 items-center justify-center"
-        data-testid={`safari-close-tab-${tab.id}`}
+      {/* Title bar with embedded close button */}
+      <div
+        className="flex w-full items-center gap-2 px-3"
+        style={{ borderBottom: '0.5px solid var(--color-separator)' }}
       >
-        <span
-          className="flex items-center justify-center rounded-full shadow-md"
-          style={{
-            width: 24,
-            height: 24,
-            backgroundColor: 'var(--color-tertiarySystemGroupedBackground)',
-            border: '0.5px solid var(--color-separator)',
-          }}
+        <Globe size={14} strokeWidth={1.8} style={{ color: 'var(--color-secondaryLabel)', flexShrink: 0 }} />
+        <button
+          onClick={onSelect}
+          className="flex-1 truncate text-left text-xs font-medium py-2.5"
+          style={{ color: 'var(--color-label)' }}
         >
-          <X size={10} strokeWidth={2} color="var(--color-secondaryLabel)" />
-        </span>
-      </button>
+          {tab.title}
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
+          className="flex h-11 w-8 shrink-0 items-center justify-center -mr-1"
+          data-testid={`safari-close-tab-${tab.id}`}
+        >
+          <X size={14} strokeWidth={2} color="var(--color-tertiaryLabel)" />
+        </button>
+      </div>
 
-      {/* Card content (click to select) */}
+      {/* Preview area (click to select) */}
       <button
         onClick={onSelect}
-        className="flex w-full flex-col overflow-hidden rounded-2xl shadow-sm"
+        className="flex w-full items-center justify-center"
         style={{
-          backgroundColor: 'var(--color-secondarySystemGroupedBackground)',
-          border: isActive
-            ? '2.5px solid var(--color-systemBlue)'
-            : '0.5px solid var(--color-separator)',
+          height: 150,
+          backgroundColor: tab.url
+            ? 'var(--color-systemBackground)'
+            : 'var(--color-systemGroupedBackground)',
         }}
       >
-        {/* Title bar */}
-        <div
-          className="flex w-full items-center gap-2 px-3 py-2.5"
-          style={{ borderBottom: '0.5px solid var(--color-separator)' }}
-        >
-          <Globe size={14} strokeWidth={1.8} />
-          <span
-            className="flex-1 truncate text-left text-xs font-medium"
-            style={{ color: 'var(--color-label)' }}
-          >
-            {tab.title}
-          </span>
-        </div>
-
-        {/* Preview area */}
-        <div
-          className="flex w-full items-center justify-center"
-          style={{
-            height: 160,
-            backgroundColor: tab.url
-              ? 'var(--color-systemBackground)'
-              : 'var(--color-systemGroupedBackground)',
-          }}
-        >
-          {tab.url ? (
-            tab.hasError ? (
-              <span
-                className="text-xs"
-                style={{ color: 'var(--color-tertiaryLabel)' }}
-              >
-                无法加载
-              </span>
-            ) : (
-              <span
-                className="text-xs"
-                style={{ color: 'var(--color-secondaryLabel)' }}
-              >
-                {extractDomain(tab.url)}
-              </span>
-            )
+        {tab.url ? (
+          tab.hasError ? (
+            <span
+              className="text-xs"
+              style={{ color: 'var(--color-tertiaryLabel)' }}
+            >
+              无法加载
+            </span>
           ) : (
             <span
-              className="text-2xl font-bold"
-              style={{ color: 'var(--color-quaternaryLabel)' }}
+              className="text-xs"
+              style={{ color: 'var(--color-secondaryLabel)' }}
             >
-              起始页
+              {extractDomain(tab.url)}
             </span>
-          )}
-        </div>
+          )
+        ) : (
+          <span
+            className="text-2xl font-bold"
+            style={{ color: 'var(--color-quaternaryLabel)' }}
+          >
+            起始页
+          </span>
+        )}
       </button>
     </motion.div>
   );
