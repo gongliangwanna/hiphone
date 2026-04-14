@@ -21,6 +21,10 @@ interface SafariState {
   isEditing: boolean;
   /** Text in the URL bar during editing */
   editText: string;
+  /** Whether the current page is loading */
+  isLoading: boolean;
+  /** Recent search queries (not URLs), newest first, max 10 */
+  searchHistory: string[];
 
   // Actions
   setView: (view: SafariView) => void;
@@ -36,6 +40,8 @@ interface SafariState {
   closeTab: (tabId: string) => void;
   setTabError: (tabId: string, hasError: boolean) => void;
   setTabTitle: (tabId: string, title: string) => void;
+  setLoading: (loading: boolean) => void;
+  clearSearchHistory: () => void;
   reset: () => void;
 }
 
@@ -86,6 +92,8 @@ export const useSafariStore = create<SafariState>()((set, get) => ({
   view: 'browse',
   isEditing: false,
   editText: '',
+  isLoading: false,
+  searchHistory: [],
 
   setView: (view) => set({ view }),
 
@@ -108,7 +116,8 @@ export const useSafariStore = create<SafariState>()((set, get) => ({
     const trimmed = input.trim();
     if (!trimmed) return;
 
-    const url = isUrl(trimmed) ? normalizeUrl(trimmed) : buildSearchUrl(trimmed);
+    const urlInput = isUrl(trimmed);
+    const url = urlInput ? normalizeUrl(trimmed) : buildSearchUrl(trimmed);
     const domain = extractDomain(url);
 
     set((state) => {
@@ -125,7 +134,13 @@ export const useSafariStore = create<SafariState>()((set, get) => ({
           hasError: false,
         };
       });
-      return { tabs, isEditing: false, view: 'browse' };
+
+      let searchHistory = state.searchHistory;
+      if (!urlInput) {
+        searchHistory = [trimmed, ...searchHistory.filter((h) => h !== trimmed)].slice(0, 10);
+      }
+
+      return { tabs, isEditing: false, view: 'browse' as const, isLoading: true, searchHistory };
     });
   },
 
@@ -238,6 +253,10 @@ export const useSafariStore = create<SafariState>()((set, get) => ({
     }));
   },
 
+  setLoading: (loading) => set({ isLoading: loading }),
+
+  clearSearchHistory: () => set({ searchHistory: [] }),
+
   reset: () => {
     const newTab = createNewTab();
     set({
@@ -246,6 +265,8 @@ export const useSafariStore = create<SafariState>()((set, get) => ({
       view: 'browse',
       isEditing: false,
       editText: '',
+      isLoading: false,
+      searchHistory: [],
     });
   },
 }));
