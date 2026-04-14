@@ -1,9 +1,22 @@
 import { useEffect, useCallback, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Share,
+  BookOpen,
+  Layers,
+  Plus,
+  X,
+  Search,
+  Globe,
+  Lock,
+} from 'lucide-react';
 import { AppScreen } from '@/system';
 import { Material } from '@/system/Material/Material';
 import { useSafariStore, extractDomain } from './safariStore';
 import { wasAppKilled, clearAppKilled } from '@/platform/stores/appRuntimeStore';
+import './safari.css';
 
 /* ── Favorites for start page ── */
 const FAVORITES = [
@@ -187,7 +200,7 @@ function BrowseView() {
                   data-testid="safari-url-input"
                 />
                 <div className="absolute left-3 top-0 bottom-0 flex items-center pointer-events-none">
-                  <SearchIcon size={16} />
+                  <Search size={16} strokeWidth={2} style={{ color: 'var(--color-secondaryLabel)' }} />
                 </div>
               </form>
               <button
@@ -213,7 +226,7 @@ function BrowseView() {
                   onClick={() => navigateTo(editText)}
                 >
                   <div className="flex h-8 w-8 items-center justify-center rounded-full" style={{ backgroundColor: 'var(--color-tertiarySystemFill)' }}>
-                    <SearchIcon size={16} />
+                    <Search size={16} strokeWidth={2} style={{ color: 'var(--color-secondaryLabel)' }} />
                   </div>
                   <span
                     className="text-[17px]"
@@ -297,7 +310,7 @@ function BrowseView() {
               </span>
             ) : (
               <div className="flex items-center gap-1.5">
-                <LockIcon size={12} />
+                <Lock size={12} strokeWidth={2} />
                 <span
                   className="truncate text-[15px]"
                   style={{ color: 'var(--color-label)' }}
@@ -319,32 +332,32 @@ function BrowseView() {
             disabled={!canGoBack}
             testId="safari-back"
           >
-            <BackIcon />
+            <ChevronLeft size={22} strokeWidth={2.5} />
           </ToolbarButton>
           <ToolbarButton
             onClick={goForward}
             disabled={!canGoForward}
             testId="safari-forward"
           >
-            <ForwardIcon />
+            <ChevronRight size={22} strokeWidth={2.5} />
           </ToolbarButton>
           <ToolbarButton
             onClick={() => {}}
             testId="safari-share"
           >
-            <ShareIcon />
+            <Share size={20} strokeWidth={1.8} />
           </ToolbarButton>
           <ToolbarButton
             onClick={() => {}}
             testId="safari-bookmarks"
           >
-            <BookmarkIcon />
+            <BookOpen size={20} strokeWidth={1.8} />
           </ToolbarButton>
           <ToolbarButton
             onClick={() => setView('tabs')}
             testId="safari-tabs-btn"
           >
-            <TabsIcon />
+            <Layers size={20} strokeWidth={1.8} />
           </ToolbarButton>
         </div>
       </Material>
@@ -441,8 +454,8 @@ function ErrorPage({ url }: { url: string }) {
       style={{ backgroundColor: 'var(--color-systemGroupedBackground)' }}
       data-testid="safari-error-page"
     >
-      <div className="mb-6" style={{ color: 'var(--color-tertiaryLabel)' }}>
-        <GlobeIcon size={64} />
+      <div className="mb-6">
+        <Globe size={64} strokeWidth={1.2} style={{ color: 'var(--color-tertiaryLabel)' }} />
       </div>
       <p
         className="mb-3 text-center text-xl font-bold"
@@ -513,7 +526,7 @@ function TabGridView() {
           }}
           data-testid="safari-new-tab"
         >
-          <PlusIcon />
+          <Plus size={22} strokeWidth={2} />
         </button>
         <span
           className="text-base font-semibold"
@@ -576,7 +589,7 @@ function TabGridView() {
             minHeight: 44,
           }}
         >
-          <PlusIcon />
+          <Plus size={22} strokeWidth={2} />
         </button>
       </Material>
     </div>
@@ -617,7 +630,7 @@ function TabCard({
         }}
         data-testid={`safari-close-tab-${tab.id}`}
       >
-        <CloseIcon size={10} color="var(--color-secondaryLabel)" />
+        <X size={10} strokeWidth={2} color="var(--color-secondaryLabel)" />
       </button>
 
       {/* Card content (click to select) */}
@@ -636,7 +649,7 @@ function TabCard({
           className="flex w-full items-center gap-2 px-3 py-2.5"
           style={{ borderBottom: '0.5px solid var(--color-separator)' }}
         >
-          <GlobeIcon size={14} />
+          <Globe size={14} strokeWidth={1.8} />
           <span
             className="flex-1 truncate text-left text-xs font-medium"
             style={{ color: 'var(--color-label)' }}
@@ -720,183 +733,3 @@ function ToolbarButton({
   );
 }
 
-/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-   SF Symbol Style Icons
-   All icons: stroke style, round linecap/linejoin, 1.5-2px strokeWidth
-   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
-
-/** SF Symbol: chevron.left */
-function BackIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
-      <path
-        d="M14 4L7 11L14 18"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-/** SF Symbol: chevron.right */
-function ForwardIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
-      <path
-        d="M8 4L15 11L8 18"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-/** SF Symbol: square.and.arrow.up */
-function ShareIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
-      <path
-        d="M7 9V18a1 1 0 001 1h8a1 1 0 001-1V9"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M11 2v10M8 5l3-3 3 3"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-/** SF Symbol: book */
-function BookmarkIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
-      <path
-        d="M4 3h14a1 1 0 011 1v15l-4-2.5L11 19l-4-2.5L3 19V4a1 1 0 011-1z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M7 8h8M7 12h5"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-/** SF Symbol: square.on.square (tabs) */
-function TabsIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
-      <rect
-        x="3"
-        y="6"
-        width="12"
-        height="13"
-        rx="2"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M7 6V5a2 2 0 012-2h8a2 2 0 012 2v10a2 2 0 01-2 2h-2"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-/** SF Symbol: plus */
-function PlusIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-      <path
-        d="M11 4v14M4 11h14"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-/** SF Symbol: xmark (small close) */
-function CloseIcon({ size = 12, color = 'white' }: { size?: number; color?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 12 12" fill="none">
-      <path
-        d="M2 2l8 8M10 2l-8 8"
-        stroke={color}
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-/** SF Symbol: magnifyingglass */
-function SearchIcon({ size = 16 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 22 22" fill="none">
-      <circle
-        cx="9.5"
-        cy="9.5"
-        r="6.5"
-        stroke="var(--color-secondaryLabel)"
-        strokeWidth="1.6"
-      />
-      <path
-        d="M14.5 14.5L19 19"
-        stroke="var(--color-secondaryLabel)"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-/** SF Symbol: globe */
-function GlobeIcon({ size = 16 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 22 22"
-      fill="none"
-      style={{ color: 'var(--color-secondaryLabel)' }}
-    >
-      <circle cx="11" cy="11" r="9" stroke="currentColor" strokeWidth="1.5" />
-      <ellipse cx="11" cy="11" rx="4" ry="9" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M2 11h18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      <path d="M4 6h14" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-      <path d="M4 16h14" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-/** SF Symbol: lock.fill */
-function LockIcon({ size = 12 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 22 22" fill="currentColor">
-      <path d="M11 2C8.8 2 7 3.8 7 6v3H6c-1.1 0-2 .9-2 2v7c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2v-7c0-1.1-.9-2-2-2h-1V6c0-2.2-1.8-4-4-4zm0 2c1.1 0 2 .9 2 2v3H9V6c0-1.1.9-2 2-2zm0 10c-.8 0-1.5.7-1.5 1.5S10.2 17 11 17s1.5-.7 1.5-1.5S11.8 14 11 14z" />
-    </svg>
-  );
-}
