@@ -19,13 +19,44 @@ import './safari.css';
 
 /* ── Favorites for start page ── */
 const FAVORITES = [
-  { name: 'Apple', url: 'https://www.apple.com', icon: '🍎' },
-  { name: 'Google', url: 'https://www.google.com', icon: '🔍' },
-  { name: 'Wikipedia', url: 'https://zh.wikipedia.org', icon: '📚' },
-  { name: '百度', url: 'https://www.baidu.com', icon: '🔎' },
-  { name: 'GitHub', url: 'https://github.com', icon: '🐙' },
-  { name: 'YouTube', url: 'https://www.youtube.com', icon: '▶️' },
+  { name: 'Apple', url: 'https://www.apple.com', gradient: 'linear-gradient(145deg, #555, #2d2d2d)', letter: '' },
+  { name: 'Google', url: 'https://www.google.com', gradient: 'linear-gradient(145deg, #4285f4, #2b6bcb)', letter: 'G' },
+  { name: 'Wikipedia', url: 'https://zh.wikipedia.org', gradient: 'linear-gradient(145deg, #737373, #4a4a4a)', letter: 'W' },
+  { name: '百度', url: 'https://www.baidu.com', gradient: 'linear-gradient(145deg, #2932e1, #1a24b8)', letter: '百' },
+  { name: 'GitHub', url: 'https://github.com', gradient: 'linear-gradient(145deg, #3a3a3a, #1a1a1a)', letter: '' },
+  { name: 'YouTube', url: 'https://www.youtube.com', gradient: 'linear-gradient(145deg, #ff2020, #cc0000)', letter: '' },
 ];
+
+/* ── FavIcon — branded favicon with gradient background ── */
+function FavIcon({ fav }: { fav: (typeof FAVORITES)[number] }) {
+  return (
+    <div
+      className="flex items-center justify-center rounded-[14px] text-white"
+      style={{
+        width: 52,
+        height: 52,
+        background: fav.gradient,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.12), inset 0 -1px 2px rgba(0,0,0,0.06)',
+      }}
+    >
+      {fav.letter ? (
+        <span className="text-[22px] font-bold">{fav.letter}</span>
+      ) : fav.name === 'Apple' ? (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
+          <path d="M18.7 19.5c-.9 1.1-1.9 2.1-3.4 2.1-1.5 0-2-.9-3.6-.9-1.7 0-2.3.9-3.7.9-1.5 0-2.6-1.1-3.5-2.2C2.4 16.6 1.2 12.3 3.5 9.5c1.1-1.4 2.8-2.2 4.5-2.2 1.5 0 2.6 1 3.5 1s2.2-1.2 3.9-1c.7 0 2.5.3 3.7 2.1-3.2 1.9-2.7 6.8.6 8.1zM14.5 5.3c.9-1.1 1.5-2.6 1.3-4.3-1.3.1-2.8.9-3.7 2-.8.9-1.5 2.5-1.3 3.9 1.4.1 2.8-.7 3.7-1.6z" />
+        </svg>
+      ) : fav.name === 'GitHub' ? (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
+          <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.564 9.564 0 0112 6.844a9.59 9.59 0 012.504.337c1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z" />
+        </svg>
+      ) : (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
+          <path d="M23 9.7s-.2-1.7-.9-2.4c-.8-.9-1.7-.9-2.2-.9C16.8 6 12 6 12 6s-4.8 0-7.9.4c-.4 0-1.4 0-2.2.9C1.2 8 1 9.7 1 9.7S.8 11.7.8 13.6v1.8c0 2 .2 3.9.2 3.9s.2 1.7.9 2.4c.8.9 1.9.8 2.4.9 1.7.2 7.7.2 7.7.2s4.8 0 7.9-.3c.4-.1 1.4-.1 2.2-.9.7-.7.9-2.4.9-2.4s.2-2 .2-3.9v-1.8c0-2-.2-3.9-.2-3.9zM9.5 16.2V8.8l6 3.7-6 3.7z" />
+        </svg>
+      )}
+    </div>
+  );
+}
 
 /* ── Constants ── */
 const TOOLBAR_HEIGHT = 44;
@@ -179,43 +210,55 @@ function BrowseView() {
             exit={{ opacity: 0, y: 20 }}
             transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
           >
-            {/* Top bar with input + cancel */}
             <Material
               variant="chrome"
-              className="flex items-center gap-2 px-4"
+              className="flex items-center gap-0"
               style={{
                 paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)',
-                paddingBottom: 8,
-                borderBottom: '0.5px solid var(--color-separator)',
+                paddingBottom: 10,
+                paddingLeft: 16,
+                paddingRight: 16,
+                borderBottom: '0.5px solid rgba(0, 0, 0, 0.06)',
+                background: 'linear-gradient(to bottom, rgba(255,255,255,0.92), rgba(248,248,250,0.96))',
+                boxShadow: '0 2px 12px rgba(0,0,0,0.03)',
               }}
             >
-              <form onSubmit={handleSubmit} className="min-w-0 flex-1 relative">
+              <form onSubmit={handleSubmit} className="relative min-w-0 flex-1">
+                <div className="pointer-events-none absolute left-3 top-0 bottom-0 flex items-center">
+                  <Search size={16} strokeWidth={2} style={{ color: 'var(--color-secondaryLabel)' }} />
+                </div>
                 <input
                   ref={inputRef}
                   type="text"
                   value={editText}
                   onChange={(e) => setEditText(e.target.value)}
                   placeholder="搜索或输入网站名称"
-                  className="w-full rounded-xl border-0 py-2 pl-9 pr-3 outline-none"
+                  className="w-full rounded-[14px] border-0 py-[11px] pl-9 pr-9 outline-none text-[16px] tracking-[0.1px]"
                   style={{
-                    backgroundColor: 'var(--color-tertiarySystemFill)',
+                    background: 'linear-gradient(to bottom, #fafafa, #eeeff1)',
                     color: 'var(--color-label)',
-                    fontSize: 17,
-                    height: 40,
+                    boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.08), inset 0 0 0 0.5px rgba(0,0,0,0.04), 0 1px 2px rgba(255,255,255,0.8)',
                   }}
                   data-testid="safari-url-input"
                 />
-                <div className="absolute left-3 top-0 bottom-0 flex items-center pointer-events-none">
-                  <Search size={16} strokeWidth={2} style={{ color: 'var(--color-secondaryLabel)' }} />
-                </div>
+                {editText && (
+                  <button
+                    type="button"
+                    onClick={() => setEditText('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-full"
+                    style={{ backgroundColor: '#c7c7cc' }}
+                  >
+                    <X size={10} strokeWidth={2.5} color="white" />
+                  </button>
+                )}
               </form>
               <button
                 onClick={handleCancel}
-                className="shrink-0 px-1 text-[17px]"
+                className="ml-2.5 shrink-0 rounded-[20px] px-3.5 py-[7px] text-[15px] font-medium transition-all duration-150 active:scale-95"
                 style={{
                   color: 'var(--color-systemBlue)',
-                  minWidth: 44,
-                  minHeight: 44,
+                  backgroundColor: 'rgba(0, 0, 0, 0.05)',
+                  boxShadow: '0 0.5px 2px rgba(0,0,0,0.04)',
                 }}
                 data-testid="safari-cancel-edit"
               >
@@ -223,63 +266,11 @@ function BrowseView() {
               </button>
             </Material>
 
-            {/* Suggestions area (simple — show favorites) */}
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-6">
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 pt-5">
               {editText.trim() ? (
-                <div
-                  className="flex items-center gap-3 rounded-2xl px-4 py-3.5 shadow-sm"
-                  style={{ backgroundColor: 'var(--color-secondarySystemGroupedBackground)' }}
-                  onClick={() => navigateTo(editText)}
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full" style={{ backgroundColor: 'var(--color-tertiarySystemFill)' }}>
-                    <Search size={16} strokeWidth={2} style={{ color: 'var(--color-secondaryLabel)' }} />
-                  </div>
-                  <span
-                    className="text-[17px]"
-                    style={{ color: 'var(--color-label)' }}
-                  >
-                    搜索 "{editText}"
-                  </span>
-                </div>
+                <SearchSuggestions editText={editText} onSelect={navigateTo} />
               ) : (
-                <div className="mx-auto max-w-[500px]">
-                  <p
-                    className="mb-3 text-lg font-bold"
-                    style={{ color: 'var(--color-label)' }}
-                  >
-                    个人收藏
-                  </p>
-                  <div
-                    className="grid grid-cols-4 gap-x-4 gap-y-6 rounded-2xl px-4 py-6"
-                    style={{ backgroundColor: 'var(--color-secondarySystemGroupedBackground)' }}
-                  >
-                    {FAVORITES.map((fav) => (
-                      <button
-                        key={fav.url}
-                        className="flex flex-col items-center gap-2"
-                        onClick={() => handleFavoriteClick(fav.url)}
-                      >
-                        <div
-                          className="flex items-center justify-center rounded-xl shadow-sm"
-                          style={{
-                            width: 56,
-                            height: 56,
-                            backgroundColor: 'var(--color-tertiarySystemGroupedBackground)',
-                            fontSize: 28,
-                          }}
-                        >
-                          {fav.icon}
-                        </div>
-                        <span
-                          className="max-w-full truncate text-[11px]"
-                          style={{ color: 'var(--color-secondaryLabel)' }}
-                        >
-                          {fav.name}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <EmptySearchState onFavoriteClick={handleFavoriteClick} />
               )}
             </div>
           </motion.div>
@@ -387,6 +378,107 @@ function BrowseView() {
 }
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   EmptySearchState — Favorites grid + search history (used in editing overlay)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+function EmptySearchState({ onFavoriteClick }: { onFavoriteClick: (url: string) => void }) {
+  const searchHistory = useSafariStore((s) => s.searchHistory);
+  const navigateTo = useSafariStore((s) => s.navigateTo);
+
+  return (
+    <div className="mx-auto max-w-[500px]">
+      <p className="mb-2.5 pl-1 text-[13px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-secondaryLabel)' }}>
+        个人收藏
+      </p>
+      <div
+        className="mb-6 grid grid-cols-4 gap-x-2.5 gap-y-3.5 rounded-2xl px-3.5 py-[18px]"
+        style={{ backgroundColor: 'rgba(255,255,255,0.85)', boxShadow: '0 1px 4px rgba(0,0,0,0.04), 0 0 0 0.5px rgba(0,0,0,0.04)' }}
+      >
+        {FAVORITES.map((fav) => (
+          <button key={fav.url} className="flex flex-col items-center gap-1.5" onClick={() => onFavoriteClick(fav.url)}>
+            <FavIcon fav={fav} />
+            <span className="max-w-full truncate text-[11px] font-medium" style={{ color: 'var(--color-label)' }}>{fav.name}</span>
+          </button>
+        ))}
+      </div>
+
+      {searchHistory.length > 0 && (
+        <>
+          <p className="mb-2.5 pl-1 text-[13px] font-semibold uppercase tracking-wider" style={{ color: 'var(--color-secondaryLabel)' }}>
+            最近搜索
+          </p>
+          <div className="overflow-hidden rounded-2xl" style={{ backgroundColor: 'rgba(255,255,255,0.85)', boxShadow: '0 1px 4px rgba(0,0,0,0.04), 0 0 0 0.5px rgba(0,0,0,0.04)' }}>
+            {searchHistory.map((query, i) => (
+              <button
+                key={query}
+                className="flex w-full items-center gap-3.5 px-4 py-3 text-left active:bg-black/[0.03]"
+                style={{ borderTop: i > 0 ? '0.5px solid rgba(0,0,0,0.06)' : undefined }}
+                onClick={() => navigateTo(query)}
+              >
+                <Search size={16} strokeWidth={2} style={{ color: 'var(--color-secondaryLabel)' }} />
+                <span className="flex-1 text-[16px]" style={{ color: 'var(--color-systemBlue)' }}>{query}</span>
+                <ChevronRight size={14} strokeWidth={2} style={{ color: 'var(--color-quaternaryLabel)' }} />
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   SearchSuggestions — shown when text is entered in URL overlay
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+function SearchSuggestions({ editText, onSelect }: { editText: string; onSelect: (input: string) => void }) {
+  const trimmed = editText.trim();
+  const matchedFav = FAVORITES.find(
+    (f) => f.name.toLowerCase().includes(trimmed.toLowerCase()) || f.url.toLowerCase().includes(trimmed.toLowerCase()),
+  );
+
+  return (
+    <div className="mx-auto max-w-[500px] space-y-2">
+      <button
+        className="flex w-full items-center gap-3.5 rounded-[14px] px-4 py-3 active:bg-black/[0.03]"
+        style={{ backgroundColor: 'rgba(255,255,255,0.85)', boxShadow: '0 1px 4px rgba(0,0,0,0.04), 0 0 0 0.5px rgba(0,0,0,0.04)' }}
+        onClick={() => onSelect(trimmed)}
+      >
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]" style={{ background: 'linear-gradient(135deg, #007aff, #5ac8fa)' }}>
+          <Search size={16} strokeWidth={2} color="white" />
+        </div>
+        <div className="min-w-0 flex-1 text-left">
+          <p className="truncate text-[16px]" style={{ color: 'var(--color-label)' }}>{trimmed}</p>
+          <p className="text-[12px]" style={{ color: 'var(--color-secondaryLabel)' }}>DuckDuckGo 搜索</p>
+        </div>
+        <ChevronRight size={16} strokeWidth={2} style={{ color: 'var(--color-quaternaryLabel)' }} />
+      </button>
+
+      {matchedFav && (
+        <button
+          className="flex w-full items-center gap-3.5 rounded-[14px] px-4 py-3 active:bg-black/[0.03]"
+          style={{ backgroundColor: 'rgba(255,255,255,0.85)', boxShadow: '0 1px 4px rgba(0,0,0,0.04), 0 0 0 0.5px rgba(0,0,0,0.04)' }}
+          onClick={() => onSelect(matchedFav.url)}
+        >
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]" style={{ background: matchedFav.gradient }}>
+            {matchedFav.letter ? (
+              <span className="text-xs font-bold text-white">{matchedFav.letter}</span>
+            ) : (
+              <Globe size={16} strokeWidth={1.8} color="white" />
+            )}
+          </div>
+          <div className="min-w-0 flex-1 text-left">
+            <p className="truncate text-[16px]" style={{ color: 'var(--color-label)' }}>{matchedFav.name}</p>
+            <p className="text-[12px]" style={{ color: 'var(--color-secondaryLabel)' }}>{extractDomain(matchedFav.url)} — 个人收藏</p>
+          </div>
+          <ChevronRight size={16} strokeWidth={2} style={{ color: 'var(--color-quaternaryLabel)' }} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    Start Page — Favorites grid + frequent visits
    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
@@ -404,36 +496,26 @@ function StartPage({
       <div className="mx-auto max-w-[500px]">
         {/* Favorites section */}
         <p
-          className="mb-3 text-lg font-bold"
-          style={{ color: 'var(--color-label)' }}
+          className="mb-2.5 pl-1 text-[13px] font-semibold uppercase tracking-wider"
+          style={{ color: 'var(--color-secondaryLabel)' }}
         >
           个人收藏
         </p>
         <div
-          className="mb-8 grid grid-cols-4 gap-x-4 gap-y-6 rounded-2xl px-4 py-6"
-          style={{ backgroundColor: 'var(--color-secondarySystemGroupedBackground)' }}
+          className="mb-8 grid grid-cols-4 gap-x-2.5 gap-y-3.5 rounded-2xl px-3.5 py-[18px]"
+          style={{ backgroundColor: 'rgba(255,255,255,0.85)', boxShadow: '0 1px 4px rgba(0,0,0,0.04), 0 0 0 0.5px rgba(0,0,0,0.04)' }}
         >
           {FAVORITES.map((fav) => (
             <button
               key={fav.url}
-              className="flex flex-col items-center gap-2"
+              className="flex flex-col items-center gap-1.5"
               onClick={() => onFavoriteClick(fav.url)}
               data-testid={`safari-fav-${fav.name}`}
             >
-              <div
-                className="flex items-center justify-center rounded-xl shadow-sm"
-                style={{
-                  width: 56,
-                  height: 56,
-                  backgroundColor: 'var(--color-tertiarySystemGroupedBackground)',
-                  fontSize: 28,
-                }}
-              >
-                {fav.icon}
-              </div>
+              <FavIcon fav={fav} />
               <span
-                className="max-w-full truncate text-[11px]"
-                style={{ color: 'var(--color-secondaryLabel)' }}
+                className="max-w-full truncate text-[11px] font-medium"
+                style={{ color: 'var(--color-label)' }}
               >
                 {fav.name}
               </span>
@@ -443,14 +525,14 @@ function StartPage({
 
         {/* Frequently visited section */}
         <p
-          className="mb-3 text-lg font-bold"
-          style={{ color: 'var(--color-label)' }}
+          className="mb-2.5 pl-1 text-[13px] font-semibold uppercase tracking-wider"
+          style={{ color: 'var(--color-secondaryLabel)' }}
         >
           经常访问的网站
         </p>
         <div
           className="flex items-center justify-center rounded-2xl py-12"
-          style={{ backgroundColor: 'var(--color-secondarySystemGroupedBackground)' }}
+          style={{ backgroundColor: 'rgba(255,255,255,0.85)', boxShadow: '0 1px 4px rgba(0,0,0,0.04), 0 0 0 0.5px rgba(0,0,0,0.04)' }}
         >
           <span
             className="text-sm"
