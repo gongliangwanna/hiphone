@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { AppScreen } from '@/system';
 import { Material } from '@/system/Material/Material';
+import { spring, duration, ease } from '@/platform/design-tokens/motion';
 import { useSafariStore, extractDomain } from './safariStore';
 import { wasAppKilled, clearAppKilled } from '@/platform/stores/appRuntimeStore';
 import './safari.css';
@@ -27,7 +28,10 @@ const FAVORITES = [
   { name: 'YouTube', url: 'https://www.youtube.com', gradient: 'linear-gradient(145deg, #ff2020, #cc0000)', letter: '' },
 ];
 
-/* ── FavIcon — branded favicon with gradient background ── */
+/* ── FavIcon — branded favicon with gradient background ──
+   Brand logos (Apple, GitHub, YouTube) use inline SVGs because lucide-react
+   does not include brand/corporate icons. Acknowledged exception to the
+   lucide-react-only icon rule. */
 function FavIcon({ fav }: { fav: (typeof FAVORITES)[number] }) {
   return (
     <div
@@ -84,7 +88,7 @@ export function SafariApp() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
+              transition={{ duration: duration.fast / 1000, ease: ease.standard }}
             >
               <BrowseView />
             </motion.div>
@@ -96,7 +100,7 @@ export function SafariApp() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.25 }}
+              transition={{ type: 'spring', ...spring.snappy }}
             >
               <TabGridView />
             </motion.div>
@@ -208,7 +212,7 @@ function BrowseView() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
+            transition={{ duration: duration.base / 1000, ease: ease.standard }}
           >
             <Material
               variant="chrome"
@@ -245,10 +249,11 @@ function BrowseView() {
                   <button
                     type="button"
                     onClick={() => setEditText('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-full"
-                    style={{ backgroundColor: '#c7c7cc' }}
+                    className="absolute right-0 top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center"
                   >
-                    <X size={10} strokeWidth={2.5} color="white" />
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full" style={{ backgroundColor: '#c7c7cc' }}>
+                      <X size={10} strokeWidth={2.5} color="white" />
+                    </span>
                   </button>
                 )}
               </form>
@@ -313,7 +318,7 @@ function BrowseView() {
               <div className="relative z-[1] flex items-center gap-1.5">
                 <Lock size={12} strokeWidth={2} style={{ color: '#34c759' }} />
                 <span
-                  className="truncate text-[15px] font-medium tracking-wide"
+                  className="truncate text-[15px] font-medium tracking-[0.2px]"
                   style={{ color: 'var(--color-label)' }}
                 >
                   {displayDomain}
@@ -724,16 +729,20 @@ function TabCard({
           e.stopPropagation();
           onClose();
         }}
-        className="absolute -right-2 -top-2 z-20 flex items-center justify-center rounded-full shadow-md"
-        style={{
-          width: 24,
-          height: 24,
-          backgroundColor: 'var(--color-tertiarySystemGroupedBackground)',
-          border: '0.5px solid var(--color-separator)',
-        }}
+        className="absolute -right-4 -top-4 z-20 flex h-11 w-11 items-center justify-center"
         data-testid={`safari-close-tab-${tab.id}`}
       >
-        <X size={10} strokeWidth={2} color="var(--color-secondaryLabel)" />
+        <span
+          className="flex items-center justify-center rounded-full shadow-md"
+          style={{
+            width: 24,
+            height: 24,
+            backgroundColor: 'var(--color-tertiarySystemGroupedBackground)',
+            border: '0.5px solid var(--color-separator)',
+          }}
+        >
+          <X size={10} strokeWidth={2} color="var(--color-secondaryLabel)" />
+        </span>
       </button>
 
       {/* Card content (click to select) */}
@@ -823,7 +832,7 @@ function ToolbarButton({
       className="flex items-center justify-center rounded-[10px] transition-all duration-150 active:scale-[0.92] active:bg-black/[0.06]"
       style={{
         minWidth: 44,
-        minHeight: 38,
+        minHeight: 44,
         color: disabled
           ? 'var(--color-quaternaryLabel)'
           : 'var(--color-systemBlue)',
