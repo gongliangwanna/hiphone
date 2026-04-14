@@ -149,7 +149,6 @@ export const useSafariStore = create<SafariState>()((set, get) => ({
       const tabs = state.tabs.map((tab) => {
         if (tab.id !== state.activeTabId) return tab;
         if (tab.historyIndex <= 0) {
-          // Go back to start page
           return {
             ...tab,
             url: null,
@@ -168,7 +167,7 @@ export const useSafariStore = create<SafariState>()((set, get) => ({
           hasError: false,
         };
       });
-      return { tabs };
+      return { tabs, isLoading: true };
     });
   },
 
@@ -187,7 +186,7 @@ export const useSafariStore = create<SafariState>()((set, get) => ({
           hasError: false,
         };
       });
-      return { tabs };
+      return { tabs, isLoading: true };
     });
   },
 

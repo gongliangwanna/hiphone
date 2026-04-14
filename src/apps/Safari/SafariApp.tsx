@@ -121,6 +121,8 @@ function BrowseView() {
     : false;
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const currentSrcRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (isEditing && inputRef.current) {
@@ -128,6 +130,18 @@ function BrowseView() {
       inputRef.current.select();
     }
   }, [isEditing]);
+
+  // Navigate iframe via ref when URL changes (preserves iframe instance)
+  const targetUrl = activeTab?.url ?? null;
+  useEffect(() => {
+    if (targetUrl && iframeRef.current && targetUrl !== currentSrcRef.current) {
+      setLoading(true);
+      iframeRef.current.src = targetUrl;
+      currentSrcRef.current = targetUrl;
+    } else if (!targetUrl) {
+      currentSrcRef.current = null;
+    }
+  }, [targetUrl, setLoading]);
 
   const handleUrlBarClick = useCallback(() => {
     setEditing(true);
@@ -169,20 +183,23 @@ function BrowseView() {
     <div className="flex min-h-0 flex-1 flex-col">
       {/* ── Web content area ── */}
       <div className="min-h-0 flex-1 overflow-hidden">
-        {showStartPage ? (
+        {showStartPage && (
           <StartPage onFavoriteClick={handleFavoriteClick} />
-        ) : activeTab?.hasError ? (
+        )}
+        {activeTab?.hasError && !showStartPage && (
           <ErrorPage url={activeTab.url!} />
-        ) : (
+        )}
+        {activeTab && (
           <iframe
-            key={activeTab?.url}
-            src={activeTab?.url ?? undefined}
+            ref={iframeRef}
+            key={activeTab.id}
             className="h-full w-full border-0"
             sandbox="allow-scripts allow-same-origin allow-forms"
             title="Web content"
             onError={handleIframeError}
             onLoad={handleIframeLoad}
             data-testid="safari-iframe"
+            style={{ display: showStartPage || activeTab.hasError ? 'none' : 'block' }}
           />
         )}
       </div>
