@@ -717,9 +717,9 @@ function TabCard({
       </div>
 
       {/* Preview area (click to select) */}
-      <button
+      <div
+        className="relative w-full cursor-pointer overflow-hidden"
         onClick={onSelect}
-        className="flex w-full items-center justify-center"
         style={{
           height: 150,
           backgroundColor: tab.url
@@ -729,29 +729,41 @@ function TabCard({
       >
         {tab.url ? (
           tab.hasError ? (
-            <span
-              className="text-xs"
-              style={{ color: 'var(--color-tertiaryLabel)' }}
-            >
-              无法加载
-            </span>
+            <div className="flex h-full w-full items-center justify-center">
+              <span
+                className="text-xs"
+                style={{ color: 'var(--color-tertiaryLabel)' }}
+              >
+                无法加载
+              </span>
+            </div>
           ) : (
-            <span
-              className="text-xs"
-              style={{ color: 'var(--color-secondaryLabel)' }}
-            >
-              {extractDomain(tab.url)}
-            </span>
+            <iframe
+              src={tab.url}
+              className="pointer-events-none border-0"
+              style={{
+                width: 375,
+                height: 812,
+                transform: 'scale(0.44)',
+                transformOrigin: 'top left',
+              }}
+              sandbox="allow-same-origin"
+              tabIndex={-1}
+              loading="lazy"
+              title={`Preview of ${tab.title}`}
+            />
           )
         ) : (
-          <span
-            className="text-2xl font-bold"
-            style={{ color: 'var(--color-quaternaryLabel)' }}
-          >
-            起始页
-          </span>
+          <div className="flex h-full w-full items-center justify-center">
+            <span
+              className="text-2xl font-bold"
+              style={{ color: 'var(--color-quaternaryLabel)' }}
+            >
+              起始页
+            </span>
+          </div>
         )}
-      </button>
+      </div>
     </motion.div>
   );
 }
