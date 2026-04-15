@@ -87,7 +87,6 @@ export function MonthView() {
     [allEventsWithHolidays, selectedDate],
   );
 
-  const touchStartXRef = useRef(0);
   const slideDirectionRef = useRef(0);
 
   const navigateMonth = useCallback(
@@ -96,19 +95,6 @@ export function MonthView() {
       setCurrentMonth(addMonths(currentMonth, delta).getTime());
     },
     [currentMonth, setCurrentMonth],
-  );
-
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    touchStartXRef.current = e.touches[0]!.clientX;
-  }, []);
-
-  const handleTouchEnd = useCallback(
-    (e: React.TouchEvent) => {
-      const dx = e.changedTouches[0]!.clientX - touchStartXRef.current;
-      if (dx < -SWIPE_THRESHOLD) navigateMonth(1);
-      else if (dx > SWIPE_THRESHOLD) navigateMonth(-1);
-    },
-    [navigateMonth],
   );
 
   const handleDateTap = (date: Date) => {
@@ -164,17 +150,29 @@ export function MonthView() {
       {/* ── Month grid ── */}
       <div
         style={{ height: 6 * 48 + 12, overflow: 'hidden', position: 'relative' }}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
       >
         <AnimatePresence initial={false}>
           <motion.div
             key={format(currentMonth, 'yyyy-MM')}
             style={{ position: 'absolute', inset: 0 }}
             initial={{ x: `${slideDirectionRef.current * 100}%` }}
-            animate={{ x: '0%' }}
+            animate={{ x: 0 }}
             exit={{ x: `${-slideDirectionRef.current * 100}%` }}
-            transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            drag="x"
+            dragDirectionLock
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={1}
+            dragMomentum={false}
+            onDragEnd={(_, info) => {
+              const pastThreshold = Math.abs(info.offset.x) > SWIPE_THRESHOLD;
+              const fastSwipe = Math.abs(info.velocity.x) > 300;
+              if (!pastThreshold && !fastSwipe) return;
+              const dir = pastThreshold
+                ? (info.offset.x < 0 ? 1 : -1)
+                : (info.velocity.x < 0 ? 1 : -1);
+              navigateMonth(dir);
+            }}
           >
             <div
               className="grid"
