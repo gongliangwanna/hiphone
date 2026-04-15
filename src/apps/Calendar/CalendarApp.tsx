@@ -1,5 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
+import { Plus } from 'lucide-react';
+import { format } from 'date-fns';
 import { useCalendarNavStore } from './calendarNavStore';
 import { useCalendarDataStore } from './calendarDataStore';
 import {
@@ -11,7 +13,6 @@ import { AppScreen, NavBar } from '@/system';
 import { MonthView } from './MonthView';
 import { EventDetail } from './EventDetail';
 import { EventForm } from './EventForm';
-import { formatMonthTitle } from './calendarUtils';
 
 const PAGE_COMPONENTS: Record<string, React.ComponentType> = {
   month: MonthView,
@@ -26,9 +27,11 @@ export function CalendarApp() {
   const stack = useCalendarNavStore((s) => s.stack);
   const activeEventId = useCalendarNavStore((s) => s.activeEventId);
   const editingEventId = useCalendarNavStore((s) => s.editingEventId);
+  const formValid = useCalendarNavStore((s) => s.formValid);
   const push = useCalendarNavStore((s) => s.push);
   const pop = useCalendarNavStore((s) => s.pop);
   const reset = useCalendarNavStore((s) => s.reset);
+  const setPendingSave = useCalendarNavStore((s) => s.setPendingSave);
   const goHome = useAppRuntimeStore((s) => s.goHome);
   const currentMonth = useCalendarDataStore((s) => s.currentMonth);
   const goToToday = useCalendarDataStore((s) => s.goToToday);
@@ -59,51 +62,132 @@ export function CalendarApp() {
 
   const PageComponent = PAGE_COMPONENTS[currentPage] ?? MonthView;
 
-  const header =
-    currentPage === 'month' ? (
-      <NavBar
-        title={formatMonthTitle(currentMonth)}
-        rightButtons={[
-          {
-            icon: <TodayIcon />,
-            onClick: goToToday,
-            testId: 'today-btn',
-          },
-          {
-            icon: <PlusIcon />,
-            onClick: () => push('event-form'),
-            testId: 'add-event-btn',
-          },
-        ]}
-      />
-    ) : currentPage === 'event-detail' ? (
-      <NavBar
-        title=""
-        showBack
-        onBack={handleBack}
-        backLabel="日历"
-        rightButtons={
-          activeEventId?.startsWith('holiday-')
-            ? []
-            : [
-                {
-                  icon: <EditIcon />,
-                  onClick: () => {
-                    if (activeEventId) push('event-form', { eventId: activeEventId, editing: true });
-                  },
-                  testId: 'edit-event-btn',
+  // ── MonthView: custom header (no NavBar) ──
+  const monthHeader = (
+    <div
+      className="flex items-center justify-between"
+      style={{ padding: '4px 20px 10px' }}
+    >
+      <div className="flex items-baseline" style={{ gap: 2 }}>
+        <span
+          style={{
+            fontSize: 22,
+            fontWeight: 700,
+            color: 'var(--color-label)',
+            letterSpacing: -0.3,
+          }}
+        >
+          {format(currentMonth, 'M月')}
+        </span>
+        <span
+          style={{
+            fontSize: 22,
+            fontWeight: 700,
+            color: 'var(--color-quaternaryLabel)',
+            marginLeft: 4,
+          }}
+        >
+          {format(currentMonth, 'yyyy')}
+        </span>
+      </div>
+      <div className="flex items-center" style={{ gap: 16 }}>
+        <button
+          onClick={goToToday}
+          style={{
+            fontSize: 14,
+            fontWeight: 600,
+            color: 'var(--color-systemRed)',
+            minHeight: 44,
+          }}
+          data-testid="today-btn"
+        >
+          今天
+        </button>
+        <button
+          onClick={() => push('event-form')}
+          className="flex items-center justify-center"
+          style={{
+            color: 'var(--color-systemRed)',
+            minWidth: 44,
+            minHeight: 44,
+          }}
+          data-testid="add-event-btn"
+        >
+          <Plus size={22} strokeWidth={1.5} />
+        </button>
+      </div>
+    </div>
+  );
+
+  // ── EventDetail: NavBar with text "编辑" button ──
+  const detailHeader = (
+    <NavBar
+      title=""
+      showBack
+      onBack={handleBack}
+      backLabel="日历"
+      rightButtons={
+        activeEventId?.startsWith('holiday-')
+          ? []
+          : [
+              {
+                icon: (
+                  <span
+                    style={{
+                      fontSize: 17,
+                      fontWeight: 400,
+                      color: 'var(--color-systemRed)',
+                    }}
+                  >
+                    编辑
+                  </span>
+                ),
+                onClick: () => {
+                  if (activeEventId) push('event-form', { eventId: activeEventId, editing: true });
                 },
-              ]
-        }
-      />
-    ) : (
-      <NavBar
-        title={editingEventId ? '编辑日程' : '新建日程'}
-        showBack
-        onBack={handleBack}
-        backLabel="取消"
-      />
-    );
+                testId: 'edit-event-btn',
+              },
+            ]
+      }
+    />
+  );
+
+  // ── EventForm: NavBar with text "添加"/"完成" button ──
+  const formHeader = (
+    <NavBar
+      title={editingEventId ? '编辑事件' : '新建事件'}
+      showBack
+      onBack={handleBack}
+      backLabel="取消"
+      rightButtons={[
+        {
+          icon: (
+            <span
+              style={{
+                fontSize: 17,
+                fontWeight: 600,
+                color: 'var(--color-systemRed)',
+                opacity: formValid ? 1 : 0.3,
+              }}
+            >
+              {editingEventId ? '完成' : '添加'}
+            </span>
+          ),
+          onClick: () => {
+            if (formValid) setPendingSave(true);
+          },
+          testId: 'save-event-btn',
+        },
+      ]}
+    />
+  );
+
+  const header =
+    currentPage === 'month'
+      ? monthHeader
+      : currentPage === 'event-detail'
+        ? detailHeader
+        : formHeader;
 
   return (
     <AppScreen backgroundColor="var(--color-systemBackground)">
@@ -132,52 +216,5 @@ export function CalendarApp() {
         </AnimatePresence>
       </div>
     </AppScreen>
-  );
-}
-
-/** SF Symbol: calendar.badge.clock — simplified "今" text icon */
-function TodayIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-      <text
-        x="10"
-        y="14.5"
-        fill="currentColor"
-        fontSize="14"
-        fontWeight="600"
-        textAnchor="middle"
-      >
-        今
-      </text>
-    </svg>
-  );
-}
-
-/** SF Symbol: plus */
-function PlusIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-      <path
-        d="M10 3v14M3 10h14"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-/** SF Symbol: pencil */
-function EditIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-      <path
-        d="M13.5 3.5l3 3L7 16H4v-3l9.5-9.5z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }

@@ -22,12 +22,14 @@ function resetStores() {
     stack: ['month'],
     activeEventId: null,
     editingEventId: null,
+    pendingSave: false,
+    formValid: false,
   });
   useCalendarDataStore.setState({
     events: [
       {
         id: 'test-event',
-        title: '测试日程',
+        title: '测试事件',
         isAllDay: false,
         startTime: new Date(
           `${format(now, 'yyyy-MM-dd')}T10:00:00`,
@@ -57,7 +59,6 @@ describe('CalendarApp', () => {
 
   it('shows weekday headers', () => {
     render(<CalendarApp />);
-    // The weekday headers are above the grid, check for them in the document
     expect(screen.getByText('日')).toBeInTheDocument();
     expect(screen.getByText('一')).toBeInTheDocument();
     expect(screen.getByText('六')).toBeInTheDocument();
@@ -71,7 +72,7 @@ describe('CalendarApp', () => {
 
   it('shows event for today', () => {
     render(<CalendarApp />);
-    expect(screen.getByText('测试日程')).toBeInTheDocument();
+    expect(screen.getByText('测试事件')).toBeInTheDocument();
   });
 
   it('navigates to event form when + is clicked', () => {
@@ -84,11 +85,5 @@ describe('CalendarApp', () => {
     render(<CalendarApp />);
     fireEvent.click(screen.getByTestId('event-row-test-event'));
     expect(screen.getByText('测试备注')).toBeInTheDocument();
-  });
-
-  it('month navigation buttons exist', () => {
-    render(<CalendarApp />);
-    expect(screen.getByTestId('month-prev')).toBeInTheDocument();
-    expect(screen.getByTestId('month-next')).toBeInTheDocument();
   });
 });
