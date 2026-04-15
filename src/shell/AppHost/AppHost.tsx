@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { AppScene } from '@/apps/AppScene';
 import { spring } from '@/platform/design-tokens/motion';
@@ -7,6 +7,11 @@ import { useViewportProfile } from '@/shell/Device/useViewportProfile';
 import { getDeviceCornerRadius } from '@/shell/Device/viewportProfile';
 
 const SWITCHER_SCALE = 0.66; // Match CARD_WIDTH_RATIO in AppSwitcher
+
+/** Reference layout width — must match the 390 in SwitcherAppContent.
+ *  Both AppHost and cards render AppScene at this width so the layout
+ *  (text wrapping, spacing) is identical during the switcher transition. */
+const APP_REF_WIDTH = 390;
 
 /** Must match --radius-icon in tokens.css (fixed 18px for all size tiers). */
 const ICON_BORDER_RADIUS = 18;
@@ -39,6 +44,10 @@ export function AppHost() {
   const dismissReason = useAppRuntimeStore((s) => s.dismissReason);
   const transitionSource = useAppRuntimeStore((s) => s.transitionSource);
   const presentationMode = useAppRuntimeStore((s) => s.presentationMode);
+  const switcherEnterAnimating = useAppRuntimeStore((s) => s.switcherEnterAnimating);
+  const finishSwitcherEnter = useAppRuntimeStore((s) => s.finishSwitcherEnter);
+  const switcherDismissing = useAppRuntimeStore((s) => s.switcherDismissing);
+  const finishSwitcherDismiss = useAppRuntimeStore((s) => s.finishSwitcherDismiss);
   const clearDismissedApp = useAppRuntimeStore((s) => s.clearDismissedApp);
   const viewportProfile = useViewportProfile();
   const deviceCornerRadius = getDeviceCornerRadius(viewportProfile.sizeTier);
@@ -53,18 +62,20 @@ export function AppHost() {
   const origin = prevOriginRef.current;
   const inSwitcher = presentationMode === 'switcher';
 
+  // Blur any focused element (e.g. search input) when entering the switcher
+  // so the keyboard dismisses and inputs don't flash.
+  useEffect(() => {
+    if (inSwitcher) {
+      (document.activeElement as HTMLElement | null)?.blur?.();
+    }
+  }, [inSwitcher]);
+
   // --- Enter animation (icon / card → full screen) ---
   const morphFromCard =
     transitionSource === 'switcher' && switcherCardOrigin && switcherCardViewport;
 
   const initialAnimation = morphFromCard
     ? {
-        position: 'absolute' as const,
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        borderRadius: deviceCornerRadius,
         opacity: 1,
         scale: switcherCardOrigin!.width / switcherCardViewport!.width,
         x:
@@ -78,31 +89,29 @@ export function AppHost() {
       }
     : transitionSource === 'icon' && origin
     ? {
-        position: 'absolute' as const,
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        borderRadius: ICON_BORDER_RADIUS,
         opacity: 0.7,
         scale: origin.width / vpWidth,
         x: origin.x - vpWidth / 2 + origin.width / 2,
         y: origin.y - vpHeight / 2 + origin.height / 2,
       }
     : {
-        position: 'absolute' as const,
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        borderRadius: transitionSource === 'switcher' ? deviceCornerRadius : 0,
         opacity: 0,
         scale: transitionSource === 'switcher' ? SWITCHER_SCALE : 0.96,
         x: 0,
         y: transitionSource === 'switcher' ? 5.5 : 0,
       };
 
-  const enterTransition = { type: 'spring' as const, ...spring.appLaunch };
+  // Transition depends on direction: softer spring when shrinking into the
+  // switcher, snappy launch spring when expanding to fullscreen.
+  const enterTransition = switcherDismissing
+    ? { type: 'spring' as const, ...spring.criticalDamped }
+    : inSwitcher
+      ? { type: 'spring' as const, ...spring.criticalDamped }
+      : { type: 'spring' as const, ...spring.appLaunch };
+
+  // Card body center sits above the card+label center by half the label
+  // height (mt-2.5 10px + 20px icon/text row = 30px → offset 15px).
+  const switcherVerticalOffset = -15;
 
   // --- Home exit: shape-morph (rectangle → square icon) ---
   const isHomeExitToIcon = dismissReason === 'home' && !!origin;
@@ -116,8 +125,6 @@ export function AppHost() {
   const homeExitTransition = { type: 'spring' as const, ...spring.appClose };
   const fallbackExitTransition = { type: 'spring' as const, ...spring.criticalDamped };
 
-
-
   return (
     <AnimatePresence>
       {/* ---- Foreground app ---- */}
@@ -127,38 +134,55 @@ export function AppHost() {
           className="absolute inset-0 overflow-hidden"
           style={{
             zIndex: 18,
-            ...(inSwitcher
+            // Only round corners when shrinking into the switcher. At fullscreen
+            // the device shell clips the content, so no borderRadius needed.
+            borderRadius: inSwitcher ? deviceCornerRadius : 0,
+            ...(inSwitcher && !switcherEnterAnimating && !switcherDismissing
               ? { visibility: 'hidden' as const, pointerEvents: 'none' as const }
-              : {}),
+              : inSwitcher
+                ? { pointerEvents: 'none' as const }
+                : {}),
           }}
           data-testid="app-host"
           data-perf-layer="app-host"
           initial={initialAnimation}
-          animate={{
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            borderRadius: 0,
-            opacity: 1,
-            scale: 1,
-            x: 0,
-            y: 0,
-          }}
+          animate={
+            switcherDismissing
+              ? {
+                  opacity: 0,
+                  scale: SWITCHER_SCALE,
+                  x: 0,
+                  y: -(vpHeight),
+                }
+              : inSwitcher
+                ? {
+                    opacity: 1,
+                    scale: SWITCHER_SCALE,
+                    x: 0,
+                    y: switcherVerticalOffset,
+                  }
+                : {
+                    opacity: 1,
+                    scale: 1,
+                    x: 0,
+                    y: 0,
+                  }
+          }
           exit={{ opacity: 0, transition: { duration: 0 } }}
           transition={enterTransition}
+          onAnimationComplete={() => {
+            if (switcherDismissing) {
+              finishSwitcherDismiss();
+            } else if (inSwitcher && switcherEnterAnimating) {
+              finishSwitcherEnter();
+            }
+          }}
         >
-          <div className="h-full" data-testid="app-gesture-scene">
-            <AppScene appId={activeAppId} />
-          </div>
+          <FixedAppContent appId={activeAppId} vpWidth={vpWidth} vpHeight={vpHeight} />
         </motion.div>
       )}
 
       {/* ---- Dismissed: home exit → shape-morph to icon ---- */}
-      {/* Only the app screenshot shrinks + fades. The real Springboard icon
-          is always visible underneath. When the screenshot becomes fully
-          transparent and the morph reaches icon size, the real icon shows
-          through naturally — no swap, no flash, one icon. */}
       {dismissedAppId && !activeAppId && isHomeExitToIcon && (
         <motion.div
           key={`dismissed-home-${dismissedAppId}`}
@@ -183,12 +207,12 @@ export function AppHost() {
           }}
         >
           <motion.div
-            className="h-full"
+            className="absolute inset-0 overflow-hidden"
             initial={{ opacity: 1 }}
             animate={{ opacity: 0 }}
             transition={{ duration: 0.3, ease: 'easeIn' }}
           >
-            <AppScene appId={dismissedAppId} />
+            <FixedAppContent appId={dismissedAppId} vpWidth={vpWidth} vpHeight={vpHeight} />
           </motion.div>
         </motion.div>
       )}
@@ -219,11 +243,42 @@ export function AppHost() {
             clearDismissedApp();
           }}
         >
-          <div className="h-full">
-            <AppScene appId={dismissedAppId} />
-          </div>
+          <FixedAppContent appId={dismissedAppId} vpWidth={vpWidth} vpHeight={vpHeight} />
         </motion.div>
       )}
     </AnimatePresence>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Fixed-size app wrapper — renders AppScene at APP_REF_WIDTH (390px) and
+// scales up to fill the viewport. This matches SwitcherAppContent's rendering
+// so the switcher transition is a pure "screenshot zoom" with zero layout shift.
+// ---------------------------------------------------------------------------
+
+function FixedAppContent({
+  appId,
+  vpWidth,
+  vpHeight,
+}: {
+  appId: string;
+  vpWidth: number;
+  vpHeight: number;
+}) {
+  const refScale = vpWidth / APP_REF_WIDTH;
+  const refHeight = Math.ceil(vpHeight / refScale);
+  return (
+    <div className="absolute inset-0 overflow-hidden" data-testid="app-gesture-scene">
+      <div
+        className="absolute left-0 top-0 origin-top-left"
+        style={{
+          width: APP_REF_WIDTH,
+          height: refHeight,
+          transform: `scale(${refScale})`,
+        }}
+      >
+        <AppScene appId={appId} />
+      </div>
+    </div>
   );
 }
