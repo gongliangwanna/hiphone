@@ -1,6 +1,6 @@
 import { useMemo, useRef, useCallback } from 'react';
 import { format, addMonths, getDay } from 'date-fns';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, useMotionValue, animate } from 'motion/react';
 import { useCalendarDataStore } from './calendarDataStore';
 import { useCalendarNavStore } from './calendarNavStore';
 import {
@@ -17,6 +17,7 @@ import {
 } from './calendarUtils';
 
 const SWIPE_THRESHOLD = 50;
+const GRID_HEIGHT = 6 * 48 + 12;
 
 /** Build a map of dateKey → color[] for multi-color dots */
 function buildColorDotsMap(
@@ -61,6 +62,11 @@ export function MonthView() {
 
   const grid = useMemo(() => generateMonthGrid(currentMonth), [currentMonth]);
 
+  const prevMonthTs = useMemo(() => addMonths(currentMonth, -1).getTime(), [currentMonth]);
+  const nextMonthTs = useMemo(() => addMonths(currentMonth, 1).getTime(), [currentMonth]);
+  const prevGrid = useMemo(() => generateMonthGrid(prevMonthTs), [prevMonthTs]);
+  const nextGrid = useMemo(() => generateMonthGrid(nextMonthTs), [nextMonthTs]);
+
   const holidays = useMemo(() => {
     const year = new Date(currentMonth).getFullYear();
     const map = new Map<string, string>();
@@ -87,15 +93,59 @@ export function MonthView() {
     [allEventsWithHolidays, selectedDate],
   );
 
-  const slideDirectionRef = useRef(0);
+  // ── Swipe gesture state (refs, not React state — 60fps) ──
+  const dragY = useMotionValue(0);
+  const isDraggingRef = useRef(false);
+  const isAnimatingRef = useRef(false);
+  const touchStartYRef = useRef(0);
 
   const navigateMonth = useCallback(
     (delta: number) => {
-      slideDirectionRef.current = delta;
       setCurrentMonth(addMonths(currentMonth, delta).getTime());
     },
     [currentMonth, setCurrentMonth],
   );
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (isAnimatingRef.current) return;
+    touchStartYRef.current = e.touches[0]!.clientY;
+    isDraggingRef.current = true;
+    dragY.stop();
+  }, [dragY]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!isDraggingRef.current) return;
+    const dy = e.touches[0]!.clientY - touchStartYRef.current;
+    dragY.set(dy);
+  }, [dragY]);
+
+  const handleTouchEnd = useCallback(() => {
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
+    const dy = dragY.get();
+    const vel = dragY.getVelocity();
+
+    const pastThreshold = Math.abs(dy) > SWIPE_THRESHOLD;
+    const fastSwipe = Math.abs(vel) > 300;
+
+    if (pastThreshold || fastSwipe) {
+      const dir = pastThreshold
+        ? (dy < 0 ? 1 : -1)
+        : (vel < 0 ? 1 : -1);
+      isAnimatingRef.current = true;
+      animate(dragY, -dir * GRID_HEIGHT, {
+        duration: 0.25,
+        ease: [0.2, 0, 0, 1],
+        onComplete: () => {
+          dragY.jump(0);
+          navigateMonth(dir);
+          isAnimatingRef.current = false;
+        },
+      });
+    } else {
+      animate(dragY, 0, { duration: 0.2, ease: [0.2, 0, 0, 1] });
+    }
+  }, [dragY, navigateMonth]);
 
   const handleDateTap = (date: Date) => {
     setSelectedDate(date.getTime());
@@ -103,6 +153,118 @@ export function MonthView() {
       setCurrentMonth(date.getTime());
     }
   };
+
+  // ── Grid renderer (shared by prev / current / next) ──
+  const renderMonthGrid = useCallback(
+    (dates: Date[], refMonth: number, testId?: string) => (
+      <div
+        className="grid"
+        style={{
+          gridTemplateColumns: 'repeat(7, 1fr)',
+          padding: '4px 16px 8px',
+          height: GRID_HEIGHT,
+        }}
+        data-testid={testId}
+      >
+        {dates.map((date) => {
+          const isInMonth = isCurrentMonth(date, refMonth);
+          const today = isToday(date);
+          const selected = isSameDay(date, selectedDate);
+          const key = dateKey(date);
+          const dots = colorDots.get(key);
+          const isSunday = date.getDay() === 0;
+
+          let numberColor: string;
+          if (today) {
+            numberColor = '#fff';
+          } else if (!isInMonth && isSunday) {
+            numberColor = 'rgba(255,59,48,0.12)';
+          } else if (!isInMonth) {
+            numberColor = 'rgba(0,0,0,0.10)';
+          } else if (isSunday) {
+            numberColor = 'var(--color-systemRed)';
+          } else {
+            numberColor = 'var(--color-label)';
+          }
+
+          return (
+            <button
+              key={date.toISOString()}
+              type="button"
+              onClick={() => handleDateTap(date)}
+              className="flex flex-col items-center justify-center"
+              style={{ height: 48, position: 'relative' }}
+              data-testid={`date-${format(date, 'yyyy-MM-dd')}`}
+            >
+              <div
+                className="flex items-center justify-center"
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: '50%',
+                  backgroundColor: today
+                    ? 'var(--color-systemRed)'
+                    : selected && !today
+                      ? 'rgba(0,0,0,0.04)'
+                      : 'transparent',
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 17,
+                    fontWeight: today ? 600 : selected ? 500 : 400,
+                    color: numberColor,
+                    letterSpacing: -0.2,
+                  }}
+                >
+                  {format(date, 'd')}
+                </span>
+              </div>
+
+              {/* Holiday "休" label */}
+              {holidays.has(key) && (
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: 2,
+                    right: 4,
+                    fontSize: 7,
+                    fontWeight: 700,
+                    color: 'rgba(52,199,89,0.7)',
+                    lineHeight: 1,
+                  }}
+                >
+                  休
+                </span>
+              )}
+
+              {/* Multi-color event dots */}
+              {dots && !today && (
+                <div
+                  className="flex"
+                  style={{ gap: 3, height: 4, marginTop: 2 }}
+                >
+                  {dots.map((c, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        width: 4,
+                        height: 4,
+                        borderRadius: '50%',
+                        backgroundColor: c,
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedDate, colorDots, holidays],
+  );
 
   const selectedWeekday = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'][
     getDay(new Date(selectedDate))
@@ -147,139 +309,26 @@ export function MonthView() {
         }}
       />
 
-      {/* ── Month grid ── */}
+      {/* ── Month grid — 3 months stacked (prev / current / next) ── */}
       <div
-        style={{ height: 6 * 48 + 12, overflow: 'hidden', position: 'relative' }}
+        style={{ height: GRID_HEIGHT, overflow: 'hidden', position: 'relative' }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
-        <AnimatePresence initial={false}>
-          <motion.div
-            key={format(currentMonth, 'yyyy-MM')}
-            style={{ position: 'absolute', inset: 0 }}
-            initial={{ y: `${slideDirectionRef.current * 100}%` }}
-            animate={{ y: 0 }}
-            exit={{ y: `${-slideDirectionRef.current * 100}%` }}
-            transition={{ duration: 0.3, ease: [0.2, 0, 0, 1] }}
-            drag="y"
-            dragDirectionLock
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={0.4}
-            dragMomentum={false}
-            dragTransition={{ bounceDamping: 60, bounceStiffness: 600 }}
-            onDragEnd={(_, info) => {
-              const pastThreshold = Math.abs(info.offset.y) > SWIPE_THRESHOLD;
-              const fastSwipe = Math.abs(info.velocity.y) > 300;
-              if (!pastThreshold && !fastSwipe) return;
-              const dir = pastThreshold
-                ? (info.offset.y < 0 ? 1 : -1)
-                : (info.velocity.y < 0 ? 1 : -1);
-              navigateMonth(dir);
-            }}
-          >
-            <div
-              className="grid"
-              style={{
-                gridTemplateColumns: 'repeat(7, 1fr)',
-                padding: '4px 16px 8px',
-              }}
-              data-testid="month-grid"
-            >
-              {grid.map((date) => {
-            const isInMonth = isCurrentMonth(date, currentMonth);
-            const today = isToday(date);
-            const selected = isSameDay(date, selectedDate);
-            const key = dateKey(date);
-            const dots = colorDots.get(key);
-            const isSunday = date.getDay() === 0;
-
-            let numberColor: string;
-            if (today) {
-              numberColor = '#fff';
-            } else if (!isInMonth && isSunday) {
-              numberColor = 'rgba(255,59,48,0.12)';
-            } else if (!isInMonth) {
-              numberColor = 'rgba(0,0,0,0.10)';
-            } else if (isSunday) {
-              numberColor = 'var(--color-systemRed)';
-            } else {
-              numberColor = 'var(--color-label)';
-            }
-
-            return (
-              <button
-                key={date.toISOString()}
-                type="button"
-                onClick={() => handleDateTap(date)}
-                className="flex flex-col items-center justify-center"
-                style={{ height: 48, position: 'relative' }}
-                data-testid={`date-${format(date, 'yyyy-MM-dd')}`}
-              >
-                <div
-                  className="flex items-center justify-center"
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: '50%',
-                    backgroundColor: today
-                      ? 'var(--color-systemRed)'
-                      : selected && !today
-                        ? 'rgba(0,0,0,0.04)'
-                        : 'transparent',
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: 17,
-                      fontWeight: today ? 600 : selected ? 500 : 400,
-                      color: numberColor,
-                      letterSpacing: -0.2,
-                    }}
-                  >
-                    {format(date, 'd')}
-                  </span>
-                </div>
-
-                {/* Holiday "休" label */}
-                {holidays.has(key) && (
-                  <span
-                    style={{
-                      position: 'absolute',
-                      top: 2,
-                      right: 4,
-                      fontSize: 7,
-                      fontWeight: 700,
-                      color: 'rgba(52,199,89,0.7)',
-                      lineHeight: 1,
-                    }}
-                  >
-                    休
-                  </span>
-                )}
-
-                {/* Multi-color event dots */}
-                {dots && !today && (
-                  <div
-                    className="flex"
-                    style={{ gap: 3, height: 4, marginTop: 2 }}
-                  >
-                    {dots.map((c, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          width: 4,
-                          height: 4,
-                          borderRadius: '50%',
-                          backgroundColor: c,
-                        }}
-                      />
-                    ))}
-                  </div>
-                )}
-              </button>
-            );
-          })}
-            </div>
-          </motion.div>
-        </AnimatePresence>
+        <motion.div
+          style={{
+            y: dragY,
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: -GRID_HEIGHT,
+          }}
+        >
+          {renderMonthGrid(prevGrid, prevMonthTs)}
+          {renderMonthGrid(grid, currentMonth, 'month-grid')}
+          {renderMonthGrid(nextGrid, nextMonthTs)}
+        </motion.div>
       </div>
 
       {/* ── Lower half: event list ── */}
