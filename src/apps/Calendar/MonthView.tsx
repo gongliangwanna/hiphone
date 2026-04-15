@@ -333,7 +333,7 @@ export function MonthView() {
                 type="button"
                 className="flex w-full items-center"
                 style={{
-                  padding: '0 20px',
+                  paddingLeft: 20,
                   minHeight: 44,
                   cursor: 'pointer',
                 }}
@@ -351,11 +351,11 @@ export function MonthView() {
                     marginRight: 10,
                   }}
                 />
-                {/* Title + right time, separator indented past icon */}
+                {/* Title + time, separator extends to right edge */}
                 <div
                   className="flex min-w-0 flex-1 items-center"
                   style={{
-                    padding: '12px 0',
+                    padding: '12px 20px 12px 0',
                     borderBottom:
                       i < dayEvents.length - 1
                         ? '0.5px solid var(--color-separator)'
