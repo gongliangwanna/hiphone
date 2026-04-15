@@ -68,6 +68,11 @@ export interface AppRuntimeState {
   /** Why the current dismissed app is being dismissed. Set by callers of
    *  `removeApp` (finishCardDismiss → 'card', exitAppToHome → 'home'). */
   dismissReason: DismissReason;
+  /** True while the foreground → switcher shrink animation is in progress. */
+  switcherEnterAnimating: boolean;
+  /** True while AppHost is being redirected to fly away from the switcher.
+   *  Set when user swipes up during entrance animation. */
+  switcherDismissing: boolean;
   statusBarStyle: StatusBarStyle;
   setStatusBarStyle: (style: StatusBarStyle) => void;
   openApp: (id: string, origin: AppOrigin) => void;
@@ -84,6 +89,12 @@ export interface AppRuntimeState {
   exitAppToHome: () => void;
   /** Enter switcher mode directly (e.g. from AssistiveTouch menu). */
   openSwitcher: () => void;
+  /** Signal that the foreground → switcher shrink animation has completed. */
+  finishSwitcherEnter: () => void;
+  /** Redirect AppHost to fly away during switcher entrance animation. */
+  dismissActiveFromSwitcher: () => void;
+  /** Called when AppHost fly-away animation completes — cleans up state and removes app. */
+  finishSwitcherDismiss: () => void;
   removeApp: (id: string) => void;
   focusAppInSwitcher: (id: string | null) => void;
   startCardDismiss: (appId: string, startY: number, cardHeight: number) => void;
@@ -131,6 +142,8 @@ export const useAppRuntimeStore = create<AppRuntimeState>()((set, get) => ({
   presentationMode: 'foreground',
   dismissedAppId: null,
   dismissReason: null,
+  switcherEnterAnimating: false,
+  switcherDismissing: false,
   statusBarStyle: 'dark',
   setStatusBarStyle: (style) => set({ statusBarStyle: style }),
   cardDismiss: {
@@ -157,6 +170,7 @@ export const useAppRuntimeStore = create<AppRuntimeState>()((set, get) => ({
         presentationMode: 'foreground',
         dismissedAppId: null,
         dismissReason: null,
+        switcherDismissing: false,
         ...resetCardDismissState(),
       };
     }),
@@ -172,8 +186,10 @@ export const useAppRuntimeStore = create<AppRuntimeState>()((set, get) => ({
         switcherAppId: id,
         transitionSource: source,
         presentationMode: 'foreground',
+        switcherEnterAnimating: false,
         dismissedAppId: null,
         dismissReason: null,
+        switcherDismissing: false,
         ...resetCardDismissState(),
       };
     }),
@@ -191,8 +207,10 @@ export const useAppRuntimeStore = create<AppRuntimeState>()((set, get) => ({
       switcherCardViewport: null,
       switcherAppId: state.activeAppId ?? state.switcherAppId ?? state.recentApps[0]?.id ?? null,
       presentationMode: 'foreground',
+      switcherEnterAnimating: false,
       dismissedAppId: null,
       dismissReason: null,
+      switcherDismissing: false,
       ...resetCardDismissState(),
     })),
 
@@ -206,9 +224,11 @@ export const useAppRuntimeStore = create<AppRuntimeState>()((set, get) => ({
       switcherCardOrigin: null,
       switcherCardViewport: null,
       presentationMode: 'foreground',
+      switcherEnterAnimating: false,
       switcherAppId: exitingId,
       dismissedAppId: exitingId,
       dismissReason: 'home',
+      switcherDismissing: false,
       ...resetCardDismissState(),
     });
   },
@@ -219,8 +239,25 @@ export const useAppRuntimeStore = create<AppRuntimeState>()((set, get) => ({
       return {
         presentationMode: 'switcher',
         switcherAppId: state.activeAppId,
+        switcherEnterAnimating: true,
       };
     }),
+
+  finishSwitcherEnter: () => set({ switcherEnterAnimating: false }),
+
+  dismissActiveFromSwitcher: () => {
+    const state = get();
+    if (!state.switcherEnterAnimating || !state.activeAppId) return;
+    set({ switcherDismissing: true });
+  },
+
+  finishSwitcherDismiss: () => {
+    const state = get();
+    const appId = state.activeAppId;
+    if (!appId) return;
+    set({ switcherDismissing: false, switcherEnterAnimating: false });
+    get().removeApp(appId);
+  },
 
   removeApp: (id) => {
     // Track that this app was killed (swiped away in switcher), so it

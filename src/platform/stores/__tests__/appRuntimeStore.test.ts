@@ -14,6 +14,7 @@ describe('appRuntimeStore', () => {
       presentationMode: 'foreground',
       dismissedAppId: null,
       dismissReason: null,
+      switcherDismissing: false,
       cardDismiss: {
         appId: null,
         startY: 0,
@@ -219,6 +220,79 @@ describe('appRuntimeStore', () => {
     const result = useAppRuntimeStore.getState().finishCardDismiss();
 
     expect(result.committed).toBe(false);
+  });
+
+  // ---------- dismissActiveFromSwitcher ----------
+
+  it('dismissActiveFromSwitcher sets switcherDismissing when entrance is animating', () => {
+    useAppRuntimeStore.getState().openApp('settings', { x: 0, y: 0, width: 60, height: 60 });
+    useAppRuntimeStore.getState().openSwitcher();
+    expect(useAppRuntimeStore.getState().switcherEnterAnimating).toBe(true);
+
+    useAppRuntimeStore.getState().dismissActiveFromSwitcher();
+
+    expect(useAppRuntimeStore.getState().switcherDismissing).toBe(true);
+  });
+
+  it('dismissActiveFromSwitcher is a no-op when entrance animation is finished', () => {
+    useAppRuntimeStore.getState().openApp('settings', { x: 0, y: 0, width: 60, height: 60 });
+    useAppRuntimeStore.getState().openSwitcher();
+    useAppRuntimeStore.getState().finishSwitcherEnter();
+
+    useAppRuntimeStore.getState().dismissActiveFromSwitcher();
+
+    expect(useAppRuntimeStore.getState().switcherDismissing).toBe(false);
+  });
+
+  it('dismissActiveFromSwitcher is a no-op when no active app', () => {
+    useAppRuntimeStore.setState({
+      presentationMode: 'switcher',
+      switcherEnterAnimating: true,
+      activeAppId: null,
+    });
+
+    useAppRuntimeStore.getState().dismissActiveFromSwitcher();
+
+    expect(useAppRuntimeStore.getState().switcherDismissing).toBe(false);
+  });
+
+  // ---------- finishSwitcherDismiss ----------
+
+  it('finishSwitcherDismiss removes the active app and resets flags', () => {
+    useAppRuntimeStore.getState().openApp('settings', { x: 0, y: 0, width: 60, height: 60 });
+    useAppRuntimeStore.getState().openApp('weather', { x: 60, y: 0, width: 60, height: 60 });
+    useAppRuntimeStore.getState().openSwitcher();
+    useAppRuntimeStore.getState().dismissActiveFromSwitcher();
+
+    useAppRuntimeStore.getState().finishSwitcherDismiss();
+
+    const s = useAppRuntimeStore.getState();
+    expect(s.switcherDismissing).toBe(false);
+    expect(s.switcherEnterAnimating).toBe(false);
+    expect(s.recentApps.map((t) => t.id)).toEqual(['settings']);
+  });
+
+  it('finishSwitcherDismiss exits switcher when last app is removed', () => {
+    useAppRuntimeStore.getState().openApp('settings', { x: 0, y: 0, width: 60, height: 60 });
+    useAppRuntimeStore.getState().openSwitcher();
+    useAppRuntimeStore.getState().dismissActiveFromSwitcher();
+
+    useAppRuntimeStore.getState().finishSwitcherDismiss();
+
+    const s = useAppRuntimeStore.getState();
+    expect(s.recentApps).toEqual([]);
+    expect(s.presentationMode).toBe('foreground');
+    expect(s.activeAppId).toBeNull();
+  });
+
+  it('goHome resets switcherDismissing', () => {
+    useAppRuntimeStore.getState().openApp('settings', { x: 0, y: 0, width: 60, height: 60 });
+    useAppRuntimeStore.getState().openSwitcher();
+    useAppRuntimeStore.getState().dismissActiveFromSwitcher();
+
+    useAppRuntimeStore.getState().goHome();
+
+    expect(useAppRuntimeStore.getState().switcherDismissing).toBe(false);
   });
 
   // ---------- deriveGestureIntent ----------
