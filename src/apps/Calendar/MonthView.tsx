@@ -1,5 +1,6 @@
 import { useMemo, useRef, useCallback } from 'react';
-import { format, addMonths } from 'date-fns';
+import { format, addMonths, getDay } from 'date-fns';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useCalendarDataStore } from './calendarDataStore';
 import { useCalendarNavStore } from './calendarNavStore';
 import {
@@ -17,8 +18,40 @@ import {
   WEEKDAY_HEADERS,
 } from './calendarUtils';
 
-/** Swipe threshold to trigger month change */
 const SWIPE_THRESHOLD = 50;
+
+/** Build a map of dateKey → color[] for multi-color dots */
+function buildColorDotsMap(
+  events: { startTime: number; endTime: number; color: string; isAllDay: boolean }[],
+  holidays: Map<string, string>,
+): Map<string, string[]> {
+  const map = new Map<string, Set<string>>();
+
+  for (const event of events) {
+    const start = new Date(event.startTime);
+    const end = new Date(event.endTime);
+    let current = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+    while (current <= endDay) {
+      const key = format(current, 'yyyy-MM-dd');
+      if (!map.has(key)) map.set(key, new Set());
+      map.get(key)!.add(event.color);
+      current = new Date(current.getTime() + 86400000);
+    }
+  }
+
+  // Holiday events get systemRed
+  for (const key of holidays.keys()) {
+    if (!map.has(key)) map.set(key, new Set());
+    map.get(key)!.add('var(--color-systemRed)');
+  }
+
+  const result = new Map<string, string[]>();
+  for (const [key, colors] of map) {
+    result.set(key, Array.from(colors).slice(0, 3));
+  }
+  return result;
+}
 
 export function MonthView() {
   const events = useCalendarDataStore((s) => s.events);
@@ -30,7 +63,6 @@ export function MonthView() {
 
   const grid = useMemo(() => generateMonthGrid(currentMonth), [currentMonth]);
 
-  // Holidays for displayed months (cover year boundaries)
   const holidays = useMemo(() => {
     const year = new Date(currentMonth).getFullYear();
     const map = new Map<string, string>();
@@ -42,15 +74,11 @@ export function MonthView() {
     return map;
   }, [currentMonth]);
 
-  const eventDates = useMemo(() => {
-    const dates = getDatesWithEvents(events);
-    for (const key of holidays.keys()) {
-      dates.add(key);
-    }
-    return dates;
-  }, [events, holidays]);
+  const colorDots = useMemo(
+    () => buildColorDotsMap(events, holidays),
+    [events, holidays],
+  );
 
-  // Merge user events with holiday events for selected date
   const allEventsWithHolidays = useMemo(() => {
     const year = new Date(selectedDate).getFullYear();
     return [...events, ...getHolidayEventsForYear(year)];
@@ -90,14 +118,42 @@ export function MonthView() {
     }
   };
 
+  const selectedWeekday = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'][
+    getDay(new Date(selectedDate))
+  ];
+  const isTodaySelected = isToday(new Date(selectedDate));
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* Weekday header */}
+      {/* ── Month nav arrows ── */}
+      <div
+        className="flex items-center"
+        style={{ padding: '6px 20px 0', gap: 20 }}
+      >
+        <button
+          onClick={() => navigateMonth(-1)}
+          className="flex items-center justify-center"
+          style={{ width: 28, height: 28, color: 'var(--color-tertiaryLabel)' }}
+          data-testid="month-prev"
+        >
+          <ChevronLeft size={18} strokeWidth={1.8} />
+        </button>
+        <button
+          onClick={() => navigateMonth(1)}
+          className="flex items-center justify-center"
+          style={{ width: 28, height: 28, color: 'var(--color-tertiaryLabel)' }}
+          data-testid="month-next"
+        >
+          <ChevronRight size={18} strokeWidth={1.8} />
+        </button>
+      </div>
+
+      {/* ── Weekday header ── */}
       <div
         className="grid"
         style={{
           gridTemplateColumns: 'repeat(7, 1fr)',
-          padding: '6px 12px 4px',
+          padding: '12px 16px 6px',
         }}
       >
         {WEEKDAY_HEADERS.map((d, i) => (
@@ -107,8 +163,11 @@ export function MonthView() {
             style={{
               fontSize: 11,
               fontWeight: 600,
-              color: i === 0 ? 'var(--color-systemRed)' : 'var(--color-secondaryLabel)',
+              color: i === 0 ? 'rgba(255,59,48,0.35)' : 'var(--color-secondaryLabel)',
+              opacity: i === 0 ? 1 : 0.5,
               lineHeight: '18px',
+              textTransform: 'uppercase',
+              letterSpacing: 0.2,
             }}
           >
             {d}
@@ -116,9 +175,18 @@ export function MonthView() {
         ))}
       </div>
 
-      {/* Month grid with touch swipe */}
+      {/* ── Separator ── */}
       <div
-        style={{ height: 6 * 44, overflow: 'hidden' }}
+        style={{
+          height: 0.5,
+          background: 'var(--color-separator)',
+          margin: '0 20px',
+        }}
+      />
+
+      {/* ── Month grid ── */}
+      <div
+        style={{ height: 6 * 48, overflow: 'hidden' }}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
@@ -126,184 +194,193 @@ export function MonthView() {
           className="grid"
           style={{
             gridTemplateColumns: 'repeat(7, 1fr)',
-            padding: '0 12px',
+            padding: '4px 16px 8px',
           }}
           data-testid="month-grid"
         >
-            {grid.map((date) => {
-              const isInMonth = isCurrentMonth(date, currentMonth);
-              const today = isToday(date);
-              const selected = isSameDay(date, selectedDate);
-              const hasEvents = eventDates.has(dateKey(date));
+          {grid.map((date) => {
+            const isInMonth = isCurrentMonth(date, currentMonth);
+            const today = isToday(date);
+            const selected = isSameDay(date, selectedDate);
+            const key = dateKey(date);
+            const dots = colorDots.get(key);
+            const isSunday = date.getDay() === 0;
 
-              return (
-                <button
-                  key={date.toISOString()}
-                  type="button"
-                  onClick={() => handleDateTap(date)}
-                  className="flex flex-col items-center justify-center"
-                  style={{ height: 44, position: 'relative' }}
-                  data-testid={`date-${format(date, 'yyyy-MM-dd')}`}
+            let numberColor: string;
+            if (today) {
+              numberColor = '#fff';
+            } else if (!isInMonth && isSunday) {
+              numberColor = 'rgba(255,59,48,0.12)';
+            } else if (!isInMonth) {
+              numberColor = 'rgba(0,0,0,0.10)';
+            } else if (isSunday) {
+              numberColor = 'var(--color-systemRed)';
+            } else {
+              numberColor = 'var(--color-label)';
+            }
+
+            return (
+              <button
+                key={date.toISOString()}
+                type="button"
+                onClick={() => handleDateTap(date)}
+                className="flex flex-col items-center justify-center"
+                style={{ height: 48, position: 'relative' }}
+                data-testid={`date-${format(date, 'yyyy-MM-dd')}`}
+              >
+                <div
+                  className="flex items-center justify-center"
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: '50%',
+                    backgroundColor: today
+                      ? 'var(--color-systemRed)'
+                      : selected && !today
+                        ? 'rgba(0,0,0,0.04)'
+                        : 'transparent',
+                  }}
                 >
-                  <div
-                    className="flex items-center justify-center"
+                  <span
                     style={{
-                      width: 34,
-                      height: 34,
-                      borderRadius: '50%',
-                      backgroundColor: today
-                        ? 'var(--color-systemRed)'
-                        : selected
-                          ? 'var(--color-tertiarySystemFill)'
-                          : 'transparent',
-                      transition: 'background-color 0.15s',
+                      fontSize: 17,
+                      fontWeight: today ? 600 : selected ? 500 : 400,
+                      color: numberColor,
+                      letterSpacing: -0.2,
                     }}
                   >
-                    <span
-                      style={{
-                        fontSize: 16,
-                        fontWeight: today || selected ? 600 : 400,
-                        color: today
-                          ? '#fff'
-                          : isInMonth
-                            ? 'var(--color-label)'
-                            : 'var(--color-quaternaryLabel)',
-                      }}
-                    >
-                      {format(date, 'd')}
-                    </span>
+                    {format(date, 'd')}
+                  </span>
+                </div>
+
+                {/* Holiday "休" label */}
+                {holidays.has(key) && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: 2,
+                      right: 4,
+                      fontSize: 7,
+                      fontWeight: 700,
+                      color: 'rgba(52,199,89,0.7)',
+                      lineHeight: 1,
+                    }}
+                  >
+                    休
+                  </span>
+                )}
+
+                {/* Multi-color event dots */}
+                {dots && !today && (
+                  <div
+                    className="flex"
+                    style={{ gap: 3, height: 4, marginTop: 2 }}
+                  >
+                    {dots.map((c, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          width: 4,
+                          height: 4,
+                          borderRadius: '50%',
+                          backgroundColor: c,
+                        }}
+                      />
+                    ))}
                   </div>
-                  {/* Holiday "休" label */}
-                  {holidays.has(dateKey(date)) && (
-                    <span
-                      style={{
-                        position: 'absolute',
-                        top: 1,
-                        right: 0,
-                        fontSize: 8,
-                        fontWeight: 700,
-                        color: 'var(--color-systemGreen)',
-                        lineHeight: 1,
-                      }}
-                    >
-                      休
-                    </span>
-                  )}
-                  {/* Event dot — hidden for today */}
-                  {hasEvents && !today && (
-                    <div
-                      style={{
-                        width: 5,
-                        height: 5,
-                        borderRadius: '50%',
-                        backgroundColor: 'var(--color-systemRed)',
-                        position: 'absolute',
-                        bottom: 3,
-                      }}
-                    />
-                  )}
-                </button>
-              );
-            })}
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Month nav arrows */}
+      {/* ── Lower half: event list ── */}
       <div
-        className="flex items-center justify-between"
-        style={{
-          padding: '6px 12px 2px',
-          borderTop: '0.5px solid var(--color-separator)',
-        }}
+        className="flex flex-1 flex-col overflow-hidden"
+        style={{ backgroundColor: 'var(--color-systemGroupedBackground)' }}
       >
-        <button
-          onClick={() => navigateMonth(-1)}
-          className="flex items-center justify-center"
-          style={{
-            width: 44,
-            height: 32,
-            color: 'var(--color-systemRed)',
-          }}
-          data-testid="month-prev"
-        >
-          <ChevronLeftIcon />
-          <span style={{ fontSize: 13, marginLeft: 2 }}>
-            {format(addMonths(currentMonth, -1), 'M月')}
-          </span>
-        </button>
-
-        <span
-          style={{
-            fontSize: 'var(--font-size-subhead)',
-            fontWeight: 600,
-            color: 'var(--color-label)',
-          }}
-        >
-          {formatDateHeader(selectedDate)}
-        </span>
-
-        <button
-          onClick={() => navigateMonth(1)}
-          className="flex items-center justify-center"
-          style={{
-            width: 44,
-            height: 32,
-            color: 'var(--color-systemRed)',
-          }}
-          data-testid="month-next"
-        >
-          <span style={{ fontSize: 13, marginRight: 2 }}>
-            {format(addMonths(currentMonth, 1), 'M月')}
-          </span>
-          <ChevronRightIcon />
-        </button>
-      </div>
-
-      {/* Event list for selected date */}
-      <div className="flex-1 overflow-auto" style={{ padding: '8px 16px 20px' }}>
-        {dayEvents.length === 0 ? (
-          <div
-            className="flex items-center justify-center"
+        {/* Date label */}
+        <div className="flex items-baseline" style={{ padding: '16px 20px 10px' }}>
+          <span
             style={{
-              height: 80,
-              color: 'var(--color-secondaryLabel)',
-              fontSize: 'var(--font-size-footnote)',
+              fontSize: 14,
+              fontWeight: 600,
+              color: 'var(--color-label)',
             }}
           >
-            没有日程
-          </div>
-        ) : (
-          <div className="flex flex-col" style={{ gap: 8 }}>
-            {dayEvents.map((event) => (
+            {format(selectedDate, 'M月d日')}
+          </span>
+          <span
+            style={{
+              fontSize: 13,
+              fontWeight: 400,
+              color: 'var(--color-tertiaryLabel)',
+              marginLeft: 6,
+            }}
+          >
+            {selectedWeekday}
+            {isTodaySelected && ' · 今天'}
+          </span>
+        </div>
+
+        {/* Event list */}
+        <div className="flex-1 overflow-auto" style={{ paddingBottom: 80 }}>
+          {dayEvents.length === 0 ? (
+            <div
+              className="flex items-center justify-center"
+              style={{
+                height: 80,
+                color: 'var(--color-secondaryLabel)',
+                fontSize: 15,
+                fontWeight: 500,
+              }}
+            >
+              没有事件
+            </div>
+          ) : (
+            dayEvents.map((event, i) => (
               <button
                 key={event.id}
                 type="button"
-                className="flex w-full items-start text-left"
+                className="flex w-full items-center"
                 style={{
-                  padding: '10px 12px',
-                  borderRadius: 10,
-                  backgroundColor: 'var(--color-tertiarySystemBackground)',
+                  padding: '0 20px',
+                  minHeight: 58,
+                  cursor: 'pointer',
                 }}
                 onClick={() => push('event-detail', { eventId: event.id })}
                 data-testid={`event-row-${event.id}`}
               >
+                {/* Color bar */}
                 <div
                   style={{
-                    width: 4,
-                    alignSelf: 'stretch',
+                    width: 3,
+                    height: 34,
                     borderRadius: 2,
                     backgroundColor: event.color,
-                    marginRight: 10,
                     flexShrink: 0,
+                    marginRight: 14,
                   }}
                 />
-                <div className="flex min-w-0 flex-1 flex-col">
+                {/* Body */}
+                <div
+                  className="flex min-w-0 flex-1 flex-col"
+                  style={{
+                    padding: '14px 0',
+                    borderBottom:
+                      i < dayEvents.length - 1
+                        ? '0.5px solid rgba(0,0,0,0.06)'
+                        : 'none',
+                  }}
+                >
                   <span
                     className="truncate"
                     style={{
-                      fontSize: 'var(--font-size-subhead)',
-                      fontWeight: 600,
+                      fontSize: 16,
+                      fontWeight: 500,
                       color: 'var(--color-label)',
+                      letterSpacing: -0.1,
                       lineHeight: 1.3,
                     }}
                   >
@@ -311,71 +388,30 @@ export function MonthView() {
                   </span>
                   <span
                     style={{
-                      fontSize: 'var(--font-size-caption1)',
-                      color: 'var(--color-secondaryLabel)',
+                      fontSize: 13,
+                      color: 'var(--color-tertiaryLabel)',
                       marginTop: 2,
+                      lineHeight: 1.3,
                     }}
                   >
                     {formatEventTime(event.startTime, event.endTime, event.isAllDay)}
                   </span>
                 </div>
-                <ChevronRightSmallIcon />
+                {/* Chevron */}
+                <ChevronRight
+                  size={14}
+                  strokeWidth={1.8}
+                  style={{
+                    color: 'rgba(0,0,0,0.12)',
+                    marginLeft: 8,
+                    flexShrink: 0,
+                  }}
+                />
               </button>
-            ))}
-          </div>
-        )}
+            ))
+          )}
+        </div>
       </div>
     </div>
-  );
-}
-
-/** SF Symbol: chevron.left */
-function ChevronLeftIcon() {
-  return (
-    <svg width="7" height="12" viewBox="0 0 7 12" fill="none">
-      <path
-        d="M6 1L1 6l5 5"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-/** SF Symbol: chevron.right */
-function ChevronRightIcon() {
-  return (
-    <svg width="7" height="12" viewBox="0 0 7 12" fill="none">
-      <path
-        d="M1 1l5 5-5 5"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-/** Small chevron for event row disclosure */
-function ChevronRightSmallIcon() {
-  return (
-    <svg
-      width="7"
-      height="12"
-      viewBox="0 0 7 12"
-      fill="none"
-      style={{ alignSelf: 'center', marginLeft: 4, flexShrink: 0 }}
-    >
-      <path
-        d="M1 1l5 5-5 5"
-        stroke="var(--color-tertiaryLabel)"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }
