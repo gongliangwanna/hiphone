@@ -1,6 +1,5 @@
 import { useMemo, useRef, useCallback } from 'react';
 import { format, addMonths, getDay } from 'date-fns';
-import { ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useCalendarDataStore } from './calendarDataStore';
 import { useCalendarNavStore } from './calendarNavStore';
@@ -341,13 +340,21 @@ export function MonthView() {
                 onClick={() => push('event-detail', { eventId: event.id })}
                 data-testid={`event-row-${event.id}`}
               >
-                <span
-                  className="truncate"
+                {/* Color dot icon */}
+                <div
                   style={{
-                    fontSize: 15,
-                    fontWeight: 400,
-                    color: 'var(--color-label)',
-                    flex: 1,
+                    width: 10,
+                    height: 10,
+                    borderRadius: '50%',
+                    backgroundColor: event.color,
+                    flexShrink: 0,
+                    marginRight: 10,
+                  }}
+                />
+                {/* Title + right time, separator indented past icon */}
+                <div
+                  className="flex min-w-0 flex-1 items-center"
+                  style={{
                     padding: '12px 0',
                     borderBottom:
                       i < dayEvents.length - 1
@@ -355,27 +362,28 @@ export function MonthView() {
                         : 'none',
                   }}
                 >
-                  {event.title}
-                </span>
-                <span
-                  style={{
-                    fontSize: 14,
-                    color: 'var(--color-secondaryLabel)',
-                    flexShrink: 0,
-                    marginLeft: 12,
-                  }}
-                >
-                  {formatEventTime(event.startTime, event.endTime, event.isAllDay)}
-                </span>
-                <ChevronRight
-                  size={14}
-                  strokeWidth={1.8}
-                  style={{
-                    color: 'rgba(0,0,0,0.12)',
-                    marginLeft: 6,
-                    flexShrink: 0,
-                  }}
-                />
+                  <span
+                    className="truncate"
+                    style={{
+                      fontSize: 15,
+                      fontWeight: 400,
+                      color: 'var(--color-label)',
+                      flex: 1,
+                    }}
+                  >
+                    {event.title}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 14,
+                      color: 'var(--color-secondaryLabel)',
+                      flexShrink: 0,
+                      marginLeft: 12,
+                    }}
+                  >
+                    {formatEventTime(event.startTime, event.endTime, event.isAllDay)}
+                  </span>
+                </div>
               </button>
             ))
           )}
