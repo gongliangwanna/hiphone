@@ -168,24 +168,23 @@ export function MonthView() {
       >
         {dates.map((date) => {
           const isInMonth = isCurrentMonth(date, refMonth);
+
+          // Out-of-month dates render as empty cells
+          if (!isInMonth) {
+            return <div key={date.toISOString()} style={{ height: 48 }} />;
+          }
+
           const today = isToday(date);
           const selected = isSameDay(date, selectedDate);
           const key = dateKey(date);
           const dots = colorDots.get(key);
           const isSunday = date.getDay() === 0;
 
-          let numberColor: string;
-          if (today) {
-            numberColor = '#fff';
-          } else if (!isInMonth && isSunday) {
-            numberColor = 'rgba(255,59,48,0.12)';
-          } else if (!isInMonth) {
-            numberColor = 'rgba(0,0,0,0.10)';
-          } else if (isSunday) {
-            numberColor = 'var(--color-systemRed)';
-          } else {
-            numberColor = 'var(--color-label)';
-          }
+          const numberColor = today
+            ? '#fff'
+            : isSunday
+              ? 'var(--color-systemRed)'
+              : 'var(--color-label)';
 
           return (
             <button
