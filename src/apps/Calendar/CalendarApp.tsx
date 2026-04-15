@@ -209,7 +209,7 @@ export function CalendarApp() {
             transition={{ duration: SLIDE_MS / 1000, ease: SLIDE_EASE }}
           >
             {header}
-            <div className="min-h-0 flex-1 overflow-hidden">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <PageComponent />
             </div>
           </motion.div>
