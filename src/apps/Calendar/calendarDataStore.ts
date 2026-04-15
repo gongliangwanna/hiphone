@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { idbStorage } from '@/platform/storage/idbStorage';
+import { uid } from '@/platform/utils/uid';
 import { startOfDay, startOfMonth, setHours } from 'date-fns';
 
 export interface CalendarEvent {
@@ -38,7 +39,7 @@ function makeSeedEvent(): CalendarEvent {
     isAllDay: false,
     startTime: start.getTime(),
     endTime: end.getTime(),
-    notes: '这是一个示例日程。你可以点击 + 创建新的日程。',
+    notes: '这是一个示例事件。你可以点击 + 创建新的事件。',
     color: 'var(--color-systemBlue)',
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -55,7 +56,7 @@ export const useCalendarDataStore = create<CalendarDataState>()(
       currentMonth: startOfMonth(now).getTime(),
 
       addEvent: (event) => {
-        const id = crypto.randomUUID();
+        const id = uid();
         const timestamp = Date.now();
         set((state) => ({
           events: [
