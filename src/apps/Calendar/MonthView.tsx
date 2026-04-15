@@ -1,6 +1,7 @@
 import { useMemo, useRef, useCallback } from 'react';
 import { format, addMonths, getDay } from 'date-fns';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useCalendarDataStore } from './calendarDataStore';
 import { useCalendarNavStore } from './calendarNavStore';
 import {
@@ -88,9 +89,11 @@ export function MonthView() {
   );
 
   const touchStartXRef = useRef(0);
+  const slideDirectionRef = useRef(0);
 
   const navigateMonth = useCallback(
     (delta: number) => {
+      slideDirectionRef.current = delta;
       setCurrentMonth(addMonths(currentMonth, delta).getTime());
     },
     [currentMonth, setCurrentMonth],
@@ -123,29 +126,6 @@ export function MonthView() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {/* ── Month nav arrows ── */}
-      <div
-        className="flex items-center"
-        style={{ padding: '6px 20px 0', gap: 20 }}
-      >
-        <button
-          onClick={() => navigateMonth(-1)}
-          className="flex items-center justify-center"
-          style={{ width: 28, height: 28, color: 'var(--color-tertiaryLabel)' }}
-          data-testid="month-prev"
-        >
-          <ChevronLeft size={18} strokeWidth={1.8} />
-        </button>
-        <button
-          onClick={() => navigateMonth(1)}
-          className="flex items-center justify-center"
-          style={{ width: 28, height: 28, color: 'var(--color-tertiaryLabel)' }}
-          data-testid="month-next"
-        >
-          <ChevronRight size={18} strokeWidth={1.8} />
-        </button>
-      </div>
-
       {/* ── Weekday header ── */}
       <div
         className="grid"
@@ -184,19 +164,28 @@ export function MonthView() {
 
       {/* ── Month grid ── */}
       <div
-        style={{ height: 6 * 48, overflow: 'hidden' }}
+        style={{ height: 6 * 48, overflow: 'hidden', position: 'relative' }}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
-        <div
-          className="grid"
-          style={{
-            gridTemplateColumns: 'repeat(7, 1fr)',
-            padding: '4px 16px 8px',
-          }}
-          data-testid="month-grid"
-        >
-          {grid.map((date) => {
+        <AnimatePresence initial={false}>
+          <motion.div
+            key={format(currentMonth, 'yyyy-MM')}
+            style={{ position: 'absolute', inset: 0 }}
+            initial={{ x: `${slideDirectionRef.current * 100}%` }}
+            animate={{ x: '0%' }}
+            exit={{ x: `${-slideDirectionRef.current * 100}%` }}
+            transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+          >
+            <div
+              className="grid"
+              style={{
+                gridTemplateColumns: 'repeat(7, 1fr)',
+                padding: '4px 16px 8px',
+              }}
+              data-testid="month-grid"
+            >
+              {grid.map((date) => {
             const isInMonth = isCurrentMonth(date, currentMonth);
             const today = isToday(date);
             const selected = isSameDay(date, selectedDate);
@@ -290,7 +279,9 @@ export function MonthView() {
               </button>
             );
           })}
-        </div>
+            </div>
+          </motion.div>
+        </AnimatePresence>
       </div>
 
       {/* ── Lower half: event list ── */}
@@ -323,7 +314,7 @@ export function MonthView() {
         </div>
 
         {/* Event list */}
-        <div className="flex-1 overflow-auto" style={{ paddingBottom: 80 }}>
+        <div className="flex-1 overflow-auto" style={{ paddingBottom: 16 }}>
           {dayEvents.length === 0 ? (
             <div
               className="flex items-center justify-center"
