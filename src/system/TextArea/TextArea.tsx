@@ -37,11 +37,12 @@ export function TextArea({
       placeholder={placeholder}
       rows={rows}
       maxLength={maxLength}
-      className="w-full resize-none rounded-lg p-3"
+      className="w-full resize-none p-3"
       style={{
         fontSize: 'var(--font-size-body)',
         color: 'var(--color-label)',
         backgroundColor: 'rgba(118,118,128,0.12)',
+        borderRadius: 'inherit',
         border: 'none',
         outline: 'none',
         lineHeight: 1.5,
