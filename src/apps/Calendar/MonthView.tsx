@@ -164,7 +164,7 @@ export function MonthView() {
 
       {/* ── Month grid ── */}
       <div
-        style={{ height: 6 * 48, overflow: 'hidden', position: 'relative' }}
+        style={{ height: 6 * 48 + 12, overflow: 'hidden', position: 'relative' }}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
