@@ -155,22 +155,23 @@ export function MonthView() {
           <motion.div
             key={format(currentMonth, 'yyyy-MM')}
             style={{ position: 'absolute', inset: 0 }}
-            initial={{ x: `${slideDirectionRef.current * 100}%` }}
-            animate={{ x: 0 }}
-            exit={{ x: `${-slideDirectionRef.current * 100}%` }}
-            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            drag="x"
+            initial={{ y: `${slideDirectionRef.current * 100}%` }}
+            animate={{ y: 0 }}
+            exit={{ y: `${-slideDirectionRef.current * 100}%` }}
+            transition={{ duration: 0.3, ease: [0.2, 0, 0, 1] }}
+            drag="y"
             dragDirectionLock
-            dragConstraints={{ left: 0, right: 0 }}
-            dragElastic={1}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={0.4}
             dragMomentum={false}
+            dragTransition={{ bounceDamping: 60, bounceStiffness: 600 }}
             onDragEnd={(_, info) => {
-              const pastThreshold = Math.abs(info.offset.x) > SWIPE_THRESHOLD;
-              const fastSwipe = Math.abs(info.velocity.x) > 300;
+              const pastThreshold = Math.abs(info.offset.y) > SWIPE_THRESHOLD;
+              const fastSwipe = Math.abs(info.velocity.y) > 300;
               if (!pastThreshold && !fastSwipe) return;
               const dir = pastThreshold
-                ? (info.offset.x < 0 ? 1 : -1)
-                : (info.velocity.x < 0 ? 1 : -1);
+                ? (info.offset.y < 0 ? 1 : -1)
+                : (info.velocity.y < 0 ? 1 : -1);
               navigateMonth(dir);
             }}
           >
