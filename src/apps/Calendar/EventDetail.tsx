@@ -63,19 +63,8 @@ export function EventDetail() {
           borderRadius: 'var(--radius-group)',
           margin: '16px 16px 0',
           padding: 16,
-          display: 'flex',
-          gap: 14,
         }}
       >
-        <div
-          style={{
-            width: 4,
-            borderRadius: 2,
-            backgroundColor: event.color,
-            flexShrink: 0,
-            alignSelf: 'stretch',
-          }}
-        />
         <div className="flex min-w-0 flex-1 flex-col">
           <h2
             style={{

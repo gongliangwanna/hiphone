@@ -335,64 +335,44 @@ export function MonthView() {
                 className="flex w-full items-center"
                 style={{
                   padding: '0 20px',
-                  minHeight: 58,
+                  minHeight: 44,
                   cursor: 'pointer',
                 }}
                 onClick={() => push('event-detail', { eventId: event.id })}
                 data-testid={`event-row-${event.id}`}
               >
-                {/* Color bar */}
-                <div
+                <span
+                  className="truncate"
                   style={{
-                    width: 3,
-                    height: 34,
-                    borderRadius: 2,
-                    backgroundColor: event.color,
-                    flexShrink: 0,
-                    marginRight: 14,
-                  }}
-                />
-                {/* Body */}
-                <div
-                  className="flex min-w-0 flex-1 flex-col"
-                  style={{
-                    padding: '14px 0',
+                    fontSize: 15,
+                    fontWeight: 400,
+                    color: 'var(--color-label)',
+                    flex: 1,
+                    padding: '12px 0',
                     borderBottom:
                       i < dayEvents.length - 1
-                        ? '0.5px solid rgba(0,0,0,0.06)'
+                        ? '0.5px solid var(--color-separator)'
                         : 'none',
                   }}
                 >
-                  <span
-                    className="truncate"
-                    style={{
-                      fontSize: 16,
-                      fontWeight: 500,
-                      color: 'var(--color-label)',
-                      letterSpacing: -0.1,
-                      lineHeight: 1.3,
-                    }}
-                  >
-                    {event.title}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 13,
-                      color: 'var(--color-tertiaryLabel)',
-                      marginTop: 2,
-                      lineHeight: 1.3,
-                    }}
-                  >
-                    {formatEventTime(event.startTime, event.endTime, event.isAllDay)}
-                  </span>
-                </div>
-                {/* Chevron */}
+                  {event.title}
+                </span>
+                <span
+                  style={{
+                    fontSize: 14,
+                    color: 'var(--color-secondaryLabel)',
+                    flexShrink: 0,
+                    marginLeft: 12,
+                  }}
+                >
+                  {formatEventTime(event.startTime, event.endTime, event.isAllDay)}
+                </span>
                 <ChevronRight
                   size={14}
                   strokeWidth={1.8}
                   style={{
                     color: 'rgba(0,0,0,0.12)',
-                    marginLeft: 8,
+                    marginLeft: 6,
                     flexShrink: 0,
                   }}
                 />
