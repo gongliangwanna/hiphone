@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { format, addHours, startOfDay, addDays } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
+import { Bell, Repeat2, ChevronRight } from 'lucide-react';
 import { useCalendarDataStore } from './calendarDataStore';
 import { useCalendarNavStore } from './calendarNavStore';
 import { roundToQuarterHour, EVENT_COLORS } from './calendarUtils';
@@ -14,6 +15,9 @@ export function EventForm() {
   const addEvent = useCalendarDataStore((s) => s.addEvent);
   const updateEvent = useCalendarDataStore((s) => s.updateEvent);
   const editingEventId = useCalendarNavStore((s) => s.editingEventId);
+  const pendingSave = useCalendarNavStore((s) => s.pendingSave);
+  const setPendingSave = useCalendarNavStore((s) => s.setPendingSave);
+  const setFormValid = useCalendarNavStore((s) => s.setFormValid);
   const pop = useCalendarNavStore((s) => s.pop);
 
   const existing = useMemo(
@@ -46,7 +50,6 @@ export function EventForm() {
   const [color, setColor] = useState(existing?.color ?? EVENT_COLORS[0]);
   const [openPicker, setOpenPicker] = useState<OpenPicker>('none');
 
-  // Delay focus to avoid animation stutter during slide-in
   const titleRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     const timer = setTimeout(() => titleRef.current?.focus(), 400);
@@ -54,6 +57,11 @@ export function EventForm() {
   }, []);
 
   const canSave = title.trim().length > 0 && (isAllDay || endTime > startTime);
+
+  // Expose form validity to NavBar
+  useEffect(() => {
+    setFormValid(canSave);
+  }, [canSave, setFormValid]);
 
   const togglePicker = (which: 'start' | 'end') => {
     setOpenPicker((prev) => (prev === which ? 'none' : which));
@@ -90,18 +98,31 @@ export function EventForm() {
     pop();
   }, [canSave, title, isAllDay, startTime, endTime, notes, color, editingEventId, addEvent, updateEvent, pop]);
 
+  // Watch pendingSave from NavBar
+  useEffect(() => {
+    if (pendingSave) {
+      setPendingSave(false);
+      handleSave();
+    }
+  }, [pendingSave, setPendingSave, handleSave]);
+
   const pickerMode = isAllDay ? 'date' : 'datetime';
 
   return (
-    <div className="flex flex-1 flex-col overflow-auto" style={{ padding: '0 16px 24px' }}>
-      {/* Title input */}
+    <div
+      className="flex flex-1 flex-col overflow-auto"
+      style={{
+        backgroundColor: 'var(--color-systemGroupedBackground)',
+        paddingBottom: 80,
+      }}
+    >
+      {/* ── Title input card ── */}
       <div
         style={{
-          backgroundColor: 'var(--color-tertiarySystemBackground)',
+          backgroundColor: 'var(--color-secondarySystemGroupedBackground)',
           borderRadius: 'var(--radius-group)',
+          margin: '16px 16px 0',
           padding: '0 16px',
-          marginTop: 12,
-          marginBottom: 12,
         }}
       >
         <input
@@ -120,16 +141,16 @@ export function EventForm() {
         />
       </div>
 
-      {/* All-day toggle + time pickers group */}
+      {/* ── Time settings card ── */}
       <div
         style={{
-          backgroundColor: 'var(--color-tertiarySystemBackground)',
+          backgroundColor: 'var(--color-secondarySystemGroupedBackground)',
           borderRadius: 'var(--radius-group)',
-          marginBottom: 12,
+          margin: '10px 16px 0',
           overflow: 'hidden',
         }}
       >
-        {/* All-day toggle row */}
+        {/* All-day toggle */}
         <div
           className="flex items-center justify-between"
           style={{
@@ -137,7 +158,7 @@ export function EventForm() {
             borderBottom: '0.5px solid var(--color-separator)',
           }}
         >
-          <span style={{ fontSize: 'var(--font-size-body)', color: 'var(--color-label)' }}>
+          <span style={{ fontSize: 'var(--font-size-body)', color: 'var(--color-label)', width: 56 }}>
             全天
           </span>
           <button
@@ -150,7 +171,7 @@ export function EventForm() {
               width: 51,
               height: 31,
               borderRadius: 16,
-              backgroundColor: isAllDay ? 'var(--color-systemGreen)' : 'var(--color-systemFill)',
+              backgroundColor: isAllDay ? 'var(--color-systemGreen)' : 'rgba(120,120,128,0.16)',
               position: 'relative',
               transition: 'background-color 0.2s',
               flexShrink: 0,
@@ -167,7 +188,7 @@ export function EventForm() {
                 top: 2,
                 left: isAllDay ? 22 : 2,
                 transition: 'left 0.2s',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.15), 0 0 0 0.5px rgba(0,0,0,0.04)',
               }}
             />
           </button>
@@ -184,15 +205,15 @@ export function EventForm() {
           onClick={() => togglePicker('start')}
           data-testid="start-time-row"
         >
-          <span style={{ fontSize: 'var(--font-size-body)', color: 'var(--color-label)' }}>
+          <span style={{ fontSize: 'var(--font-size-body)', color: 'var(--color-label)', width: 56 }}>
             开始
           </span>
           <span
             style={{
-              fontSize: 'var(--font-size-subhead)',
-              color: openPicker === 'start' ? 'var(--color-systemRed)' : 'var(--color-label)',
+              fontSize: 16,
+              color: openPicker === 'start' ? 'var(--color-systemRed)' : 'var(--color-systemBlue)',
               backgroundColor:
-                openPicker === 'start' ? 'rgba(255,59,48,0.12)' : 'var(--color-tertiarySystemFill)',
+                openPicker === 'start' ? 'rgba(255,59,48,0.12)' : 'transparent',
               padding: '4px 10px',
               borderRadius: 6,
               transition: 'color 0.15s, background-color 0.15s',
@@ -238,15 +259,15 @@ export function EventForm() {
           onClick={() => togglePicker('end')}
           data-testid="end-time-row"
         >
-          <span style={{ fontSize: 'var(--font-size-body)', color: 'var(--color-label)' }}>
+          <span style={{ fontSize: 'var(--font-size-body)', color: 'var(--color-label)', width: 56 }}>
             结束
           </span>
           <span
             style={{
-              fontSize: 'var(--font-size-subhead)',
-              color: openPicker === 'end' ? 'var(--color-systemRed)' : 'var(--color-label)',
+              fontSize: 16,
+              color: openPicker === 'end' ? 'var(--color-systemRed)' : 'var(--color-systemBlue)',
               backgroundColor:
-                openPicker === 'end' ? 'rgba(255,59,48,0.12)' : 'var(--color-tertiarySystemFill)',
+                openPicker === 'end' ? 'rgba(255,59,48,0.12)' : 'transparent',
               padding: '4px 10px',
               borderRadius: 6,
               transition: 'color 0.15s, background-color 0.15s',
@@ -282,17 +303,145 @@ export function EventForm() {
         </AnimatePresence>
       </div>
 
-      {/* Notes */}
+      {/* ── Reminder & Repeat card ── */}
       <div
         style={{
-          backgroundColor: 'var(--color-tertiarySystemBackground)',
+          backgroundColor: 'var(--color-secondarySystemGroupedBackground)',
           borderRadius: 'var(--radius-group)',
-          padding: '12px 16px',
-          marginBottom: 12,
+          margin: '10px 16px 0',
+          overflow: 'hidden',
         }}
       >
+        <div
+          className="flex items-center"
+          style={{ padding: '12px 16px', minHeight: 44 }}
+        >
+          <div
+            className="flex items-center justify-center"
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 6,
+              backgroundColor: 'var(--color-systemOrange)',
+              marginRight: 12,
+              flexShrink: 0,
+            }}
+          >
+            <Bell size={14} color="#fff" strokeWidth={2.5} />
+          </div>
+          <span style={{ fontSize: 16, color: 'var(--color-label)', flex: 1 }}>
+            提醒
+          </span>
+          <span style={{ fontSize: 15, color: 'var(--color-tertiaryLabel)' }}>
+            无
+          </span>
+          <ChevronRight
+            size={14}
+            strokeWidth={1.8}
+            style={{ color: 'rgba(0,0,0,0.15)', marginLeft: 6 }}
+          />
+        </div>
+        <div
+          style={{
+            height: 0.5,
+            backgroundColor: 'var(--color-separator)',
+            marginLeft: 56,
+          }}
+        />
+        <div
+          className="flex items-center"
+          style={{ padding: '12px 16px', minHeight: 44 }}
+        >
+          <div
+            className="flex items-center justify-center"
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 6,
+              backgroundColor: '#8e8e93',
+              marginRight: 12,
+              flexShrink: 0,
+            }}
+          >
+            <Repeat2 size={14} color="#fff" strokeWidth={2.5} />
+          </div>
+          <span style={{ fontSize: 16, color: 'var(--color-label)', flex: 1 }}>
+            重复
+          </span>
+          <span style={{ fontSize: 15, color: 'var(--color-tertiaryLabel)' }}>
+            无
+          </span>
+          <ChevronRight
+            size={14}
+            strokeWidth={1.8}
+            style={{ color: 'rgba(0,0,0,0.15)', marginLeft: 6 }}
+          />
+        </div>
+      </div>
+
+      {/* ── Color picker card ── */}
+      <div
+        style={{
+          backgroundColor: 'var(--color-secondarySystemGroupedBackground)',
+          borderRadius: 'var(--radius-group)',
+          margin: '10px 16px 0',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          className="flex items-center"
+          style={{ padding: '0 16px', minHeight: 44 }}
+        >
+          <span style={{ fontSize: 16, color: 'var(--color-label)' }}>
+            颜色
+          </span>
+          <div style={{ flex: 1 }} />
+          <div className="flex" style={{ gap: 10 }}>
+            {EVENT_COLORS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setColor(c)}
+                style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: '50%',
+                  backgroundColor: c,
+                  outline: color === c ? `2px solid ${c}` : 'none',
+                  outlineOffset: 3,
+                  opacity: color === c ? 1 : 0.65,
+                  transition: 'opacity 0.15s',
+                }}
+                data-testid={`color-${c}`}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Notes card ── */}
+      <div
+        style={{
+          backgroundColor: 'var(--color-secondarySystemGroupedBackground)',
+          borderRadius: 'var(--radius-group)',
+          margin: '10px 16px 0',
+          padding: '12px 16px',
+        }}
+      >
+        <div
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: 'var(--color-secondaryLabel)',
+            textTransform: 'uppercase',
+            letterSpacing: 0.5,
+            marginBottom: 6,
+          }}
+        >
+          备注
+        </div>
         <textarea
-          placeholder="备注"
+          placeholder="添加备注…"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           className="w-full bg-transparent outline-none"
@@ -307,78 +456,7 @@ export function EventForm() {
         />
       </div>
 
-      {/* Color picker */}
-      <div
-        style={{
-          backgroundColor: 'var(--color-tertiarySystemBackground)',
-          borderRadius: 'var(--radius-group)',
-          padding: '12px 16px',
-          marginBottom: 24,
-        }}
-      >
-        <div
-          style={{
-            fontSize: 'var(--font-size-caption1)',
-            color: 'var(--color-secondaryLabel)',
-            marginBottom: 10,
-            fontWeight: 500,
-          }}
-        >
-          颜色
-        </div>
-        <div className="flex gap-3">
-          {EVENT_COLORS.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setColor(c)}
-              className="flex items-center justify-center"
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: '50%',
-                backgroundColor: c,
-                outline: color === c ? '2px solid var(--color-systemBlue)' : 'none',
-                outlineOffset: 2,
-              }}
-              data-testid={`color-${c}`}
-            >
-              {color === c && (
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                  <path
-                    d="M3 7l3 3 5-5"
-                    stroke="white"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Save button */}
-      <button
-        type="button"
-        onClick={handleSave}
-        disabled={!canSave}
-        style={{
-          padding: '14px 0',
-          fontSize: 'var(--font-size-body)',
-          fontWeight: 600,
-          color: '#fff',
-          textAlign: 'center',
-          backgroundColor: canSave ? 'var(--color-systemBlue)' : 'var(--color-systemFill)',
-          borderRadius: 'var(--radius-group)',
-          opacity: canSave ? 1 : 0.5,
-          transition: 'opacity 0.15s',
-        }}
-        data-testid="save-event-btn"
-      >
-        {editingEventId ? '保存' : '添加日程'}
-      </button>
+      {/* No standalone save button — action is in NavBar "添加"/"完成" */}
     </div>
   );
 }
