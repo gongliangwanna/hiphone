@@ -1,8 +1,11 @@
 import { useMemo } from 'react';
-import { format } from 'date-fns';
+import { format, getDay } from 'date-fns';
+import { Bell, Repeat2, ChevronRight } from 'lucide-react';
 import { useCalendarDataStore } from './calendarDataStore';
 import { useCalendarNavStore } from './calendarNavStore';
 import { getHolidayEventsForYear } from './calendarUtils';
+
+const WEEKDAY_NAMES = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
 
 export function EventDetail() {
   const events = useCalendarDataStore((s) => s.events);
@@ -15,7 +18,6 @@ export function EventDetail() {
   const event = useMemo(() => {
     const userEvent = events.find((e) => e.id === activeEventId);
     if (userEvent) return userEvent;
-    // Look up holiday events by extracting year from ID: "holiday-2026-01-01"
     const match = activeEventId?.match(/^holiday-(\d{4})/);
     if (match) {
       const year = Number(match[1]);
@@ -28,9 +30,12 @@ export function EventDetail() {
     return (
       <div
         className="flex flex-1 items-center justify-center"
-        style={{ color: 'var(--color-secondaryLabel)', fontSize: 'var(--font-size-footnote)' }}
+        style={{
+          color: 'var(--color-secondaryLabel)',
+          fontSize: 15,
+        }}
       >
-        日程未找到
+        事件未找到
       </div>
     );
   }
@@ -40,116 +45,190 @@ export function EventDetail() {
     pop();
   };
 
+  const startDate = new Date(event.startTime);
+  const weekday = WEEKDAY_NAMES[getDay(startDate)];
+
   return (
-    <div className="flex flex-1 flex-col overflow-auto" style={{ padding: '0 16px 24px' }}>
-      {/* Event header card */}
+    <div
+      className="flex flex-1 flex-col overflow-auto"
+      style={{
+        backgroundColor: 'var(--color-systemGroupedBackground)',
+        paddingBottom: 80,
+      }}
+    >
+      {/* ── Title card ── */}
       <div
         style={{
-          marginTop: 12,
-          backgroundColor: 'var(--color-tertiarySystemBackground)',
+          backgroundColor: 'var(--color-secondarySystemGroupedBackground)',
           borderRadius: 'var(--radius-group)',
-          padding: '16px',
-          marginBottom: 12,
+          margin: '16px 16px 0',
+          padding: 16,
+          display: 'flex',
+          gap: 14,
         }}
       >
-        <div className="flex items-start gap-3">
+        <div
+          style={{
+            width: 4,
+            borderRadius: 2,
+            backgroundColor: event.color,
+            flexShrink: 0,
+            alignSelf: 'stretch',
+          }}
+        />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <h2
+            style={{
+              margin: 0,
+              fontSize: 22,
+              fontWeight: 700,
+              color: 'var(--color-label)',
+              letterSpacing: -0.3,
+              lineHeight: 1.2,
+              wordBreak: 'break-word',
+              marginBottom: 6,
+            }}
+          >
+            {event.title}
+          </h2>
           <div
             style={{
-              width: 14,
-              height: 14,
-              borderRadius: 4,
-              backgroundColor: event.color,
-              flexShrink: 0,
-              marginTop: 4,
+              fontSize: 14,
+              color: 'var(--color-secondaryLabel)',
+              lineHeight: 1.5,
             }}
-          />
-          <div className="flex min-w-0 flex-1 flex-col">
-            <h2
-              style={{
-                margin: 0,
-                fontSize: 'var(--font-size-title3)',
-                fontWeight: 600,
-                color: 'var(--color-label)',
-                lineHeight: 1.25,
-                wordBreak: 'break-word',
-              }}
-            >
-              {event.title}
-            </h2>
+          >
+            {event.isAllDay ? (
+              <span>{format(event.startTime, 'yyyy年M月d日')} {weekday}</span>
+            ) : (
+              <>
+                <div>
+                  {format(event.startTime, 'yyyy年M月d日')} {weekday}
+                </div>
+                <div>
+                  {format(event.startTime, 'HH:mm')} – {format(event.endTime, 'HH:mm')}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Time section */}
+      {/* ── Reminder / Repeat card ── */}
       <div
         style={{
-          backgroundColor: 'var(--color-tertiarySystemBackground)',
+          backgroundColor: 'var(--color-secondarySystemGroupedBackground)',
           borderRadius: 'var(--radius-group)',
-          marginBottom: 12,
+          margin: '10px 16px 0',
+          overflow: 'hidden',
         }}
       >
-        {event.isAllDay ? (
+        {/* Reminder row */}
+        <div
+          className="flex items-center"
+          style={{
+            padding: '12px 16px',
+            minHeight: 44,
+          }}
+        >
           <div
-            className="flex items-center justify-between"
+            className="flex items-center justify-center"
             style={{
-              fontSize: 'var(--font-size-body)',
-              color: 'var(--color-label)',
-              padding: '12px 16px',
+              width: 28,
+              height: 28,
+              borderRadius: 6,
+              backgroundColor: 'var(--color-systemOrange)',
+              marginRight: 12,
+              flexShrink: 0,
             }}
           >
-            <span>全天</span>
-            <span style={{ color: 'var(--color-secondaryLabel)' }}>
-              {format(event.startTime, 'yyyy年M月d日')}
-            </span>
+            <Bell size={14} color="#fff" strokeWidth={2.5} />
           </div>
-        ) : (
-          <>
-            <div
-              className="flex items-center justify-between"
-              style={{
-                fontSize: 'var(--font-size-body)',
-                color: 'var(--color-label)',
-                padding: '12px 16px',
-                borderBottom: '0.5px solid var(--color-separator)',
-              }}
-            >
-              <span>开始</span>
-              <span style={{ color: 'var(--color-secondaryLabel)' }}>
-                {format(event.startTime, 'yyyy年M月d日  HH:mm')}
-              </span>
-            </div>
-            <div
-              className="flex items-center justify-between"
-              style={{
-                fontSize: 'var(--font-size-body)',
-                color: 'var(--color-label)',
-                padding: '12px 16px',
-              }}
-            >
-              <span>结束</span>
-              <span style={{ color: 'var(--color-secondaryLabel)' }}>
-                {format(event.endTime, 'yyyy年M月d日  HH:mm')}
-              </span>
-            </div>
-          </>
-        )}
+          <span style={{ fontSize: 16, color: 'var(--color-label)', flex: 1 }}>
+            提醒
+          </span>
+          <span style={{ fontSize: 15, color: 'var(--color-tertiaryLabel)' }}>
+            无
+          </span>
+          <ChevronRight
+            size={14}
+            strokeWidth={1.8}
+            style={{ color: 'rgba(0,0,0,0.15)', marginLeft: 6 }}
+          />
+        </div>
+
+        {/* Separator */}
+        <div
+          style={{
+            height: 0.5,
+            backgroundColor: 'var(--color-separator)',
+            marginLeft: 56,
+          }}
+        />
+
+        {/* Repeat row */}
+        <div
+          className="flex items-center"
+          style={{
+            padding: '12px 16px',
+            minHeight: 44,
+          }}
+        >
+          <div
+            className="flex items-center justify-center"
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 6,
+              backgroundColor: '#8e8e93',
+              marginRight: 12,
+              flexShrink: 0,
+            }}
+          >
+            <Repeat2 size={14} color="#fff" strokeWidth={2.5} />
+          </div>
+          <span style={{ fontSize: 16, color: 'var(--color-label)', flex: 1 }}>
+            重复
+          </span>
+          <span style={{ fontSize: 15, color: 'var(--color-tertiaryLabel)' }}>
+            无
+          </span>
+          <ChevronRight
+            size={14}
+            strokeWidth={1.8}
+            style={{ color: 'rgba(0,0,0,0.15)', marginLeft: 6 }}
+          />
+        </div>
       </div>
 
-      {/* Notes section */}
+      {/* ── Notes card ── */}
       {event.notes && (
         <div
           style={{
-            backgroundColor: 'var(--color-tertiarySystemBackground)',
+            backgroundColor: 'var(--color-secondarySystemGroupedBackground)',
             borderRadius: 'var(--radius-group)',
-            padding: '12px 16px',
-            marginBottom: 12,
+            margin: '10px 16px 0',
+            padding: '14px 16px',
           }}
         >
           <div
             style={{
-              fontSize: 'var(--font-size-body)',
+              fontSize: 12,
+              fontWeight: 600,
+              color: 'var(--color-secondaryLabel)',
+              textTransform: 'uppercase',
+              letterSpacing: 0.5,
+              marginBottom: 6,
+            }}
+          >
+            备注
+          </div>
+          <div
+            style={{
+              fontSize: 15,
               color: 'var(--color-label)',
-              lineHeight: 1.5,
+              opacity: 0.7,
+              lineHeight: 1.55,
               whiteSpace: 'pre-wrap',
             }}
           >
@@ -158,25 +237,31 @@ export function EventDetail() {
         </div>
       )}
 
-      <div style={{ flex: 1 }} />
-
-      {/* Delete button — hidden for holiday events */}
+      {/* ── Delete card ── */}
       {!isHoliday && (
-        <button
-          type="button"
-          onClick={handleDelete}
+        <div
           style={{
-            padding: '14px 0',
-            fontSize: 'var(--font-size-body)',
-            color: 'var(--color-systemRed)',
-            textAlign: 'center',
-            backgroundColor: 'var(--color-tertiarySystemBackground)',
+            backgroundColor: 'var(--color-secondarySystemGroupedBackground)',
             borderRadius: 'var(--radius-group)',
+            margin: '10px 16px 0',
+            overflow: 'hidden',
           }}
-          data-testid="delete-event-btn"
         >
-          删除日程
-        </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            className="w-full"
+            style={{
+              padding: '13px 16px',
+              fontSize: 17,
+              color: 'var(--color-systemRed)',
+              textAlign: 'center',
+            }}
+            data-testid="delete-event-btn"
+          >
+            删除事件
+          </button>
+        </div>
       )}
     </div>
   );
