@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, startTransition } from 'react';
 import {
   animate,
   motion,
   useMotionValue,
-  useTransform,
 } from 'motion/react';
 import { computeVelocity, type VelocitySample } from '@/platform/gesture/velocity';
 import { spring } from '@/platform/design-tokens/motion';
@@ -48,6 +47,9 @@ export function AppSwitcher() {
   const [activatingId, setActivatingId] = useState<string | null>(null);
   const [flyingAwayId, setFlyingAwayId] = useState<string | null>(null);
   const [exitAnimating, setExitAnimating] = useState(false);
+  // Track whether cards should play their entrance animation.
+  // True on the first render after the switcher becomes visible.
+  const [enterAnimating, setEnterAnimating] = useState(true);
   const intent = useGestureIntent();
   const viewportProfile = useViewportProfile();
   const deviceCornerRadius = getDeviceCornerRadius(viewportProfile.sizeTier);
@@ -70,6 +72,15 @@ export function AppSwitcher() {
       setExitAnimating(false);
     }
   }, [visible, activatingId]);
+
+  // Reset entrance animation state when the switcher becomes visible
+  useEffect(() => {
+    if (visible) {
+      setEnterAnimating(true);
+      const timer = setTimeout(() => setEnterAnimating(false), 400);
+      return () => clearTimeout(timer);
+    }
+  }, [visible]);
 
   const selectedId = switcherAppId ?? activeAppId ?? recentApps[0]?.id ?? null;
 
@@ -180,6 +191,9 @@ export function AppSwitcher() {
               marginLeft={i === 0 ? spacerWidth + CARD_GAP : CARD_GAP}
               isFlyingAway={task.id === flyingAwayId}
               isActivatingOther={activatingId !== null && task.id !== activatingId}
+              isActiveCard={task.id === activeAppId}
+              enterAnimating={enterAnimating}
+              enterIndex={i}
               deviceCornerRadius={deviceCornerRadius}
               onActivate={(payload) => {
                 setActivatingId(task.id);
@@ -222,6 +236,12 @@ interface SwitcherCardProps {
   marginLeft: number;
   isFlyingAway: boolean;
   isActivatingOther: boolean;
+  /** Whether this card belongs to the app that was in the foreground. */
+  isActiveCard: boolean;
+  /** Whether the switcher just opened and cards should play entrance animation. */
+  enterAnimating: boolean;
+  /** Index in the card list, used for stagger delay. */
+  enterIndex: number;
   deviceCornerRadius: number;
   onActivate: (payload: CardActivatePayload | null) => void;
   onDismissCommit: (appId: string) => void;
@@ -235,6 +255,9 @@ function SwitcherCard({
   marginLeft,
   isFlyingAway,
   isActivatingOther,
+  isActiveCard,
+  enterAnimating,
+  enterIndex,
   deviceCornerRadius,
   onActivate,
   onDismissCommit,
@@ -242,6 +265,7 @@ function SwitcherCard({
   onFocus,
 }: SwitcherCardProps) {
   const app = getAppInfoById(appId);
+  const viewportProfile = useViewportProfile();
   const startCardDismiss = useAppRuntimeStore((s) => s.startCardDismiss);
   const updateCardDismiss = useAppRuntimeStore((s) => s.updateCardDismiss);
   const finishCardDismiss = useAppRuntimeStore((s) => s.finishCardDismiss);
@@ -249,10 +273,11 @@ function SwitcherCard({
   const animationRef = useRef<ReturnType<typeof animate> | null>(null);
   const cardBodyRef = useRef<HTMLDivElement>(null);
   const dismissRef = useRef<DismissState>({ phase: 'idle', startY: 0 });
+  // Ref so native touchmove listener reads the latest value without re-attaching
+  const enterAnimatingRef = useRef(enterAnimating);
+  enterAnimatingRef.current = enterAnimating;
 
   const dragY = useMotionValue(0);
-  // Scale feedback: only active during drag, not during fly-away.
-  const scaleFromDrag = useTransform(dragY, [-300, 0], [0.92, 1], { clamp: true });
 
   // Motion values for smooth gap-collapse after fly-away
   const wrapperWidth = useMotionValue(cardWidth);
@@ -300,7 +325,18 @@ function SwitcherCard({
     };
   }, [isFlyingAway, appId, onDismissComplete, wrapperWidth, wrapperMargin]);
 
-  const cardBodyRadius = deviceCornerRadius * (cardWidth / 390);
+
+  // Must match AppHost's visual radius at SWITCHER_SCALE exactly so the
+  // crossfade has no visible corner-radius jump. Using CARD_WIDTH_RATIO
+  // (= SWITCHER_SCALE) instead of cardWidth/390 avoids rounding drift.
+  const cardBodyRadius = deviceCornerRadius * CARD_WIDTH_RATIO;
+
+
+  // Non-active cards play a subtle entrance animation when the switcher opens.
+  // The active card is hidden behind AppHost (z-18) during the shrink, so it
+  // doesn't need a separate entrance animation.
+  const shouldEnterAnimate = enterAnimating && !isActiveCard;
+  const enterDelay = shouldEnterAnimate ? Math.min(enterIndex * 0.04, 0.12) : 0;
 
   // --- Touch-based dismiss gesture ---
   // We use native touch events (not pointer events) because:
@@ -326,6 +362,7 @@ function SwitcherCard({
     if (e.touches.length !== 1) return;
     const t = e.touches[0]!;
     const d = dismissRef.current;
+    const duringEntrance = enterAnimatingRef.current;
 
     if (d.phase === 'pending') {
       const dx = t.clientX - (d.startX ?? 0);
@@ -340,9 +377,13 @@ function SwitcherCard({
       if (result) {
         d.phase = 'locked';
         e.preventDefault();
-        dragY.set(0);
-        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-        startCardDismiss(appId, d.startY, Math.max(rect.height, 200));
+        // During entrance: track silently — no visual updates, no store calls.
+        // The gesture is buffered and auto-executed when entrance completes.
+        if (!duringEntrance) {
+          dragY.set(0);
+          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          startCardDismiss(appId, d.startY, Math.max(rect.height, 200));
+        }
       } else {
         d.phase = 'idle'; // horizontal — let scroll handle it
         return;
@@ -355,14 +396,15 @@ function SwitcherCard({
     e.preventDefault();
     draggedRef.current = true;
     const deltaY = t.clientY - d.startY;
-    dragY.set(Math.min(deltaY, 0));
-    // Velocity samples
+    // During entrance: skip visual movement to avoid "two cards" split
+    if (!duringEntrance) {
+      dragY.set(Math.min(deltaY, 0));
+    }
+    // Velocity samples — kept in ref, NOT pushed to Zustand per-frame.
     if (!d.samples) d.samples = [];
     d.samples.push({ time: performance.now(), x: 0, y: t.clientY });
     if (d.samples.length > 8) d.samples = d.samples.slice(-8);
-    const { vy } = computeVelocity(d.samples);
-    updateCardDismiss(t.clientY, vy);
-  }, [appId, dragY, startCardDismiss, updateCardDismiss]);
+  }, [appId, dragY, startCardDismiss]);
 
   useEffect(() => {
     const el = cardBodyRef.current;
@@ -380,6 +422,19 @@ function SwitcherCard({
     d.phase = 'idle';
 
     const t = e.changedTouches[0]!;
+
+    // During entrance on active card: redirect AppHost to fly away.
+    // On non-active cards: ignore (no AppHost covering them, but entrance
+    // animation blocks normal dismiss anyway).
+    const storeState = useAppRuntimeStore.getState();
+    if (storeState.switcherEnterAnimating && isActiveCard) {
+      const deltaY = t.clientY - d.startY;
+      if (deltaY < -30) {
+        storeState.dismissActiveFromSwitcher();
+      }
+      return;
+    }
+
     if (d.samples) {
       d.samples.push({ time: performance.now(), x: 0, y: t.clientY });
     }
@@ -406,7 +461,7 @@ function SwitcherCard({
         velocity: result.velocity * 1000,
       });
     }
-  }, [appId, dragY, updateCardDismiss, finishCardDismiss, onDismissCommit, onDismissComplete]);
+  }, [isActiveCard, appId, dragY, updateCardDismiss, finishCardDismiss, onDismissCommit, onDismissComplete]);
 
   const handleTouchCancel = useCallback(() => {
     if (dismissRef.current.phase === 'locked') {
@@ -425,8 +480,6 @@ function SwitcherCard({
         marginLeft: wrapperMargin,
         scrollSnapAlign: isFlyingAway ? undefined : 'center',
         y: dragY,
-        // Only apply scale during active drag, not during fly-away.
-        scale: isFlyingAway ? 1 : scaleFromDrag,
         // Activating card stays visible — AppHost (z-18) covers it.
         // Other cards fade out via the parent container's opacity transition.
         opacity: isActivatingOther ? 0 : 1,
@@ -439,8 +492,16 @@ function SwitcherCard({
         role="button"
         tabIndex={0}
         className="w-full text-left outline-none"
+        style={
+          shouldEnterAnimate
+            ? {
+                opacity: 0,
+                animation: `switcher-card-enter 300ms ease-out ${enterDelay * 1000}ms both`,
+              }
+            : undefined
+        }
         onClick={(event) => {
-          if (draggedRef.current || isFlyingAway) {
+          if (enterAnimating || draggedRef.current || isFlyingAway) {
             draggedRef.current = false;
             return;
           }
@@ -469,10 +530,9 @@ function SwitcherCard({
           ref={cardBodyRef}
           className="overflow-hidden bg-black"
           style={{
-            aspectRatio: '9 / 19.5',
+            aspectRatio: `${viewportProfile.width} / ${viewportProfile.height}`,
             borderRadius: cardBodyRadius,
             position: 'relative',
-            boxShadow: '0 18px 50px rgba(0,0,0,0.35), 0 4px 14px rgba(0,0,0,0.18)',
           }}
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
@@ -481,6 +541,7 @@ function SwitcherCard({
           <div
             className="pointer-events-none relative h-full w-full"
             data-testid={`switcher-card-surface-${appId}`}
+            inert
           >
             <SwitcherAppContent appId={appId} cardWidth={cardWidth} />
           </div>
@@ -521,15 +582,31 @@ interface DismissState {
 // ---------------------------------------------------------------------------
 
 function SwitcherAppContent({ appId, cardWidth }: { appId: string; cardWidth: number }) {
+  const [mounted, setMounted] = useState(false);
+  const viewportProfile = useViewportProfile();
   const scale = cardWidth / 390;
+  const refHeight = Math.ceil(viewportProfile.height * 390 / viewportProfile.width);
+
+  useEffect(() => {
+    // Defer the heavy AppScene mount so it doesn't block entrance animations
+    // or early dismiss gestures. startTransition marks it as interruptible —
+    // if the user starts swiping, React handles the gesture first.
+    const id = requestAnimationFrame(() => {
+      startTransition(() => setMounted(true));
+    });
+    return () => cancelAnimationFrame(id);
+  }, []);
+
   return (
-    <div className="absolute inset-0 overflow-hidden">
-      <div
-        className="absolute left-0 top-0 origin-top-left"
-        style={{ width: 390, height: 844, transform: `scale(${scale})` }}
-      >
-        <AppScene appId={appId} />
-      </div>
+    <div className="absolute inset-0 overflow-hidden" style={{ contain: 'strict' }}>
+      {mounted && (
+        <div
+          className="absolute left-0 top-0 origin-top-left"
+          style={{ width: 390, height: refHeight, transform: `scale(${scale})` }}
+        >
+          <AppScene appId={appId} />
+        </div>
+      )}
     </div>
   );
 }
