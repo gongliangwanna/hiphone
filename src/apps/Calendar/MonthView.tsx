@@ -336,6 +336,7 @@ export function MonthView() {
                   paddingLeft: 20,
                   minHeight: 44,
                   cursor: 'pointer',
+                  textAlign: 'left',
                 }}
                 onClick={() => push('event-detail', { eventId: event.id })}
                 data-testid={`event-row-${event.id}`}
