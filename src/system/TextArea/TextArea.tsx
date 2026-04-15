@@ -37,7 +37,7 @@ export function TextArea({
       placeholder={placeholder}
       rows={rows}
       maxLength={maxLength}
-      className="w-full resize-none p-3"
+      className="block w-full resize-none p-3"
       style={{
         fontSize: 'var(--font-size-body)',
         color: 'var(--color-label)',
