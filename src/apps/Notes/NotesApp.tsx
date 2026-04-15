@@ -101,7 +101,7 @@ export function NotesApp() {
       >
         <AnimatePresence initial={false}>
           <motion.div
-            key={currentPage + (currentPage === 'editor' ? activeNoteId : '')}
+            key={currentPage}
             className="absolute inset-0 flex min-h-0 flex-col"
             style={{
               backgroundColor: 'var(--color-systemBackground)',

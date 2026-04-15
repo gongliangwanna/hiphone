@@ -140,19 +140,32 @@ export function Device() {
   const switcherBgActive = presentationMode === 'switcher';
   // Fade out the blur background when transitioning from switcher to foreground
   // instead of instantly unmounting it.
+  //
+  // CRITICAL: the fading toggle MUST happen synchronously during render (React's
+  // "setState during render" pattern), NOT in a useEffect. An effect runs after
+  // paint, which leaves one frame where showSwitcherBg is false — the blur bg
+  // unmounts, the DOM element is removed, and when it remounts the CSS transition
+  // has no previous opacity to animate from, causing an instant opacity jump.
   const [switcherBgFading, setSwitcherBgFading] = useState(false);
   const prevSwitcherBgRef = useRef(switcherBgActive);
+  if (prevSwitcherBgRef.current && !switcherBgActive && !switcherBgFading && activeAppId) {
+    // Only keep the blur alive when activating an app (AppHost needs time to
+    // expand). Going home (activeAppId=null) removes the blur immediately.
+    setSwitcherBgFading(true);
+  }
+  if (switcherBgActive && switcherBgFading) {
+    setSwitcherBgFading(false);
+  }
+  prevSwitcherBgRef.current = switcherBgActive;
+
+  // Clean up fading state after the CSS animation completes
   useEffect(() => {
-    if (prevSwitcherBgRef.current && !switcherBgActive) {
-      setSwitcherBgFading(true);
-      const timer = setTimeout(() => setSwitcherBgFading(false), 350);
-      return () => clearTimeout(timer);
-    }
-    if (switcherBgActive) {
-      setSwitcherBgFading(false);
-    }
-    prevSwitcherBgRef.current = switcherBgActive;
-  }, [switcherBgActive]);
+    if (!switcherBgFading) return;
+    // 250ms CSS transition-delay + 300ms opacity fade + buffer
+    const timer = setTimeout(() => setSwitcherBgFading(false), 600);
+    return () => clearTimeout(timer);
+  }, [switcherBgFading]);
+
   const showSwitcherBg = switcherBgActive || switcherBgFading;
 
   useEffect(() => {
@@ -221,6 +234,11 @@ export function Device() {
       el.style.transform = '';
       el.style.opacity = '';
       el.style.visibility = 'hidden';
+    } else if (switcherBgFading && appCoversScreen) {
+      // Exiting switcher into an app — keep desktop hidden until the blur
+      // backdrop fades and AppHost expand covers the screen. When going
+      // home (appCoversScreen=false), skip this so the Dock is visible.
+      el.style.visibility = 'hidden';
     } else if (appCoversScreen) {
       // App is opening / fully open — scale down + dim Springboard behind it
       el.style.visibility = 'visible';
@@ -242,7 +260,7 @@ export function Device() {
       el.style.opacity = '1';
       el.style.visibility = 'visible';
     }
-  }, [disableDesktopFilter, isLocked, presentationMode, appCoversScreen, appDismissing]);
+  }, [disableDesktopFilter, isLocked, presentationMode, appCoversScreen, appDismissing, switcherBgFading]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -343,7 +361,8 @@ export function Device() {
                 willChange: 'transform',
                 zIndex: 1,
                 opacity: switcherBgFading ? 0 : 1,
-                transition: switcherBgFading ? 'opacity 300ms ease-out' : undefined,
+                // 250ms delay lets AppHost expand cover the screen before blur fades
+                transition: switcherBgFading ? 'opacity 300ms ease-out 250ms' : undefined,
               }}
               data-perf-layer="wallpaper-gesture-overlay"
             />

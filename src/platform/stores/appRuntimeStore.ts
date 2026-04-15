@@ -75,7 +75,7 @@ export interface AppRuntimeState {
   switcherDismissing: boolean;
   statusBarStyle: StatusBarStyle;
   setStatusBarStyle: (style: StatusBarStyle) => void;
-  openApp: (id: string, origin: AppOrigin) => void;
+  openApp: (id: string, origin: AppOrigin | null) => void;
   activateApp: (id: string, source?: AppTransitionSource) => void;
   activateAppFromCard: (
     id: string,

@@ -66,54 +66,44 @@ export function Settings() {
         <span style={{ fontSize: 16, fontWeight: 700, color: T.textPrimary }}>设置</span>
       </div>
 
-      <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto px-4 pt-4 pb-8">
-        {/* 封面图 */}
-        <motion.div
-          style={{
-            borderRadius: T.r.xl,
-            backgroundColor: T.card,
-            boxShadow: T.shadow2,
-            overflow: 'hidden',
-          }}
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
+      <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto pb-8">
+        {/* 封面图 — 全宽布局，与"我的"页保持一致 */}
+        <motion.button
+          className="relative w-full overflow-hidden"
+          style={{ height: 200 }}
+          onClick={() => setShowCoverPicker(true)}
+          whileTap={{ scale: 0.98 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
           transition={springs.gentle}
         >
-          <motion.button
-            className="relative w-full"
-            style={{ height: 120 }}
-            onClick={() => setShowCoverPicker(true)}
-            whileTap={{ scale: 0.98 }}
-          >
-            <img
-              src={settings.coverUrl || DEFAULT_COVER}
-              alt=""
-              className="absolute inset-0 h-full w-full object-cover"
-            />
-            <div
-              className="absolute inset-0"
-              style={{ background: 'linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.3) 100%)' }}
-            />
-            <div className="absolute bottom-2.5 right-3 flex items-center gap-1 rounded-full px-2.5 py-1" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}>
-              <ImageIcon size={12} color="#fff" strokeWidth={2.5} />
-              <span style={{ fontSize: 11, color: '#fff', fontWeight: 500 }}>更换封面</span>
-            </div>
-          </motion.button>
-        </motion.div>
+          <img
+            src={settings.coverUrl || DEFAULT_COVER}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+          <div
+            className="absolute bottom-0 left-0 right-0"
+            style={{
+              height: 60,
+              background: `linear-gradient(180deg, transparent 0%, ${T.bg} 100%)`,
+            }}
+          />
+          <div className="absolute bottom-2.5 right-3 flex items-center gap-1 rounded-full px-2.5 py-1" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}>
+            <ImageIcon size={12} color="#fff" strokeWidth={2.5} />
+            <span style={{ fontSize: 11, color: '#fff', fontWeight: 500 }}>更换封面</span>
+          </div>
+        </motion.button>
 
-        {/* Avatar & Nickname */}
+        {/* Avatar & Nickname — 负 margin 叠在封面上 */}
+        <div className="relative px-4" style={{ marginTop: -50, zIndex: 1 }}>
         <motion.div
           className="flex flex-col items-center"
           style={{
             padding: '24px 20px',
             borderRadius: T.r.xl,
             backgroundColor: T.card,
-            boxShadow: T.shadow2,
-            marginTop: -36,
-            position: 'relative',
-            zIndex: 1,
-            marginLeft: 16,
-            marginRight: 16,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.03)',
           }}
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -176,8 +166,10 @@ export function Settings() {
             />
           </div>
         </motion.div>
+        </div>
 
         {/* Theme Color */}
+        <div className="px-4">
         <motion.div
           className="mt-4"
           style={{
@@ -251,6 +243,7 @@ export function Settings() {
 
         <div className="mt-8 flex flex-col items-center" style={{ opacity: 0.3 }}>
           <span style={{ fontSize: 11, color: T.textMuted, letterSpacing: 1 }}>可爱信 v1.0</span>
+        </div>
         </div>
       </div>
 

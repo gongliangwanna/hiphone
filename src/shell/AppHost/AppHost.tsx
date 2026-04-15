@@ -235,7 +235,7 @@ export function AppHost() {
             opacity: 0,
             scale: 0.3,
             x: 0,
-            y: vpHeight,
+            y: 0,
           }}
           transition={fallbackExitTransition}
           onAnimationComplete={() => {

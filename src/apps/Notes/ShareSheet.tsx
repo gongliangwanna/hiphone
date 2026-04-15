@@ -9,6 +9,7 @@ import { getIdol } from '@/apps/XingYu/data';
 import { useCharacterStore } from '@/platform/stores/characterStore';
 import { useToastStore } from '@/system';
 import { Avatar } from '@/apps/XingYu/components/Avatar';
+import { stripHtml } from './richTextUtils';
 
 const CHAR_FALLBACK_AVATAR = '/resource/avatars/preset-01.jpg';
 
@@ -77,7 +78,7 @@ export function ShareSheet({ noteId }: ShareSheetProps) {
       useXYData.getState().sendNoteMessage(target.convId, {
         noteId: noteId,
         title: note.title,
-        body: note.body,
+        body: stripHtml(note.body),
       });
       useToastStore.getState().show(`已分享到 ${target.name}`);
       close();

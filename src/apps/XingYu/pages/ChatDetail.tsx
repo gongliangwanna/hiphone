@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback, memo } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, Phone, Send, Image, Smile, Search, X, Palette, MoreHorizontal, FileText, Music } from 'lucide-react';
+import { motion } from 'motion/react';
+import { ChevronLeft, Phone, Send, Image, Smile, Palette, MoreHorizontal, Play } from 'lucide-react';
 import { useXYNav } from '../xingYuNavStore';
 import { useXYData } from '../xingYuDataStore';
 import { getIdol, formatChatTime, DEFAULT_AVATAR } from '../data';
@@ -45,10 +45,12 @@ export function ChatDetail() {
   const sendStickerMessage = useXYData((s) => s.sendStickerMessage);
   const markRead = useXYData((s) => s.markRead);
 
+  const scrollToMessageId = useXYNav((s) => s.scrollToMessageId);
+  const clearScrollToMessage = useXYNav((s) => s.clearScrollToMessage);
+
   const [input, setInput] = useState('');
   const [pickerMode, setPickerMode] = useState<PickerMode>('none');
-  const [searchMode, setSearchMode] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [highlightMsgId, setHighlightMsgId] = useState<string | null>(null);
   const [showDrawing, setShowDrawing] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -199,21 +201,13 @@ export function ChatDetail() {
     [allMessages, activeChatId],
   );
 
-  const messages = useMemo(() => {
-    if (!searchQuery.trim()) return allConvMessages;
-    const q = searchQuery.trim().toLowerCase();
-    return allConvMessages.filter(
-      (m) => m.text?.toLowerCase().includes(q) || m.stickerDesc?.toLowerCase().includes(q),
-    );
-  }, [allConvMessages, searchQuery]);
+  // Paginated slice: show last N messages.
+  const visibleMessages = useMemo(
+    () => allConvMessages.slice(-displayCount),
+    [allConvMessages, displayCount],
+  );
 
-  // Paginated slice: search shows all results, normal mode shows last N.
-  const visibleMessages = useMemo(() => {
-    if (searchQuery.trim()) return messages;
-    return messages.slice(-displayCount);
-  }, [messages, searchQuery, displayCount]);
-
-  const hasMore = !searchQuery.trim() && messages.length > displayCount;
+  const hasMore = allConvMessages.length > displayCount;
 
   // Reset pagination & animation tracking when switching chats.
   useEffect(() => {
@@ -278,10 +272,44 @@ export function ChatDetail() {
 
   // Auto-scroll to the latest message whenever message count changes, the
   // streaming text grows, OR when the user switches conversations.
+  // Skip when we are scrolling to (or just scrolled to) a specific target message.
+  const scrollingToTargetRef = useRef(false);
   useEffect(() => {
+    if (scrollToMessageId || scrollingToTargetRef.current) return;
     // rAF so layout has a chance to lay out any brand-new bubble first.
     requestAnimationFrame(() => scrollToBottom('auto'));
-  }, [activeChatId, messages.length, lastMsgTextLen, scrollToBottom]);
+  }, [activeChatId, allConvMessages.length, lastMsgTextLen, scrollToBottom, scrollToMessageId]);
+
+  // ── Scroll-to-message: triggered from ChatSearch result ──
+  useEffect(() => {
+    if (!scrollToMessageId) return;
+    const idx = allConvMessages.findIndex((m) => m.id === scrollToMessageId);
+    if (idx < 0) {
+      clearScrollToMessage();
+      return;
+    }
+    // Expand pagination to include the target message
+    const fromEnd = allConvMessages.length - idx;
+    if (fromEnd > displayCount) {
+      setDisplayCount(fromEnd + 10);
+      return; // will re-run after displayCount update renders the target
+    }
+    // DOM should contain the target now — scroll after layout
+    scrollingToTargetRef.current = true;
+    clearScrollToMessage();
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        const el = document.getElementById(`msg-${scrollToMessageId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setHighlightMsgId(scrollToMessageId);
+          setTimeout(() => setHighlightMsgId(null), 2000);
+        }
+        // Keep the guard up briefly so auto-scroll doesn't fight smooth scroll
+        setTimeout(() => { scrollingToTargetRef.current = false; }, 600);
+      }, 150);
+    });
+  }, [scrollToMessageId, allConvMessages, displayCount, clearScrollToMessage]);
 
   // ResizeObserver on the scroll container keeps the latest message
   // pinned to the bottom through flex reflows (orientation change,
@@ -293,7 +321,7 @@ export function ChatDetail() {
     const el = scrollRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(() => {
-      if (userTouchingRef.current) return;
+      if (userTouchingRef.current || scrollingToTargetRef.current) return;
       const max = el.scrollHeight - el.clientHeight;
       el.scrollTo({ top: Math.max(0, max - 1), behavior: 'auto' });
     });
@@ -414,7 +442,7 @@ export function ChatDetail() {
           <div className="flex w-1/4 items-center justify-start">
             <motion.button
               className="flex items-center justify-center gap-1"
-              onClick={() => { searchMode ? (setSearchMode(false), setSearchQuery('')) : closeChat(); }}
+              onClick={closeChat}
               whileTap={{ opacity: 0.5 }}
               transition={{ duration: 0 }}
             >
@@ -451,14 +479,6 @@ export function ChatDetail() {
               className="flex items-center justify-center"
               style={{ width: 32, height: 32 }}
               whileTap={{ opacity: 0.5 }}
-              onClick={() => { setSearchMode((p) => !p); setSearchQuery(''); }}
-            >
-              <Search size={18} strokeWidth={2} color={searchMode ? T.accent : T.textSecondary} />
-            </motion.button>
-            <motion.button
-              className="flex items-center justify-center"
-              style={{ width: 32, height: 32 }}
-              whileTap={{ opacity: 0.5 }}
             >
               <Phone size={18} strokeWidth={2} color={T.textSecondary} />
             </motion.button>
@@ -472,57 +492,6 @@ export function ChatDetail() {
             </motion.button>
           </div>
         </div>
-
-        {/* Search bar */}
-        <AnimatePresence>
-          {searchMode && (
-            <motion.div
-              className="flex items-center gap-2 px-3 pb-2"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-            >
-              <div
-                className="flex min-w-0 flex-1 items-center gap-2"
-                style={{
-                  height: 34,
-                  borderRadius: T.r.xl,
-                  backgroundColor: T.card,
-                  paddingLeft: 12,
-                  paddingRight: 6,
-                  border: `1px solid ${T.border}`,
-                }}
-              >
-                <Search size={14} strokeWidth={1.8} color={T.textMuted} />
-                <input
-                  className="min-w-0 flex-1 bg-transparent outline-none"
-                  style={{ fontSize: 13, color: T.textPrimary }}
-                  placeholder="搜索消息..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  autoFocus
-                />
-                {searchQuery && (
-                  <motion.button
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    className="flex items-center justify-center rounded-full"
-                    style={{ width: 18, height: 18, backgroundColor: T.textMuted }}
-                    onClick={() => setSearchQuery('')}
-                  >
-                    <X size={10} strokeWidth={2.5} color={T.card} />
-                  </motion.button>
-                )}
-              </div>
-              {searchQuery && (
-                <span style={{ fontSize: 11, color: T.textMuted, whiteSpace: 'nowrap' }}>
-                  {messages.length} 条结果
-                </span>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
 
       {/* ── Messages ──
@@ -564,6 +533,7 @@ export function ChatDetail() {
               onAvatarTap={openIdol}
               skipAnimation={!shouldAnimate}
               aiChatPeers={aiChatPeers}
+              highlight={msg.id === highlightMsgId}
             />
           );
         })}
@@ -770,6 +740,7 @@ const MsgBubble = memo(function MsgBubble({
   onAvatarTap,
   skipAnimation,
   aiChatPeers,
+  highlight,
 }: {
   msg: Message;
   peer: { id: string; avatar: string; ringIndex: number };
@@ -778,6 +749,7 @@ const MsgBubble = memo(function MsgBubble({
   skipAnimation?: boolean;
   /** For AI-AI conversations: provides both peers and which side each goes */
   aiChatPeers?: AIChatPeers;
+  highlight?: boolean;
 }) {
   const { isSelf: perspectiveIsSelf, phoneOwnerId } = usePerspective();
   const isMine = aiChatPeers
@@ -804,9 +776,18 @@ const MsgBubble = memo(function MsgBubble({
 
   return (
     <motion.div
+      id={`msg-${msg.id}`}
       initial={skipAnimation ? false : { opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={skipAnimation ? { duration: 0 } : springs.gentle}
+      animate={{
+        opacity: 1,
+        y: 0,
+        backgroundColor: highlight ? [T.accentLight, 'transparent'] : 'transparent',
+      }}
+      transition={{
+        ...(skipAnimation ? { duration: 0 } : springs.gentle),
+        backgroundColor: highlight ? { duration: 2, ease: 'easeOut' } : { duration: 0 },
+      }}
+      style={{ borderRadius: 12 }}
     >
       {showTime && (
         <div className="py-2.5 text-center">
@@ -884,126 +865,165 @@ const MsgBubble = memo(function MsgBubble({
           {msg.type === 'text' && msg.noteRef ? (
             <button
               type="button"
-              className="w-full text-left"
+              className="w-full text-left flex flex-col"
               onClick={() => {
-                useAppRuntimeStore.getState().openApp('notes', { x: 0, y: 0, width: 60, height: 60 });
+                useAppRuntimeStore.getState().openApp('notes', null);
                 setTimeout(() => {
                   useNotesNavStore.getState().reset();
                   useNotesNavStore.getState().push('editor', msg.noteRef!.noteId);
                 }, 50);
               }}
               style={{
-                borderRadius: 12,
-                borderTopRightRadius: isMine ? 4 : 12,
-                borderTopLeftRadius: isMine ? 12 : 4,
+                borderRadius: 18,
                 background: T.card,
                 boxShadow: T.shadow1,
-                border: `1px solid ${T.border}`,
+                border: `0.5px solid ${T.border}`,
                 overflow: 'hidden',
-                width: 220,
+                width: 250,
+                // 取消气泡的不对称圆角，iOS Rich Link 通常是统一大圆角
+                marginLeft: isMine ? 'auto' : undefined,
               }}
             >
-              {/* 主体: 图标 + 标题/摘要 */}
-              <div className="flex items-center gap-2.5" style={{ padding: '10px 12px' }}>
+              {/* Top: Note Preview Area */}
+              <div
+                className="relative w-full flex items-center justify-center p-4"
+                style={{ 
+                  aspectRatio: '4/3', 
+                  background: 'linear-gradient(135deg, #FFF9D2 0%, #FCEB82 100%)',
+                  borderBottom: `0.5px solid ${T.border}`,
+                }}
+              >
+                {/* Simulated paper card inside */}
                 <div
-                  className="flex shrink-0 items-center justify-center"
+                  className="w-full h-full bg-white/80 rounded-md p-3 flex flex-col overflow-hidden"
                   style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 8,
-                    background: 'linear-gradient(135deg, #FFCC00 0%, #FF9500 100%)',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                    border: '0.5px solid rgba(255,255,255,0.8)'
                   }}
                 >
-                  <FileText size={18} strokeWidth={2} color="#fff" />
-                </div>
-                <div className="min-w-0 flex-1">
                   <div
-                    className="truncate"
-                    style={{ fontSize: 14, fontWeight: 600, color: T.textPrimary, lineHeight: 1.3 }}
+                    className="line-clamp-2"
+                    style={{ fontSize: 16, fontWeight: 600, color: '#2C2C2E', lineHeight: 1.3 }}
                   >
                     {msg.noteRef.title || '无标题备忘录'}
                   </div>
                   <div
-                    className="truncate"
-                    style={{ fontSize: 12, color: T.textSecondary, lineHeight: 1.3, marginTop: 2 }}
+                    className="line-clamp-3 mt-1.5"
+                    style={{ fontSize: 13, color: '#666', lineHeight: 1.4, whiteSpace: 'pre-wrap' }}
                   >
-                    {msg.noteRef.body?.slice(0, 30) || '无内容'}
+                    {msg.noteRef.body?.slice(0, 80) || '无附加文本'}
                   </div>
                 </div>
               </div>
-              {/* 底栏: 来源标识 */}
+              
+              {/* Bottom: Info & App Icon */}
               <div
-                className="flex items-center gap-1 px-3"
-                style={{
-                  height: 24,
-                  borderTop: `0.5px solid ${T.separator}`,
-                  fontSize: 10,
-                  color: T.textMuted,
-                }}
+                className="flex items-center justify-between w-full"
+                style={{ padding: '12px 14px' }}
               >
-                <FileText size={10} strokeWidth={2} />
-                <span>备忘录</span>
+                <div className="min-w-0 flex-1 pr-3">
+                  <div
+                    className="truncate"
+                    style={{ fontSize: 15, fontWeight: 600, color: T.textPrimary, lineHeight: 1.2 }}
+                  >
+                    备忘录
+                  </div>
+                  <div
+                    className="truncate"
+                    style={{ fontSize: 13, color: T.textSecondary, lineHeight: 1.2, marginTop: 4 }}
+                  >
+                    通过 Cloud 分享
+                  </div>
+                </div>
+                <img
+                  src="/resource/icons/ios-system/notes.jpg"
+                  alt="备忘录"
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: 6,
+                    border: '0.5px solid rgba(0,0,0,0.1)',
+                    flexShrink: 0
+                  }}
+                />
               </div>
             </button>
           ) : msg.type === 'text' && msg.songRef ? (
             <button
               type="button"
-              className="w-full text-left"
+              className="w-full text-left flex flex-col"
               onClick={() => {
-                useAppRuntimeStore.getState().openApp('music', { x: 0, y: 0, width: 60, height: 60 });
+                useAppRuntimeStore.getState().openApp('music', null);
               }}
               style={{
-                borderRadius: 12,
-                borderTopRightRadius: isMine ? 4 : 12,
-                borderTopLeftRadius: isMine ? 12 : 4,
+                borderRadius: 18,
                 background: T.card,
                 boxShadow: T.shadow1,
-                border: `1px solid ${T.border}`,
+                border: `0.5px solid ${T.border}`,
                 overflow: 'hidden',
-                width: 220,
+                width: 250,
+                marginLeft: isMine ? 'auto' : undefined,
               }}
             >
-              {/* 主体: 封面 + 歌名/歌手 */}
-              <div className="flex items-center gap-2.5" style={{ padding: 10 }}>
-                <div
-                  className="shrink-0 overflow-hidden"
-                  style={{ width: 44, height: 44, borderRadius: 6 }}
-                >
-                  <img
-                    src={msg.songRef.artworkUrl}
-                    alt=""
-                    className="block h-full w-full"
-                    style={{ objectFit: 'cover' }}
-                    draggable={false}
-                  />
+              {/* Top: Full width Artwork with Play Button */}
+              <div
+                className="relative w-full"
+                style={{ aspectRatio: '1/1', backgroundColor: '#e5e5ea' }}
+              >
+                <img
+                  src={msg.songRef.artworkUrl}
+                  alt=""
+                  className="block h-full w-full"
+                  style={{ objectFit: 'cover' }}
+                  draggable={false}
+                />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/10">
+                  <div
+                    className="flex items-center justify-center rounded-full"
+                    style={{
+                      width: 48,
+                      height: 48,
+                      background: 'rgba(255,255,255,0.3)',
+                      backdropFilter: 'blur(10px)',
+                      WebkitBackdropFilter: 'blur(10px)',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                    }}
+                  >
+                    <Play size={24} fill="#fff" color="#fff" style={{ marginLeft: 3 }} />
+                  </div>
                 </div>
-                <div className="min-w-0 flex-1">
+              </div>
+              
+              {/* Bottom: Info & App Icon */}
+              <div
+                className="flex items-center justify-between w-full"
+                style={{ padding: '12px 14px' }}
+              >
+                <div className="min-w-0 flex-1 pr-3">
                   <div
                     className="truncate"
-                    style={{ fontSize: 14, fontWeight: 600, color: T.textPrimary, lineHeight: 1.3 }}
+                    style={{ fontSize: 15, fontWeight: 600, color: T.textPrimary, lineHeight: 1.2 }}
                   >
                     {msg.songRef.title}
                   </div>
                   <div
                     className="truncate"
-                    style={{ fontSize: 12, color: T.textSecondary, lineHeight: 1.3, marginTop: 2 }}
+                    style={{ fontSize: 13, color: T.textSecondary, lineHeight: 1.2, marginTop: 4 }}
                   >
                     {msg.songRef.artist}
                   </div>
                 </div>
-              </div>
-              {/* 底栏来源 */}
-              <div
-                className="flex items-center gap-1 px-3"
-                style={{
-                  height: 24,
-                  borderTop: `0.5px solid ${T.separator}`,
-                  fontSize: 10,
-                  color: T.textMuted,
-                }}
-              >
-                <Music size={10} strokeWidth={2} />
-                <span>音乐</span>
+                <img
+                  src="/resource/icons/ios-system/music.jpg"
+                  alt="Music"
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: 6,
+                    border: '0.5px solid rgba(0,0,0,0.1)',
+                    flexShrink: 0
+                  }}
+                />
               </div>
             </button>
           ) : msg.type === 'text' && msg.text && (
@@ -1044,7 +1064,7 @@ const MsgBubble = memo(function MsgBubble({
             onClick={() => onAvatarTap?.(aiP ? peer.id : phoneOwnerId || 'me')}
             whileTap={{ scale: 0.9 }}
           >
-            <Avatar src={selfAvatar} size={28} ringIndex={aiP?.ringIndex ?? 0} />
+            <Avatar src={selfAvatar} size={36} ringIndex={aiP?.ringIndex ?? 0} />
           </motion.button>
           );
         })()}
@@ -1058,7 +1078,7 @@ const MsgBubble = memo(function MsgBubble({
 function TypingDots({ avatarSrc, ringIndex }: { avatarSrc: string; ringIndex: number }) {
   return (
     <div className="mb-2 flex items-end gap-2">
-      <Avatar src={avatarSrc} size={28} ringIndex={ringIndex} />
+      <Avatar src={avatarSrc} size={36} ringIndex={ringIndex} />
       <div
         className="flex items-center gap-1.5"
         style={{

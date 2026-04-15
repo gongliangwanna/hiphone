@@ -18,6 +18,7 @@ import { WorldBookEntryEditPage } from './pages/WorldBookEntryEditPage';
 import { PromptViewerPage } from './pages/PromptViewerPage';
 import { HeartbeatSettingsPage } from './pages/HeartbeatSettingsPage';
 import { ModelSelectPage } from './pages/ModelSelectPage';
+import { DeveloperToolsPage } from './pages/DeveloperToolsPage';
 import { AppScreen, NavBar } from '@/system';
 
 const PAGE_TITLES: Record<string, string> = {
@@ -40,6 +41,7 @@ const PAGE_TITLES: Record<string, string> = {
   modelSelect: '选择模型',
   heartbeat: '心跳系统',
   disclaimer: '免责声明',
+  developerTools: '开发者工具',
 };
 
 const PAGE_COMPONENTS: Record<string, React.ComponentType> = {
@@ -60,6 +62,7 @@ const PAGE_COMPONENTS: Record<string, React.ComponentType> = {
   modelSelect: ModelSelectPage,
   heartbeat: HeartbeatSettingsPage,
   disclaimer: DisclaimerPage,
+  developerTools: DeveloperToolsPage,
 };
 
 /** iOS push/pop slide — 350ms, ease-out */

@@ -56,6 +56,12 @@ export interface AppDragPreview {
 
 /** Entrance transition shared by newly-added widgets and apps. */
 const ENTRANCE_TRANSITION = { type: 'spring' as const, ...spring.smooth };
+/** Default slot transition — spring for layout FLIP, instant opacity.
+ *  Only the `isEntering` path uses `ENTRANCE_TRANSITION` (spring opacity).
+ *  Instant opacity prevents the "flash" on drag-end: the DragOverlay
+ *  vanishes in the same frame the slot unhides, so a spring fade-in would
+ *  show a brief transparent gap. */
+const SLOT_TRANSITION = { ...ENTRANCE_TRANSITION, opacity: { duration: 0 } };
 
 interface WidgetSlotProps {
   widget: WidgetInstance;
@@ -133,10 +139,7 @@ function WidgetSlot({
     justifySelf: 'stretch',
     padding: 4,
     boxSizing: 'border-box',
-    // Hide the source while the floating overlay owns the visual; also
-    // suppress pointer interaction as defense-in-depth against any child
-    // widget component that might otherwise capture pointer events.
-    visibility: isBeingDragged ? 'hidden' : 'visible',
+    // Suppress pointer interaction while the floating overlay owns the drag.
     pointerEvents: isBeingDragged ? 'none' : undefined,
     // `touch-action: none` keeps iOS Safari from intercepting as page pan.
     touchAction: isEditMode ? 'none' : undefined,
@@ -144,17 +147,10 @@ function WidgetSlot({
 
   return (
     <motion.div
-      layout
+      layout="position"
       initial={isEntering ? { scale: 0.6, opacity: 0 } : false}
-      // Same defense pattern as the app slot — Framer animate.opacity +
-      // inline visibility/pointerEvents (in `style` above) + skipping the
-      // child render below. The `WidgetDragOverlay` is the only visible
-      // representation while dragging.
-      animate={{
-        scale: 1,
-        opacity: isBeingDragged ? 0 : 1,
-      }}
-      transition={ENTRANCE_TRANSITION}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={isEntering ? ENTRANCE_TRANSITION : SLOT_TRANSITION}
       onLayoutAnimationComplete={isEntering ? onClearEntrance : undefined}
       className={`relative ${
         isEditMode
@@ -167,56 +163,42 @@ function WidgetSlot({
       onPointerDown={isEditMode ? handleEditPointerDown : longPress.onPointerDown}
       onPointerUp={isEditMode ? undefined : longPress.onPointerUp}
       onPointerCancel={isEditMode ? undefined : longPress.onPointerCancel}
-      // Suppress the click that browsers synthesize on pointerUp following
-      // a fired long-press. Using onClickCapture (capture phase) is
-      // essential: bubble-phase stopPropagation would run AFTER the inner
-      // widget's onClick (e.g. MusicWidget's tap-to-open), which would
-      // have already launched the app. Capture-phase stops the event
-      // before it descends into any child handler. Non-long-press clicks
-      // see `firedRef = false` and pass through untouched.
       onClickCapture={longPress.onClick}
       data-testid={`widget-slot-${widget.id}`}
     >
-      {/*
-        Render no widget content while this slot is the drag source. The
-        cell still occupies grid space (so neighbour reflow + Framer FLIP
-        keep working) but there is nothing to paint — `WidgetDragOverlay`
-        owns the visible icon. This was the missing piece behind the
-        "two icons" bug for app drag, mirrored here for symmetry.
-      */}
-      {isBeingDragged ? null : (
-        <>
-          <Component
-            size={widget.size}
-            styleIndex={widget.styleIndex ?? 0}
-          />
+      {/* Keep content always mounted — hide via wrapper visibility during
+          drag so WidgetDragOverlay is the only visible copy. */}
+      <div className="h-full" style={isBeingDragged ? { visibility: 'hidden' } : undefined}>
+        <Component
+          size={widget.size}
+          styleIndex={widget.styleIndex ?? 0}
+        />
 
-          {isEditMode && (
-            <button
-              type="button"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={() => onRemoveWidget?.(pageIndex, widget.id)}
-              className="absolute flex items-center justify-center"
-              style={{
-                top: -6,
-                left: -6,
-                width: 24,
-                height: 24,
-                borderRadius: 12,
-                backgroundColor: 'rgba(40,40,42,0.95)',
-                border: '1px solid rgba(255,255,255,0.25)',
-                color: 'white',
-                zIndex: 2,
-                cursor: 'pointer',
-              }}
-              data-testid={`widget-remove-${widget.id}`}
-              aria-label="移除小组件"
-            >
-              <X size={14} strokeWidth={3} />
-            </button>
-          )}
-        </>
-      )}
+        {isEditMode && (
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => onRemoveWidget?.(pageIndex, widget.id)}
+            className="absolute flex items-center justify-center"
+            style={{
+              top: -6,
+              left: -6,
+              width: 24,
+              height: 24,
+              borderRadius: 12,
+              backgroundColor: 'rgba(40,40,42,0.95)',
+              border: '1px solid rgba(255,255,255,0.25)',
+              color: 'white',
+              zIndex: 2,
+              cursor: 'pointer',
+            }}
+            data-testid={`widget-remove-${widget.id}`}
+            aria-label="移除小组件"
+          >
+            <X size={14} strokeWidth={3} />
+          </button>
+        )}
+      </div>
     </motion.div>
   );
 }
@@ -463,42 +445,28 @@ export const IconGrid = memo(function IconGrid({
           return (
             <motion.div
               key={app.id}
-              layout
+              layout="position"
               initial={isEntering ? { scale: 0.6, opacity: 0 } : false}
-              // While the slot is being dragged, force opacity through
-              // Framer's animation system AND drop the inline visibility/
-              // pointerEvents styles. Earlier attempts to hide via inline
-              // `visibility: hidden` + `opacity: 0` proved unreliable in
-              // production — the source slot kept rendering alongside the
-              // floating DragOverlay. The decisive fix is to skip rendering
-              // the AppIcon child entirely while dragging (see below);
-              // these styles are kept as belt-and-braces.
-              animate={{
-                scale: 1,
-                opacity: isBeingDragged ? 0 : 1,
-              }}
-              transition={ENTRANCE_TRANSITION}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={isEntering ? ENTRANCE_TRANSITION : SLOT_TRANSITION}
               onLayoutAnimationComplete={
                 isEntering ? clearRecentlyAdded : undefined
               }
               style={{
                 gridColumnStart: p.col + 1,
                 gridRowStart: p.row + 1,
-                visibility: isBeingDragged ? 'hidden' : 'visible',
                 pointerEvents: isBeingDragged ? 'none' : undefined,
               }}
             >
               {/*
-                Don't render any AppIcon while this slot is the drag source.
-                The CSS Grid cell still occupies its area (so the row-major
-                packer math holds and Framer FLIP can measure neighbours),
-                but there's literally nothing to paint here — the floating
-                DragOverlay is the only visible icon. This was the missing
-                piece behind the "two icons" bug: visibility/opacity wasn't
-                taking effect, so the only bulletproof fix is to omit the
-                child entirely.
+                Keep AppIcon always mounted so the slot never changes
+                dimensions — this gives the dragged slot the exact same
+                render path as neighbouring slots (no mount/unmount, no
+                FLIP size delta, no paint-frame gap). During drag the
+                DragOverlay owns the visual; this wrapper just hides the
+                grid copy via `visibility: hidden`.
               */}
-              {isBeingDragged ? null : (
+              <div style={isBeingDragged ? { visibility: 'hidden' } : undefined}>
                 <AppIcon
                   app={app}
                   metrics={metrics}
@@ -509,7 +477,7 @@ export const IconGrid = memo(function IconGrid({
                   onDragStart={onDragStart}
                   onOpen={onOpen}
                 />
-              )}
+              </div>
             </motion.div>
           );
         })}

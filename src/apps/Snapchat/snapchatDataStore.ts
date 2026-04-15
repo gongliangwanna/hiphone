@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { idbStorage } from '@/platform/storage/idbStorage';
+import { uid } from '@/platform/utils/uid';
 import type { Conversation, ChatMessage } from './data';
 import { SEED_CONVERSATIONS, SEED_MESSAGES } from './data';
 
@@ -20,7 +21,7 @@ export const useSnapchatDataStore = create<SnapchatDataState>()(
 
       sendMessage: (conversationId, text) => {
         const msg: ChatMessage = {
-          id: crypto.randomUUID(),
+          id: uid(),
           conversationId,
           senderId: 'me',
           text,

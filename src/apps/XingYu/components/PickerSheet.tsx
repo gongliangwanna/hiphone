@@ -30,15 +30,16 @@ export function PickerSheet({
   };
 
   return (
-    <motion.div
-      className="absolute inset-0 z-50 flex flex-col"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
-    >
-      {/* 遮罩 */}
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+    <motion.div className="absolute inset-0 z-50 flex flex-col">
+      {/* 遮罩 — 独立渐变动画，避免与面板弹簧动画冲突 */}
+      <motion.div
+        className="absolute inset-0 bg-black/40"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.3 }}
+        onClick={onClose}
+      />
       {/* 面板 — relative z-10 确保始终在遮罩之上（遮罩是 absolute z-auto） */}
       <motion.div
         className="relative z-10 mt-auto flex flex-col"

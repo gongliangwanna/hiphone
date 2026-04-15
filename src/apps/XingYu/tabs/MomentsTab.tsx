@@ -73,17 +73,13 @@ export function MomentsTab() {
         {/* 个人封面区域 (类似朋友圈) */}
         <div className="relative" style={{ height: 280, backgroundColor: T.bg }}>
           {/* 封面图 */}
-          <motion.button
-            className="absolute inset-0 w-full overflow-hidden"
-            onClick={() => setViewingImage('cover')}
-            whileTap={{ opacity: 0.8 }}
-          >
+          <div className="absolute inset-0 w-full overflow-hidden">
             <img
               src={displayProfile.coverUrl || DEFAULT_COVER}
               alt=""
               className="absolute inset-0 h-full w-full object-cover"
             />
-          </motion.button>
+          </div>
 
           {/* 底部渐变遮罩让头像过渡更自然 */}
           <div
@@ -190,29 +186,16 @@ export function MomentsTab() {
             exit={{ opacity: 0 }}
             onClick={() => setViewingImage(null)}
           >
-            {viewingImage === 'cover' ? (
-              <motion.img
-                src={displayProfile.coverUrl || DEFAULT_COVER}
-                alt=""
-                className="w-full"
-                style={{ maxHeight: '80%', objectFit: 'contain' }}
-                initial={{ scale: 0.9 }}
-                animate={{ scale: 1 }}
-                exit={{ scale: 0.9 }}
-                transition={springs.gentle}
-              />
-            ) : (
-              <motion.img
-                src={viewingImage}
-                alt=""
-                className="w-full"
-                style={{ maxHeight: '80%', objectFit: 'contain' }}
-                initial={{ scale: 0.9 }}
-                animate={{ scale: 1 }}
-                exit={{ scale: 0.9 }}
-                transition={springs.gentle}
-              />
-            )}
+            <motion.img
+              src={viewingImage}
+              alt=""
+              className="w-full"
+              style={{ maxHeight: '80%', objectFit: 'contain' }}
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.9 }}
+              transition={springs.gentle}
+            />
           </motion.div>
         )}
       </AnimatePresence>

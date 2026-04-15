@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AppInfo } from './apps.data';
 import type { SpringboardMetrics } from '../Device/viewportProfile';
 import {
@@ -213,12 +213,45 @@ export function useIconDrag({
   const [isSettling, setIsSettling] = useState(false);
   const pendingMoveRef = useRef<(() => void) | null>(null);
 
+  // ---- Overlay linger (prevents flash on settle → grid-slot swap) -----------
+  // After the settle animation completes, the DragOverlay and the grid slot
+  // swap visibility in the same frame. On some browsers/devices there's a
+  // 1-frame paint gap — the overlay is gone before the grid slot's first
+  // paint completes. To fix this we keep a static snapshot of the overlay
+  // for one extra paint frame so it covers the grid slot while it renders
+  // underneath. The snapshot is at z-50, same as the real overlay.
+  const overlayLingerRef = useRef<{ icon: string; x: number; y: number; size: number } | null>(null);
+  const [overlayLingering, setOverlayLingering] = useState(false);
+
+  useEffect(() => {
+    if (!overlayLingering) return;
+    const id = requestAnimationFrame(() => {
+      setOverlayLingering(false);
+      overlayLingerRef.current = null;
+    });
+    return () => cancelAnimationFrame(id);
+  }, [overlayLingering]);
+
   const onSettleComplete = useCallback(() => {
+    // Snapshot the overlay's appearance before clearing state.
+    const app = dragPos ? pages[dragPos.page]?.[dragPos.localIndex] ?? null : null;
+    if (app) {
+      overlayLingerRef.current = {
+        icon: app.icon,
+        x: dragX,
+        y: dragY,
+        size: metrics.iconSize,
+      };
+    }
+
     pendingMoveRef.current?.();
     pendingMoveRef.current = null;
     setIsSettling(false);
     resetAllState();
-  }, [resetAllState]);
+    // Activate linger — same React batch, so the snapshot overlay renders
+    // in the same frame that the main overlay unmounts.
+    setOverlayLingering(true);
+  }, [resetAllState, dragPos, pages, dragX, dragY, metrics.iconSize]);
 
   const onDragStart = useCallback(
     (pageIndex: number, localIndex: number, e: React.PointerEvent<HTMLElement>) => {
@@ -486,20 +519,23 @@ export function useIconDrag({
           drop.col === meta.widget.col &&
           drop.row === meta.widget.row;
 
-        // Defer moveWidget until the settle animation completes
-        if (!same) {
+        if (same) {
+          // Dropped at original position — no move, no settle animation needed.
+          resetAllState();
+        } else {
+          // Defer moveWidget until the settle animation completes
           pendingMoveRef.current = () =>
             moveWidget(meta.fromPage, meta.widget.id, drop.page, drop.col, drop.row);
+
+          // Stop accepting pointer moves but keep widgetDrag/widgetDropPos
+          // alive so the grid slot stays hidden during the settle animation.
+          pointerRef.current = null;
+          dragKindRef.current = null;
+
+          setDragX(sidePadding + drop.col * colWidth);
+          setDragY(metrics.springboardTopPadding + drop.row * rowH);
+          setIsSettling(true);
         }
-
-        // Stop accepting pointer moves but keep widgetDrag/widgetDropPos
-        // alive so the grid slot stays hidden during the settle animation.
-        pointerRef.current = null;
-        dragKindRef.current = null;
-
-        setDragX(sidePadding + drop.col * colWidth);
-        setDragY(metrics.springboardTopPadding + drop.row * rowH);
-        setIsSettling(true);
       } else {
         resetAllState();
       }
@@ -546,6 +582,9 @@ export function useIconDrag({
     // Widget settle animation
     isSettling,
     onSettleComplete,
+    // Overlay linger (static snapshot shown for 1 frame after settle)
+    overlayLingering,
+    overlayLingerData: overlayLingerRef.current,
     // Shared pointer handlers (Springboard routes them here)
     onPointerMove,
     onPointerUp,

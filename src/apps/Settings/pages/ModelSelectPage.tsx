@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef } from 'react';
-import { Check, Eye, EyeOff, RefreshCw, Search, Zap } from 'lucide-react';
+import { Check, Eye, EyeOff, RefreshCw, Search, Zap, X } from 'lucide-react';
 import {
   useAIConfigStore,
   PROVIDER_ADAPTERS,
@@ -79,7 +79,7 @@ function ProviderCard({
           fontWeight: 600,
         }}
       >
-        {id === 'openrouter' ? 'OR' : 'SF'}
+        {id === 'openrouter' ? 'OR' : id === 'siliconflow' ? 'SF' : '自'}
       </div>
       <span
         className="flex-1 text-left"
@@ -177,9 +177,8 @@ export function ModelSelectPage() {
 
   const [showKey, setShowKey] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [keyHint, setKeyHint] = useState(false);
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
-  const [testOutput, setTestOutput] = useState('');
+  const [testError, setTestError] = useState('');
   const abortRef = useRef<AbortController | null>(null);
 
   const adapterInfo = PROVIDER_ADAPTERS[provider];
@@ -196,8 +195,9 @@ export function ModelSelectPage() {
     );
   }, [fetchedModels, searchQuery]);
 
-  const canFetch = !adapterInfo?.requiresKeyForModels || apiKey.trim().length > 0;
-  const canTest = apiKey.trim().length > 0 && model.trim().length > 0;
+  const hasEndpoint = apiEndpoint.trim().length > 0 || !!adapterInfo?.defaultEndpoint;
+  const canFetch = hasEndpoint && (!adapterInfo?.requiresKeyForModels || apiKey.trim().length > 0);
+  const canTest = apiKey.trim().length > 0 && model.trim().length > 0 && hasEndpoint;
 
   const handleTest = useCallback(() => {
     if (!canTest) return;
@@ -205,32 +205,27 @@ export function ModelSelectPage() {
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     setTestStatus('loading');
-    setTestOutput('');
+    setTestError('');
 
     const endpoint = apiEndpoint || adapterInfo?.defaultEndpoint || '';
     streamChat(
       { endpoint, apiKey, model, providerId: provider },
-      [{ role: 'user', content: '你好，请用一句话介绍你自己。' }],
-      (token) => setTestOutput((prev) => prev + token),
+      [{ role: 'user', content: 'Hi' }],
+      () => {},
       ctrl.signal,
     )
       .then(() => setTestStatus('done'))
       .catch((e) => {
         if (ctrl.signal.aborted) return;
         setTestStatus('error');
-        setTestOutput(e instanceof Error ? e.message : String(e));
+        setTestError(e instanceof Error ? e.message : String(e));
       });
   }, [canTest, apiKey, apiEndpoint, model, provider, adapterInfo]);
 
   const handleFetch = useCallback(() => {
-    if (!canFetch) {
-      setKeyHint(true);
-      setTimeout(() => setKeyHint(false), 2000);
-      return;
-    }
     fetchModels();
     setSearchQuery('');
-  }, [canFetch, fetchModels]);
+  }, [fetchModels]);
 
   return (
     <div
@@ -291,45 +286,106 @@ export function ModelSelectPage() {
             type="text"
             value={apiEndpoint}
             onChange={(e) => setApiEndpoint(e.target.value)}
-            placeholder={adapterInfo?.defaultEndpoint || '输入 API 端点'}
+            placeholder={adapterInfo?.defaultEndpoint || 'https://api.example.com/v1'}
             className="min-w-0 flex-1"
             style={{ fontSize: 'var(--font-size-body)', color: 'var(--color-label)', backgroundColor: 'transparent', border: 'none', outline: 'none' }}
           />
         </div>
       </div>
-      <SectionFooter text={adapterInfo?.requiresKeyForModels ? '需要 API Key 才能拉取模型列表' : '模型列表无需 API Key'} />
+      <SectionFooter text={provider === 'custom' ? '填写任意 OpenAI 兼容端点' : adapterInfo?.requiresKeyForModels ? '需要 API Key 才能拉取模型列表' : '模型列表无需 API Key'} />
 
-      {/* ═══════════════ 3. 拉取模型 ═══════════════ */}
+      {/* ═══════════════ 2.5 自定义模型名 ═══════════════ */}
 
-      <div className="mx-4 mb-5">
-        <button
-          onClick={handleFetch}
-          disabled={modelListLoading}
-          className="flex w-full items-center justify-center gap-2"
-          style={{
-            minHeight: 44,
-            borderRadius: 'var(--radius-group)',
-            backgroundColor: canFetch ? 'var(--color-systemBlue)' : 'var(--color-systemGray4)',
-            color: 'white',
-            fontSize: 'var(--font-size-body)',
-            fontWeight: 600,
-            opacity: modelListLoading ? 0.6 : 1,
-          }}
-        >
-          <RefreshCw size={16} className={modelListLoading ? 'animate-spin' : ''} />
-          {modelListLoading ? '正在拉取…' : '拉取模型列表'}
-        </button>
-        {keyHint && (
-          <div className="mt-2 rounded-lg px-3 py-2" style={{ fontSize: 'var(--font-size-footnote)', color: 'var(--color-systemOrange)', backgroundColor: 'rgba(255,149,0,0.1)' }}>
-            请先填写 API Key
+      {provider === 'custom' && (
+        <>
+          <SectionHeader title="模型" />
+          <div
+            className="mx-4 mb-1 overflow-hidden"
+            style={{
+              backgroundColor: 'var(--color-tertiarySystemBackground)',
+              borderRadius: 'var(--radius-group)',
+            }}
+          >
+            <div className="flex items-center gap-2 px-4" style={{ minHeight: 44 }}>
+              <span className="flex-shrink-0" style={{ fontSize: 'var(--font-size-body)', color: 'var(--color-label)', width: 70 }}>
+                模型名
+              </span>
+              <input
+                type="text"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder="例如 gpt-4o, claude-3.5-sonnet"
+                className="min-w-0 flex-1"
+                style={{ fontSize: 'var(--font-size-body)', color: 'var(--color-label)', backgroundColor: 'transparent', border: 'none', outline: 'none' }}
+              />
+            </div>
           </div>
-        )}
-        {modelListError && !keyHint && (
-          <div className="mt-2 rounded-lg px-3 py-2" style={{ fontSize: 'var(--font-size-footnote)', color: 'var(--color-systemRed)', backgroundColor: 'rgba(255,59,48,0.1)' }}>
-            {modelListError}
-          </div>
-        )}
-      </div>
+          <SectionFooter text="输入模型 ID，也可通过下方拉取模型列表选择" />
+        </>
+      )}
+
+      {/* ═══════════════ 3. 操作按钮 ═══════════════ */}
+
+      {(canFetch || canTest) && (
+        <div className="mx-4 mb-5 flex flex-col gap-2">
+          {canFetch && (
+            <button
+              onClick={handleFetch}
+              disabled={modelListLoading}
+              className="flex w-full items-center justify-center gap-2"
+              style={{
+                minHeight: 44,
+                borderRadius: 'var(--radius-group)',
+                backgroundColor: 'var(--color-systemBlue)',
+                color: 'white',
+                fontSize: 'var(--font-size-body)',
+                fontWeight: 600,
+                opacity: modelListLoading ? 0.6 : 1,
+              }}
+            >
+              <RefreshCw size={16} className={modelListLoading ? 'animate-spin' : ''} />
+              {modelListLoading ? '正在拉取…' : '拉取模型列表'}
+            </button>
+          )}
+          {canTest && (
+            <button
+              onClick={handleTest}
+              disabled={testStatus === 'loading'}
+              className="flex w-full items-center justify-center gap-2"
+              style={{
+                minHeight: 44,
+                borderRadius: 'var(--radius-group)',
+                backgroundColor: testStatus === 'error'
+                  ? 'var(--color-systemRed)'
+                  : 'var(--color-systemGreen)',
+                color: 'white',
+                fontSize: 'var(--font-size-body)',
+                fontWeight: 600,
+                opacity: testStatus === 'loading' ? 0.6 : 1,
+              }}
+            >
+              {testStatus === 'loading' && <RefreshCw size={16} className="animate-spin" />}
+              {testStatus === 'done' && <Check size={16} strokeWidth={2.5} />}
+              {testStatus === 'error' && <X size={16} strokeWidth={2.5} />}
+              {testStatus === 'idle' && <Zap size={16} />}
+              {testStatus === 'loading' ? '正在测试…'
+                : testStatus === 'done' ? '测试成功'
+                : testStatus === 'error' ? '测试失败'
+                : '测试连接'}
+            </button>
+          )}
+          {modelListError && (
+            <div className="rounded-lg px-3 py-2" style={{ fontSize: 'var(--font-size-footnote)', color: 'var(--color-systemRed)', backgroundColor: 'rgba(255,59,48,0.1)' }}>
+              {modelListError}
+            </div>
+          )}
+          {testStatus === 'error' && testError && (
+            <div className="rounded-lg px-3 py-2" style={{ fontSize: 'var(--font-size-footnote)', color: 'var(--color-systemRed)', backgroundColor: 'rgba(255,59,48,0.1)' }}>
+              {testError}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ═══════════════ 4. 模型列表 ═══════════════ */}
 
@@ -376,7 +432,7 @@ export function ModelSelectPage() {
         </>
       )}
 
-      {model && (
+      {model && provider !== 'custom' && (
         <>
           <SectionHeader title="已选模型" />
           <div className="mx-4 mb-5 overflow-hidden px-4 py-3" style={{ backgroundColor: 'var(--color-tertiarySystemBackground)', borderRadius: 'var(--radius-group)' }}>
@@ -388,63 +444,6 @@ export function ModelSelectPage() {
             </div>
           </div>
         </>
-      )}
-
-      {/* ═══════════════ 5. 测试连接 ═══════════════ */}
-
-      <div className="mx-4 mb-2">
-        <button
-          onClick={handleTest}
-          disabled={testStatus === 'loading'}
-          className="flex w-full items-center justify-center gap-2"
-          style={{
-            minHeight: 44,
-            borderRadius: 'var(--radius-group)',
-            backgroundColor: canTest ? 'var(--color-systemGreen)' : 'var(--color-systemGray4)',
-            color: 'white',
-            fontSize: 'var(--font-size-body)',
-            fontWeight: 600,
-            opacity: testStatus === 'loading' ? 0.6 : 1,
-          }}
-        >
-          <Zap size={16} />
-          {testStatus === 'loading' ? '正在测试…' : '发送测试消息'}
-        </button>
-      </div>
-      {!canTest && <SectionFooter text="请先填写 API Key 并选择模型" />}
-
-      {(testStatus === 'loading' || testStatus === 'done' || testStatus === 'error') && (
-        <div className="mx-4 mb-5 overflow-hidden" style={{ borderRadius: 'var(--radius-group)', backgroundColor: 'var(--color-tertiarySystemBackground)' }}>
-          <div
-            className="flex items-center gap-2 px-4 py-2"
-            style={{
-              borderBottom: '0.5px solid var(--color-separator)',
-              fontSize: 'var(--font-size-caption1)',
-              color: testStatus === 'error' ? 'var(--color-systemRed)' : testStatus === 'done' ? 'var(--color-systemGreen)' : 'var(--color-secondaryLabel)',
-            }}
-          >
-            <div
-              className="rounded-full"
-              style={{
-                width: 6, height: 6,
-                backgroundColor: testStatus === 'error' ? 'var(--color-systemRed)' : testStatus === 'done' ? 'var(--color-systemGreen)' : 'var(--color-systemOrange)',
-              }}
-            />
-            {testStatus === 'loading' && '接收中…'}
-            {testStatus === 'done' && '测试成功'}
-            {testStatus === 'error' && '测试失败'}
-          </div>
-          <div
-            className="whitespace-pre-wrap px-4 py-3"
-            style={{
-              fontSize: 'var(--font-size-callout)',
-              color: testStatus === 'error' ? 'var(--color-systemRed)' : 'var(--color-label)',
-              maxHeight: 200, overflowY: 'auto', lineHeight: 1.5,
-            }}
-          >
-            {testOutput || (testStatus === 'loading' ? '▍' : '')}
-          </div>
-        </div>
       )}
 
       <div style={{ height: 40 }} />

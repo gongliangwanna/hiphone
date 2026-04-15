@@ -105,6 +105,30 @@ describe('NotesApp', () => {
     expect(screen.getByText('Shopping List')).toBeInTheDocument();
   });
 
+  it('saves new note immediately on first keystroke, persists after back', async () => {
+    render(<NotesApp />);
+    const countBefore = useNotesDataStore.getState().notes.length;
+
+    // 1. Open new note editor
+    fireEvent.click(screen.getByTestId('notes-compose'));
+    expect(screen.getByTestId('note-editor')).toBeInTheDocument();
+
+    // 2. Type a title — note should be created immediately (no debounce)
+    fireEvent.change(screen.getByTestId('note-title-input'), {
+      target: { value: 'Quick Note' },
+    });
+    expect(useNotesDataStore.getState().notes.length).toBe(countBefore + 1);
+    expect(useNotesDataStore.getState().notes.some((n) => n.title === 'Quick Note')).toBe(true);
+
+    // 3. Go back — note should still exist
+    fireEvent.click(screen.getByTestId('nav-back'));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 500));
+    });
+    expect(useNotesDataStore.getState().notes.length).toBe(countBefore + 1);
+    expect(useNotesDataStore.getState().notes.some((n) => n.title === 'Quick Note')).toBe(true);
+  });
+
   it('resets nav state when app is killed', () => {
     // Navigate to editor
     useNotesNavStore.getState().push('editor', 'test-1');

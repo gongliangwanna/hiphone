@@ -15,8 +15,8 @@ Keep the main flow short: check auth, build, deploy `dist`, verify the stable si
 
 - Project root: `/Users/wanqilin/WorkSpace/ai/hiPhone`
 - Build output: `dist/`
-- Cloudflare Pages project: `hiphone-wanqilin`
-- Stable URL: `https://hiphone-wanqilin.pages.dev/`
+- Cloudflare Pages project: `mini-iphone`
+- Stable URL: `https://mini-iphone.pages.dev/`
 
 ## Workflow
 
@@ -55,7 +55,7 @@ Notes:
 Run:
 
 ```bash
-npx -y wrangler pages deploy dist --project-name hiphone-wanqilin --commit-dirty=true
+npx -y wrangler pages deploy dist --project-name mini-iphone --commit-dirty=true
 ```
 
 Why `--commit-dirty=true`:
@@ -72,7 +72,7 @@ Use a cache-busting query string so verification does not hit stale cached fetch
 
 ```bash
 # Example
-https://hiphone-wanqilin.pages.dev/?ts=<unix-timestamp>
+https://mini-iphone.pages.dev/?ts=<unix-timestamp>
 ```
 
 Recommended checks:
@@ -85,8 +85,8 @@ Recommended checks:
 When reporting success, include:
 - what was deployed: hiPhone
 - target: Cloudflare Pages
-- project name: `hiphone-wanqilin`
-- stable URL: `https://hiphone-wanqilin.pages.dev/`
+- project name: `mini-iphone`
+- stable URL: `https://mini-iphone.pages.dev/`
 
 If replying on Weixin, send the final URL as a separate standalone message.
 

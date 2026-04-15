@@ -4,6 +4,7 @@ import { Trash2 } from 'lucide-react';
 import { spring } from '@/platform/design-tokens/motion';
 import { format, isToday, isThisYear } from 'date-fns';
 import type { Note } from './notesDataStore';
+import { stripHtml } from './richTextUtils';
 
 const OPEN_WIDTH = 80;
 const AXIS_LOCK_THRESHOLD = 8;
@@ -203,7 +204,7 @@ export function SwipeableNoteRow({
           }}
         >
           <span>{formatNoteDate(note.updatedAt)}</span>
-          <span style={{ opacity: 0.6 }}>{note.body.slice(0, 50) || '无附加文本'}</span>
+          <span style={{ opacity: 0.6 }}>{stripHtml(note.body).slice(0, 50) || '无附加文本'}</span>
         </span>
         {!isLast && (
           <div

@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, X, Users, Check, Upload } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Users, Check, Upload, Search } from 'lucide-react';
 import { useXYNav } from '../xingYuNavStore';
 import { useXYData } from '../xingYuDataStore';
 import { getIdol } from '../data';
@@ -13,6 +13,7 @@ const CHAR_FALLBACK_AVATAR = '/resource/avatars/preset-01.jpg';
 export function ChatSettings() {
   const activeChatId = useXYNav((s) => s.activeChatId);
   const closeChatSettings = useXYNav((s) => s.closeChatSettings);
+  const openChatSearch = useXYNav((s) => s.openChatSearch);
   const openChat = useXYNav((s) => s.openChat);
   const conversations = useXYData((s) => s.conversations);
   const updateConvSettings = useXYData((s) => s.updateConversationSettings);
@@ -85,8 +86,31 @@ export function ChatSettings() {
       </div>
 
       <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto px-4 pt-4 pb-8">
+        {/* ── Section 0: 查找聊天记录 ── */}
+        <motion.button
+          className="flex w-full items-center gap-3"
+          style={{
+            padding: '14px 20px',
+            borderRadius: T.r.xl,
+            backgroundColor: T.card,
+            boxShadow: T.shadow2,
+          }}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={springs.gentle}
+          onClick={openChatSearch}
+          whileTap={{ scale: 0.98 }}
+        >
+          <Search size={18} strokeWidth={2} color={T.textMuted} />
+          <span className="flex-1 text-left" style={{ fontSize: 14, fontWeight: 500, color: T.textPrimary }}>
+            查找聊天记录
+          </span>
+          <ChevronRight size={16} strokeWidth={2} color={T.textMuted} />
+        </motion.button>
+
         {/* ── Section 1: 聊天背景 ── */}
         <motion.div
+          className="mt-4"
           style={{
             padding: '16px 20px',
             borderRadius: T.r.xl,
@@ -104,21 +128,6 @@ export function ChatSettings() {
             为当前聊天设置个性化背景
           </p>
 
-          {/* 预览 */}
-          {conv.backgroundUrl && (
-            <div
-              className="relative w-full overflow-hidden"
-              style={{ height: 120, borderRadius: T.r.md }}
-            >
-              <img
-                src={conv.backgroundUrl}
-                alt=""
-                className="absolute inset-0 h-full w-full object-cover"
-                style={{ borderRadius: T.r.md }}
-              />
-            </div>
-          )}
-
           {/* 隐藏的文件输入 — 用 opacity:0 + absolute 而非 display:none，兼容性更好 */}
           <input
             ref={bgFileRef}
@@ -128,7 +137,7 @@ export function ChatSettings() {
             onChange={handleBgUpload}
           />
 
-          <div className={`flex gap-3 ${conv.backgroundUrl ? 'mt-3' : ''}`}>
+          <div className="flex gap-3">
             <motion.button
               className="flex flex-1 items-center justify-center gap-2"
               style={{
@@ -156,7 +165,7 @@ export function ChatSettings() {
                   backgroundColor: T.bg,
                   border: `1px solid ${T.border}`,
                   fontSize: 13,
-                  color: T.rose,
+                  color: T.textSecondary,
                   fontWeight: 500,
                 }}
                 onClick={() => updateConvSettings(conv.id, { backgroundUrl: undefined })}
@@ -326,14 +335,15 @@ function GroupPicker({
   };
 
   return (
-    <motion.div
-      className="absolute inset-0 z-50 flex flex-col"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.2 }}
-    >
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+    <motion.div className="absolute inset-0 z-50 flex flex-col">
+      <motion.div
+        className="absolute inset-0 bg-black/40"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.3 }}
+        onClick={onClose}
+      />
       <motion.div
         className="mt-auto flex flex-col"
         style={{

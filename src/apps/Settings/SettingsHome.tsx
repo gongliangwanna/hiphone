@@ -9,6 +9,7 @@ import {
   ShieldAlert,
   BookOpen,
   Trash2,
+  Wrench,
 } from 'lucide-react';
 import { useSettingsNavStore } from './settingsNavStore';
 import { usePersonaStore } from '@/platform/stores/personaStore';
@@ -157,6 +158,13 @@ export function SettingsHome() {
           iconColor="#32ADE6"
           title="壁纸"
           onClick={() => push('wallpaper')}
+          chevron
+        />
+        <ListRow
+          icon={<Wrench size={16} />}
+          iconColor="#8E8E93"
+          title="开发者工具"
+          onClick={() => push('developerTools')}
           chevron
         />
         <ListRow

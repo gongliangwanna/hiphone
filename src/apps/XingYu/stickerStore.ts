@@ -129,6 +129,10 @@ export const useStickerStore = create<StickerState>()(
           ),
         })),
     }),
-    { name: 'hiPhone-xingyu-stickers', storage: idbStorage },
+    {
+      name: 'hiPhone-xingyu-stickers',
+      storage: idbStorage,
+      partialize: (s) => ({ packs: s.packs }),
+    },
   ),
 );

@@ -196,11 +196,37 @@ export async function streamChat(
   }
 }
 
+// ── Custom (user-provided endpoint) ───────────────────
+
+const custom: ProviderAdapter = {
+  id: 'custom',
+  label: '自定义',
+  defaultEndpoint: '',
+  requiresKeyForModels: true,
+
+  async fetchModels(apiKey, endpoint) {
+    if (!endpoint) throw new Error('请先填写 API 端点');
+    if (!apiKey) throw new Error('请先填写 API Key');
+    const res = await fetch(`${endpoint}/models`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    if (!res.ok) throw new Error(`/models ${res.status}: ${await res.text()}`);
+    const json = await res.json();
+    const data: Array<{ id: string; owned_by?: string }> = json.data ?? [];
+    return data.map((m) => ({
+      id: m.id,
+      name: m.id,
+      ownedBy: m.owned_by,
+    }));
+  },
+};
+
 // ── Registry ───────────────────────────────────────────
 
 export const PROVIDER_ADAPTERS: Record<string, ProviderAdapter> = {
   openrouter,
   siliconflow,
+  custom,
 };
 
 export type ProviderId = keyof typeof PROVIDER_ADAPTERS;

@@ -13,6 +13,7 @@ import { ChatDetail } from './pages/ChatDetail';
 import { IdolProfile } from './pages/IdolProfile';
 import { Settings } from './pages/Settings';
 import { ChatSettings } from './pages/ChatSettings';
+import { ChatSearch } from './pages/ChatSearch';
 import { ComposeTab } from './tabs/ComposeTab';
 import { StickerManager } from './pages/StickerManager';
 import { InteractionList } from './pages/InteractionList';
@@ -79,6 +80,7 @@ export function XingYuApp() {
               {page === 'idol-profile' && <IdolProfile />}
               {page === 'settings' && <Settings />}
               {page === 'chat-settings' && <ChatSettings />}
+              {page === 'chat-search' && <ChatSearch />}
               {page === 'sticker-manager' && <StickerManager />}
               {page === 'interactions' && <InteractionList />}
             </motion.div>

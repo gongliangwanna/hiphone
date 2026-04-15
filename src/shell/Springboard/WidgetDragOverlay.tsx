@@ -53,7 +53,6 @@ export const WidgetDragOverlay = memo(function WidgetDragOverlay({
 
   const cellW = (viewportWidth - metrics.sidePadding * 2) / COLS;
   const contentHeight = 4 + metrics.iconSize + 4 + metrics.labelSize * 1.2 + 4;
-  const rowH = contentHeight + metrics.gridGapY;
 
   const cs = WIDGET_COL_SPAN[widget.size];
   const rs = WIDGET_ROW_SPAN[widget.size];
@@ -64,12 +63,13 @@ export const WidgetDragOverlay = memo(function WidgetDragOverlay({
       animate={{
         x,
         y,
+        scale: isSettling ? 1 : 1.03,
       }}
       transition={isSettling ? SETTLE_TRANSITION : DRAG_TRANSITION}
       onAnimationComplete={isSettling ? onSettleComplete : undefined}
       style={{
         width: `${cellW * cs}px`,
-        height: `${rowH * rs}px`,
+        height: `${contentHeight * rs + metrics.gridGapY * (rs - 1)}px`,
         padding: 4,
         boxSizing: 'border-box',
         willChange: 'transform',

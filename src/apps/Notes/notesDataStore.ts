@@ -3,6 +3,8 @@ import { persist } from 'zustand/middleware';
 import { idbStorage } from '@/platform/storage/idbStorage';
 import { EntityStoreRegistry } from '@/platform/storage/entityStoreRegistry';
 import { usePhoneOwnerStore } from '@/platform/stores/phoneOwnerStore';
+import { uid } from '@/platform/utils/uid';
+import { stripHtml } from './richTextUtils';
 
 export interface Note {
   id: string;
@@ -46,7 +48,7 @@ function createNotesStore(persistName: string) {
         searchQuery: '',
 
         addNote: (title, body) => {
-          const id = crypto.randomUUID();
+          const id = uid();
           const now = Date.now();
           set((state) => ({
             notes: [
@@ -111,7 +113,7 @@ export function selectFilteredNotes(state: NotesDataState): Note[] {
     result = result.filter(
       (n) =>
         n.title.toLowerCase().includes(q) ||
-        n.body.toLowerCase().includes(q),
+        stripHtml(n.body).toLowerCase().includes(q),
     );
   }
   return [...result].sort((a, b) => b.updatedAt - a.updatedAt);

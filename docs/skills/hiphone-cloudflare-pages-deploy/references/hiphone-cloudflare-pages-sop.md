@@ -6,8 +6,8 @@
 
 固定信息：
 - 项目目录：`/Users/wanqilin/WorkSpace/ai/hiPhone`
-- Pages 项目名：`hiphone-wanqilin`
-- 稳定访问地址：`https://hiphone-wanqilin.pages.dev/`
+- Pages 项目名：`mini-iphone`
+- 稳定访问地址：`https://mini-iphone.pages.dev/`
 - 构建产物目录：`dist/`
 
 ## 这份 SOP 来自哪里
@@ -67,7 +67,7 @@ pnpm build
 ### 第 4 步，部署到 Cloudflare Pages
 
 ```bash
-npx -y wrangler pages deploy dist --project-name hiphone-wanqilin --commit-dirty=true
+npx -y wrangler pages deploy dist --project-name mini-iphone --commit-dirty=true
 ```
 
 说明：
@@ -77,7 +77,7 @@ npx -y wrangler pages deploy dist --project-name hiphone-wanqilin --commit-dirty
 预期输出：
 - `Uploaded X files`
 - `Deployment complete!`
-- 一个预览链接，例如 `https://xxxxxxxx.hiphone-wanqilin.pages.dev`
+- 一个预览链接，例如 `https://xxxxxxxx.mini-iphone.pages.dev`
 
 注意：
 - 预览链接只用于本次发布记录
@@ -88,13 +88,13 @@ npx -y wrangler pages deploy dist --project-name hiphone-wanqilin --commit-dirty
 优先验证：
 
 ```text
-https://hiphone-wanqilin.pages.dev/
+https://mini-iphone.pages.dev/
 ```
 
 为了绕开缓存，建议带时间戳参数：
 
 ```text
-https://hiphone-wanqilin.pages.dev/?ts=<当前时间戳>
+https://mini-iphone.pages.dev/?ts=<当前时间戳>
 ```
 
 建议检查项：
@@ -134,8 +134,8 @@ https://hiphone-wanqilin.pages.dev/?ts=<当前时间戳>
 
 ```text
 已重新构建并部署 hiPhone 到 Cloudflare Pages。
-项目名：hiphone-wanqilin
-稳定地址：https://hiphone-wanqilin.pages.dev/
+项目名：mini-iphone
+稳定地址：https://mini-iphone.pages.dev/
 ```
 
 ### 微信回报
@@ -149,7 +149,7 @@ https://hiphone-wanqilin.pages.dev/?ts=<当前时间戳>
 再单独发一条纯链接：
 
 ```text
-https://hiphone-wanqilin.pages.dev/
+https://mini-iphone.pages.dev/
 ```
 
 原因：
@@ -178,7 +178,7 @@ https://hiphone-wanqilin.pages.dev/
 - 人拿到的是一次性预览地址，不是长期稳定链接
 
 解决：
-- 对外统一发 `https://hiphone-wanqilin.pages.dev/`
+- 对外统一发 `https://mini-iphone.pages.dev/`
 
 ### 4. 用户说黑屏，就立刻认定部署坏了
 
@@ -196,6 +196,6 @@ https://hiphone-wanqilin.pages.dev/
 
 - `wrangler whoami` 成功
 - `pnpm build` 成功
-- `wrangler pages deploy dist --project-name hiphone-wanqilin --commit-dirty=true` 成功
+- `wrangler pages deploy dist --project-name mini-iphone --commit-dirty=true` 成功
 - 稳定域名可访问
 - 对外发送的是稳定域名，而不是 preview URL

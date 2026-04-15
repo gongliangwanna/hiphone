@@ -9,6 +9,7 @@ interface XingYuNavState {
   activeIdolId: string | null;
   momentComposerOpen: boolean;
   stickerManagerOrigin: string | null;
+  scrollToMessageId: string | null;
 
   setTab: (tab: XYTab) => void;
   openChat: (convId: string) => void;
@@ -23,6 +24,10 @@ interface XingYuNavState {
   closeStickerManager: () => void;
   openChatSettings: () => void;
   closeChatSettings: () => void;
+  openChatSearch: () => void;
+  closeChatSearch: () => void;
+  closeChatSearchToMessage: (msgId: string) => void;
+  clearScrollToMessage: () => void;
   openInteractions: () => void;
   closeInteractions: () => void;
   reset: () => void;
@@ -35,6 +40,7 @@ export const useXYNav = create<XingYuNavState>()((set, get) => ({
   activeIdolId: null,
   momentComposerOpen: false,
   stickerManagerOrigin: null,
+  scrollToMessageId: null,
 
   setTab: (tab) => set({ activeTab: tab, page: null, activeChatId: null, activeIdolId: null }),
   openChat: (convId) => set({ page: 'chat-detail', activeChatId: convId }),
@@ -56,7 +62,11 @@ export const useXYNav = create<XingYuNavState>()((set, get) => ({
   },
   openChatSettings: () => set({ page: 'chat-settings' }),
   closeChatSettings: () => set({ page: 'chat-detail' }),
+  openChatSearch: () => set({ page: 'chat-search' }),
+  closeChatSearch: () => set({ page: 'chat-settings' }),
+  closeChatSearchToMessage: (msgId) => set({ page: 'chat-detail', scrollToMessageId: msgId }),
+  clearScrollToMessage: () => set({ scrollToMessageId: null }),
   openInteractions: () => set({ page: 'interactions' }),
   closeInteractions: () => set({ page: null }),
-  reset: () => set({ activeTab: 'chat', page: null, activeChatId: null, activeIdolId: null, momentComposerOpen: false, stickerManagerOrigin: null }),
+  reset: () => set({ activeTab: 'chat', page: null, activeChatId: null, activeIdolId: null, momentComposerOpen: false, stickerManagerOrigin: null, scrollToMessageId: null }),
 }));

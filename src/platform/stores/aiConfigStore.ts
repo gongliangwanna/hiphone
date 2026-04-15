@@ -6,7 +6,15 @@ import { type ModelInfo, getAdapter } from '@/platform/ai/providers';
 // ── Types ──────────────────────────────────────────────
 
 /** Supported provider IDs — grows as we add adapters one-by-one */
-export type ProviderId = 'openrouter' | 'siliconflow';
+export type ProviderId = 'openrouter' | 'siliconflow' | 'custom';
+
+/** Per-provider connection settings, saved independently */
+export interface ProviderConfig {
+  apiKey: string;
+  apiEndpoint: string;
+  model: string;
+  fetchedModels: ModelInfo[];
+}
 
 export interface AIConfigState {
   // Connection
@@ -14,6 +22,9 @@ export interface AIConfigState {
   apiKey: string;
   apiEndpoint: string;
   model: string;
+
+  // Per-provider saved configs
+  providerConfigs: Record<string, ProviderConfig>;
 
   // Dynamic model list (fetched from API)
   fetchedModels: ModelInfo[];
@@ -82,6 +93,8 @@ export const useAIConfigStore = create<AIConfigState>()(
       apiEndpoint: '',
       model: '',
 
+      providerConfigs: {},
+
       fetchedModels: [],
       modelListLoading: false,
       modelListError: null,
@@ -105,7 +118,25 @@ export const useAIConfigStore = create<AIConfigState>()(
 
       // ── Connection actions ──
 
-      setProvider: (p) => set({ provider: p, model: '', fetchedModels: [], modelListError: null }),
+      setProvider: (p) => {
+        const { provider: prev, apiKey, apiEndpoint, model, fetchedModels, providerConfigs } = get();
+        // Save current provider's config
+        const saved = {
+          ...providerConfigs,
+          [prev]: { apiKey, apiEndpoint, model, fetchedModels },
+        };
+        // Restore target provider's config (or defaults)
+        const target = saved[p] ?? { apiKey: '', apiEndpoint: '', model: '', fetchedModels: [] };
+        set({
+          provider: p,
+          providerConfigs: saved,
+          apiKey: target.apiKey,
+          apiEndpoint: target.apiEndpoint,
+          model: target.model,
+          fetchedModels: target.fetchedModels,
+          modelListError: null,
+        });
+      },
       setApiKey: (k) => set({ apiKey: k }),
       setApiEndpoint: (url) => set({ apiEndpoint: url }),
       setModel: (m) => set({ model: m }),
@@ -162,6 +193,7 @@ export const useAIConfigStore = create<AIConfigState>()(
         apiKey: s.apiKey,
         apiEndpoint: s.apiEndpoint,
         model: s.model,
+        providerConfigs: s.providerConfigs,
         fetchedModels: s.fetchedModels,
         temperature: s.temperature,
         maxTokens: s.maxTokens,

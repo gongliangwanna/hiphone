@@ -15,17 +15,11 @@ import type { Message, Moment } from '@/apps/XingYu/data';
 import type { StoreApi, UseBoundStore } from 'zustand';
 
 // ---------------------------------------------------------------------------
-// UID helper (same as xingYuDataStore)
+// UID helper — re-exported from shared utility
 // ---------------------------------------------------------------------------
 
-export function uid(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    try {
-      return crypto.randomUUID();
-    } catch { /* fall through */ }
-  }
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
-}
+import { uid } from '@/platform/utils/uid';
+export { uid } from '@/platform/utils/uid';
 
 // ---------------------------------------------------------------------------
 // Tool descriptions (injected into system prompt)

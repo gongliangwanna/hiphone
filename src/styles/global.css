@@ -23,6 +23,26 @@ body,
   box-sizing: border-box;
 }
 
+/* App switcher card entrance — opacity only, no scale.
+   Scale animation would compete visually with the AppHost shrink. */
+@keyframes switcher-card-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Suppress focus visuals inside inert switcher cards — prevents input
+   caret flash and focus rings when the card becomes visible. */
+[inert] input,
+[inert] textarea,
+[inert] [contenteditable] {
+  caret-color: transparent !important;
+}
+[inert] *:focus,
+[inert] *:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 /* Utility: hide scrollbar while keeping scroll functionality */
 .scrollbar-hide {
   scrollbar-width: none;

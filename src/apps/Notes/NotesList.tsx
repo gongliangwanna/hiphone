@@ -5,6 +5,7 @@ import { usePerspective } from '@/platform/hooks/usePerspective';
 import { Material } from '@/system';
 import { Search, SquarePen, FileText } from 'lucide-react';
 import { SwipeableNoteRow } from './SwipeableNoteRow';
+import { stripHtml } from './richTextUtils';
 
 export function NotesList() {
   const allNotes = useActiveNotesStore((s) => s.notes);
@@ -14,7 +15,7 @@ export function NotesList() {
     let result = allNotes;
     if (q) {
       result = result.filter(
-        (n) => n.title.toLowerCase().includes(q) || n.body.toLowerCase().includes(q),
+        (n) => n.title.toLowerCase().includes(q) || stripHtml(n.body).toLowerCase().includes(q),
       );
     }
     return [...result].sort((a, b) => b.updatedAt - a.updatedAt);

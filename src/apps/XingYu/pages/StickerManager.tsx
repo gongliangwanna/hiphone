@@ -612,14 +612,15 @@ function EditDescDialog({
   return (
     <AnimatePresence>
       {visible && (
-        <motion.div
-          className="absolute inset-0 z-50 flex items-center justify-center"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-        >
-          <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+        <motion.div className="absolute inset-0 z-50 flex items-center justify-center">
+          <motion.div
+            className="absolute inset-0 bg-black/40"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            onClick={onClose}
+          />
 
           <motion.div
             className="relative flex flex-col items-center"
@@ -729,15 +730,16 @@ function CreatePackDialog({
   return (
     <AnimatePresence>
       {visible && (
-        <motion.div
-          className="absolute inset-0 z-50 flex items-center justify-center"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-        >
+        <motion.div className="absolute inset-0 z-50 flex items-center justify-center">
           {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+          <motion.div
+            className="absolute inset-0 bg-black/40"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            onClick={onClose}
+          />
 
           {/* Card */}
           <motion.div
@@ -836,15 +838,16 @@ function ConfirmDeleteDialog({
   return (
     <AnimatePresence>
       {target && (
-        <motion.div
-          className="absolute inset-0 z-50 flex items-center justify-center"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-        >
+        <motion.div className="absolute inset-0 z-50 flex items-center justify-center">
           {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+          <motion.div
+            className="absolute inset-0 bg-black/40"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            onClick={onClose}
+          />
 
           {/* Card */}
           <motion.div

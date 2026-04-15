@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { idbStorage } from '@/platform/storage/idbStorage';
 import { loadAllMessages, loadAllMoments } from '@/platform/storage/idbRecordStorage';
 import { startXYDataSync } from '@/platform/storage/zustandIdbSync';
+import { uid } from '@/platform/utils/uid';
 import type { Conversation, Message, Moment, MomentInteraction } from './data';
 import {
   SEED_CONVS,
@@ -70,21 +71,7 @@ const replyTimers = new Map<string, ReturnType<typeof setTimeout>>();
 /* ── In-flight AI stream controllers, keyed by convId ── */
 const aiControllers = new Map<string, AbortController>();
 
-/**
- * UUID 生成的稳健 fallback。
- * uid() 需要 secure context 且 iOS Safari 15.4+,
- * 任何一个条件不满足都会抛错,导致 sendMessage 静默失败。
- */
-function uid(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    try {
-      return crypto.randomUUID();
-    } catch {
-      /* fall through */
-    }
-  }
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
-}
+// uid() imported from @/platform/utils/uid
 
 export interface UserSettings {
   nickname: string;

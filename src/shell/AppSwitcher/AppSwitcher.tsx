@@ -266,6 +266,7 @@ function SwitcherCard({
 }: SwitcherCardProps) {
   const app = getAppInfoById(appId);
   const viewportProfile = useViewportProfile();
+  const switcherDismissing = useAppRuntimeStore((s) => s.switcherDismissing);
   const startCardDismiss = useAppRuntimeStore((s) => s.startCardDismiss);
   const updateCardDismiss = useAppRuntimeStore((s) => s.updateCardDismiss);
   const finishCardDismiss = useAppRuntimeStore((s) => s.finishCardDismiss);
@@ -482,7 +483,9 @@ function SwitcherCard({
         y: dragY,
         // Activating card stays visible — AppHost (z-18) covers it.
         // Other cards fade out via the parent container's opacity transition.
-        opacity: isActivatingOther ? 0 : 1,
+        // When AppHost is flying away (switcherDismissing), hide the active
+        // card so it doesn't show through as AppHost moves off screen.
+        opacity: isActivatingOther || (isActiveCard && switcherDismissing) ? 0 : 1,
         // Prevent overflowing content during gap collapse
         overflow: isFlyingAway ? 'hidden' : undefined,
       }}

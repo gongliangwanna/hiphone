@@ -251,6 +251,38 @@ export function Springboard({ sizeTier, viewportWidth }: SpringboardProps) {
           />
         )}
 
+        {/* Static overlay snapshot — covers the grid slot for one paint frame
+            while it renders underneath. Prevents the 1-frame flash on
+            settle → grid-slot swap. */}
+        {iconDrag.overlayLingering && iconDrag.overlayLingerData && (
+          <div
+            className="pointer-events-none absolute left-0 top-0 z-50"
+            style={{
+              width: iconDrag.overlayLingerData.size,
+              height: iconDrag.overlayLingerData.size,
+              transform: `translate3d(${iconDrag.overlayLingerData.x}px,${iconDrag.overlayLingerData.y}px,0)`,
+              willChange: 'transform',
+              filter: 'drop-shadow(0 8px 24px rgba(0,0,0,0.35))',
+            }}
+          >
+            <div
+              className="h-full w-full overflow-hidden"
+              style={{ borderRadius: 'var(--radius-icon)' }}
+            >
+              {hideIconImages ? (
+                <div className="h-full w-full bg-gray-400" />
+              ) : (
+                <img
+                  src={iconDrag.overlayLingerData.icon}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  draggable={false}
+                />
+              )}
+            </div>
+          </div>
+        )}
+
         {iconDrag.widgetDrag && (
           <WidgetDragOverlay
             widget={iconDrag.widgetDrag.widget}
