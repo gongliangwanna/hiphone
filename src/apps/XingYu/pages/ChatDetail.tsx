@@ -4,7 +4,7 @@ import { ChevronLeft, Phone, Send, Image, Smile, Palette, MoreHorizontal, Play }
 import { useXYNav } from '../xingYuNavStore';
 import { useXYData } from '../xingYuDataStore';
 import { getIdol, formatChatTime, DEFAULT_AVATAR } from '../data';
-import type { Message } from '../data';
+import type { Message, QuoteRef } from '../data';
 import { useCharacterStore } from '@/platform/stores/characterStore';
 import { usePersonaStore } from '@/platform/stores/personaStore';
 import { usePerspective } from '@/platform/hooks/usePerspective';
@@ -13,6 +13,8 @@ import { useNotesNavStore } from '@/apps/Notes/notesNavStore';
 import { useLongPress } from '@/platform/gesture/useLongPress';
 import { useToastStore } from '@/system';
 import { MessageActionBar, type ActionType } from '../components/MessageActionBar';
+import { QuotePreview, getQuotePreviewText } from '../components/QuotePreview';
+import { QuoteBlock } from '../components/QuoteBlock';
 
 /** Character 对话头像兜底路径,和 ContactsTab 保持一致 */
 const CHAR_FALLBACK_AVATAR = '/resource/avatars/preset-01.jpg';
@@ -56,6 +58,7 @@ export function ChatDetail() {
   const [highlightMsgId, setHighlightMsgId] = useState<string | null>(null);
   const [showDrawing, setShowDrawing] = useState(false);
   const [actionMenu, setActionMenu] = useState<{ msgId: string; position: 'above' | 'below' } | null>(null);
+  const [quoteMsg, setQuoteMsg] = useState<Message | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -217,6 +220,8 @@ export function ChatDetail() {
   useEffect(() => {
     setDisplayCount(PAGE_SIZE);
     seenMsgIdsRef.current = null;
+    setActionMenu(null);
+    setQuoteMsg(null);
   }, [activeChatId]);
 
   // Track seen message IDs for animation control.
@@ -374,11 +379,36 @@ export function ChatDetail() {
     const liveValue = inputRef.current?.value ?? input;
     const text = liveValue.trim();
     if (!text || !activeChatId) return;
-    sendMessage(activeChatId, text);
+
+    let finalText = text;
+    let ref: QuoteRef | undefined;
+    if (quoteMsg) {
+      const preview = getQuotePreviewText(quoteMsg);
+      const refType: QuoteRef['type'] =
+        quoteMsg.type === 'text'
+          ? quoteMsg.noteRef
+            ? 'note'
+            : quoteMsg.songRef
+              ? 'song'
+              : 'text'
+          : quoteMsg.type === 'image'
+            ? 'image'
+            : 'sticker';
+      ref = {
+        msgId: quoteMsg.id,
+        senderId: quoteMsg.senderId,
+        preview,
+        type: refType,
+      };
+      finalText = `[引用: ${preview}] ${text}`;
+      setQuoteMsg(null);
+    }
+
+    sendMessage(activeChatId, finalText, ref);
     setInput('');
     setPickerMode('none');
     if (inputRef.current) inputRef.current.value = '';
-  }, [input, activeChatId, sendMessage]);
+  }, [input, activeChatId, sendMessage, quoteMsg]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -427,8 +457,24 @@ export function ChatDetail() {
     [activeChatId, sendImageMessage],
   );
 
+  const getSenderName = useCallback(
+    (senderId: string): string => {
+      if (senderId === 'me') return persona?.name || userSettings.nickname || '我';
+      const charId = senderId.replace(/^char-/, '');
+      const ch = characters.find((c) => c.id === charId);
+      if (ch) return ch.name;
+      const idol = getIdol(senderId);
+      return idol?.name || senderId;
+    },
+    [persona, userSettings, characters],
+  );
+
   const handleLongPressMsg = useCallback((msg: Message, position: 'above' | 'below') => {
     setActionMenu({ msgId: msg.id, position });
+  }, []);
+
+  const handleQuoteTap = useCallback((msgId: string) => {
+    useXYNav.setState({ scrollToMessageId: msgId });
   }, []);
 
   const handleCloseMenu = useCallback(() => setActionMenu(null), []);
@@ -451,7 +497,8 @@ export function ChatDetail() {
         useToastStore.getState().show('已收藏');
         break;
       case 'quote':
-        // Wired in Task 5
+        setQuoteMsg(msg);
+        inputRef.current?.focus();
         break;
       case 'forward':
         // Wired in Task 8
@@ -584,6 +631,8 @@ export function ChatDetail() {
               onLongPress={handleLongPressMsg}
               onAction={handleMessageAction}
               onCloseMenu={handleCloseMenu}
+              onQuoteTap={handleQuoteTap}
+              resolveSenderName={getSenderName}
             />
           );
         })}
@@ -599,6 +648,15 @@ export function ChatDetail() {
           return <TypingDots avatarSrc={peer.avatar} ringIndex={peer.ringIndex} />;
         })()}
       </div>
+
+      {/* ── Quote preview bar (above input) ── */}
+      {quoteMsg && !conv?.aiChatParticipants && !isViewingOther && (
+        <QuotePreview
+          msg={quoteMsg}
+          senderName={getSenderName(quoteMsg.senderId)}
+          onClose={() => setQuoteMsg(null)}
+        />
+      )}
 
       {/* ── Input (hidden for observer/read-only modes) ── */}
       {conv?.aiChatParticipants || isViewingOther ? (
@@ -797,6 +855,8 @@ const MsgBubble = memo(function MsgBubble({
   onLongPress,
   onAction,
   onCloseMenu,
+  onQuoteTap,
+  resolveSenderName,
 }: {
   msg: Message;
   peer: { id: string; avatar: string; ringIndex: number };
@@ -811,6 +871,8 @@ const MsgBubble = memo(function MsgBubble({
   onLongPress?: (msg: Message, position: 'above' | 'below') => void;
   onAction?: (type: ActionType, msg: Message) => void;
   onCloseMenu?: () => void;
+  onQuoteTap?: (msgId: string) => void;
+  resolveSenderName?: (senderId: string) => string;
 }) {
   const { isSelf: perspectiveIsSelf, phoneOwnerId } = usePerspective();
   const isMine = aiChatPeers
@@ -1130,6 +1192,14 @@ const MsgBubble = memo(function MsgBubble({
                 wordBreak: 'break-word',
               }}
             >
+              {msg.quoteRef && onQuoteTap && (
+                <QuoteBlock
+                  quoteRef={msg.quoteRef}
+                  isMine={isMine}
+                  senderName={resolveSenderName?.(msg.quoteRef.senderId) ?? ''}
+                  onTap={onQuoteTap}
+                />
+              )}
               {msg.text}
             </div>
           )}

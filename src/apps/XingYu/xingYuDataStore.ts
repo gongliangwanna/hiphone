@@ -12,6 +12,8 @@ import type {
   Message,
   Moment,
   MomentInteraction,
+  QuoteRef,
+  TextMessage,
 } from './data';
 import {
   SEED_CONVS,
@@ -119,7 +121,7 @@ interface XingYuDataState {
   /** 用户收藏的消息 */
   favorites: Favorite[];
 
-  sendMessage: (convId: string, text: string) => void;
+  sendMessage: (convId: string, text: string, quoteRef?: QuoteRef) => void;
   sendNoteMessage: (convId: string, noteRef: { noteId: string; title: string; body: string }) => void;
   sendSongMessage: (convId: string, songRef: { songId: string; title: string; artist: string; artworkUrl: string }, lyricsText?: string) => void;
   sendImageMessage: (convId: string, imageUrl: string) => void;
@@ -668,8 +670,16 @@ export const useXYData = create<XingYuDataState>()(
         coverUrl: '',
       },
 
-      sendMessage: (convId, text) => {
-        const msg: Message = { id: uid(), convId, senderId: 'me', type: 'text', text, timestamp: Date.now() };
+      sendMessage: (convId, text, quoteRef) => {
+        const msg: TextMessage = {
+          id: uid(),
+          convId,
+          senderId: 'me',
+          type: 'text',
+          text,
+          timestamp: Date.now(),
+          ...(quoteRef ? { quoteRef } : {}),
+        };
         set((s) => ({
           messages: [...s.messages, msg],
           conversations: s.conversations.map((c) =>
