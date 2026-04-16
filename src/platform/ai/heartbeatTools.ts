@@ -359,7 +359,7 @@ function execViewMoments(input: Record<string, unknown>, characterId: string): T
     if (m.comments.length === 0) return header;
 
     const commentLines = m.comments.slice(-5).map(
-      (c) => `  💬 ${nameOf(c.userId)}: ${c.text.slice(0, 60)}`,
+      (c) => `  [评论] ${nameOf(c.userId)}: ${c.text.slice(0, 60)}`,
     );
     if (m.comments.length > 5) {
       commentLines.unshift(`  ...还有${m.comments.length - 5}条更早的评论`);
@@ -662,7 +662,7 @@ function execViewUnreadMessages(characterId: string): ToolResult {
 
   const preview = unreadMsgs
     .slice(-5)
-    .map((m) => `  「${m.text?.slice(0, 60) ?? '[非文本]'}」`)
+    .map((m) => `  「${(m.type === 'text' || m.type === 'heartbeat_log') ? m.text.slice(0, 60) : '[非文本]'}」`)
     .join('\n');
 
   return {
@@ -718,9 +718,9 @@ function execViewUnreadInteractions(characterId: string): ToolResult {
   const lines = newItems.slice(0, 10).map((i) => {
     const who = nameOf(i.userId);
     if (i.type === 'like') {
-      return `❤️ ${who} 赞了你的动态「${i.momentText}」`;
+      return `[赞] ${who} 赞了你的动态「${i.momentText}」`;
     }
-    return `💬 ${who} 评论了你的动态「${i.momentText}」：「${i.commentText?.slice(0, 40) ?? ''}」`;
+    return `[评论] ${who} 评论了你的动态「${i.momentText}」：「${i.commentText?.slice(0, 40) ?? ''}」`;
   });
 
   return { observation: `${newCount}条新互动：\n${lines.join('\n')}`, done: false };

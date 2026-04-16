@@ -47,7 +47,11 @@ export function ChatSearch() {
     const q = searchQuery.trim().toLowerCase();
     return allMessages
       .filter((m) => m.convId === activeChatId)
-      .filter((m) => m.text?.toLowerCase().includes(q) || m.stickerDesc?.toLowerCase().includes(q))
+      .filter((m) => {
+        const text = (m.type === 'text' || m.type === 'heartbeat_log') ? m.text : undefined;
+        const desc = m.type === 'sticker' ? m.stickerDesc : undefined;
+        return text?.toLowerCase().includes(q) || desc?.toLowerCase().includes(q);
+      })
       .sort((a, b) => b.timestamp - a.timestamp); // newest first
   }, [allMessages, activeChatId, searchQuery]);
 
@@ -127,7 +131,11 @@ export function ChatSearch() {
             {searchResults.map((msg) => {
               const isMine = msg.senderId === 'me';
               const senderName = isMine ? '我' : peerName;
-              const preview = (msg.text || msg.stickerDesc || '').slice(0, 60);
+              const preview = (
+                (msg.type === 'text' || msg.type === 'heartbeat_log') ? msg.text
+                : msg.type === 'sticker' ? (msg.stickerDesc ?? '')
+                : ''
+              ).slice(0, 60);
               return (
                 <motion.button
                   key={msg.id}

@@ -15,24 +15,42 @@ export interface Idol {
   memberCount?: number;
 }
 
-export type MsgType = 'text' | 'image' | 'sticker' | 'voice' | 'heartbeat_log';
+/* ── Quote / Forward sub-types ── */
 
-export interface Message {
+export interface QuoteRef {
+  msgId: string;
+  senderId: string;
+  preview: string;
+  type: 'text' | 'image' | 'sticker' | 'note' | 'song';
+}
+
+export interface ForwardedMsg {
+  senderId: string;
+  senderName: string;
+  type: 'text' | 'image' | 'sticker';
+  text?: string;
+  imageUrl?: string;
+  stickerUrl?: string;
+  timestamp: number;
+}
+
+/* ── Discriminated union Message types ── */
+
+interface MessageBase {
   id: string;
   convId: string;
   senderId: string;
-  type: MsgType;
-  text?: string;
-  imageUrl?: string;
-  /** 表情包图片 (base64 data URL)，独立于表情包存储，删包不影响历史 */
-  stickerUrl?: string;
-  /** 表情包描述，用于 AI 理解 */
-  stickerDesc?: string;
   timestamp: number;
   /** AI 流式消息还在 append 中(character 对话才会用到) */
   streaming?: boolean;
   /** 心跳 agent 主动发出的消息（非用户触发） */
   proactive?: boolean;
+  quoteRef?: QuoteRef;
+}
+
+export interface TextMessage extends MessageBase {
+  type: 'text';
+  text: string;
   /** 分享的备忘录引用 — 存在时聊天气泡渲染为卡片 */
   noteRef?: { noteId: string; title: string; body: string };
   /** 分享的歌曲引用 — 存在时聊天气泡渲染为音乐卡片 */
@@ -42,6 +60,59 @@ export interface Message {
     artist: string;
     artworkUrl: string;
   };
+}
+
+export interface ImageMessage extends MessageBase {
+  type: 'image';
+  imageUrl: string;
+}
+
+export interface StickerMessage extends MessageBase {
+  type: 'sticker';
+  /** 表情包图片 (base64 data URL)，独立于表情包存储，删包不影响历史 */
+  stickerUrl: string;
+  /** 表情包描述，用于 AI 理解 */
+  stickerDesc?: string;
+}
+
+export interface ForwardCardMessage extends MessageBase {
+  type: 'forward_card';
+  forwardCard: {
+    title: string;
+    messages: ForwardedMsg[];
+    preview: string[];
+  };
+}
+
+export interface HeartbeatLogMessage extends MessageBase {
+  type: 'heartbeat_log';
+  text: string;
+}
+
+export type Message = TextMessage | ImageMessage | StickerMessage
+  | ForwardCardMessage | HeartbeatLogMessage;
+
+export type MsgType = Message['type'];
+
+/* ── Favorite ── */
+
+export interface Favorite {
+  id: string;
+  messageId: string;
+  convId: string;
+  senderId: string;
+  senderName: string;
+  type: Message['type'];
+  content: {
+    text?: string;
+    imageUrl?: string;
+    stickerUrl?: string;
+    noteRef?: TextMessage['noteRef'];
+    songRef?: TextMessage['songRef'];
+    forwardCard?: ForwardCardMessage['forwardCard'];
+  };
+  timestamp: number;
+  favoritedAt: number;
 }
 
 export interface Conversation {

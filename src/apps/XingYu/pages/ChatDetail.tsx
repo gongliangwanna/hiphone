@@ -267,8 +267,11 @@ export function ChatDetail() {
   // 再往里 append text",长度不变,老的 effect 只在插入那一刻滚了一次,
   // 之后气泡越长越多行,用户就看不到后半截了。把文本长度也加入依赖,
   // 每个 token 都会触发 scrollToBottom,把视图钉在底部。
+  const lastMsg = allConvMessages[allConvMessages.length - 1];
   const lastMsgTextLen =
-    allConvMessages[allConvMessages.length - 1]?.text?.length ?? 0;
+    lastMsg && (lastMsg.type === 'text' || lastMsg.type === 'heartbeat_log')
+      ? lastMsg.text.length
+      : 0;
 
   // Auto-scroll to the latest message whenever message count changes, the
   // streaming text grows, OR when the user switches conversations.
@@ -541,7 +544,8 @@ export function ChatDetail() {
         {(() => {
           const last = visibleMessages[visibleMessages.length - 1];
           if (!last) return null;
-          const isCharStreaming = conv.characterId && last.streaming && !last.text;
+          const lastText = (last.type === 'text' || last.type === 'heartbeat_log') ? last.text : undefined;
+          const isCharStreaming = conv.characterId && last.streaming && !lastText;
           const isLegacyTyping =
             !conv.characterId && peer.online && last.senderId === 'me';
           if (!isCharStreaming && !isLegacyTyping) return null;
@@ -771,7 +775,7 @@ const MsgBubble = memo(function MsgBubble({
     (msg.type === 'text' && !!msg.text) ||
     (msg.type === 'image' && !!msg.imageUrl) ||
     (msg.type === 'sticker' && !!msg.stickerUrl) ||
-    msg.type === 'voice';
+    msg.type === 'forward_card';
   if (!hasContent) return null;
 
   return (
@@ -843,7 +847,7 @@ const MsgBubble = memo(function MsgBubble({
                 borderRadius: T.r.lg,
                 overflow: 'hidden',
                 boxShadow: T.shadow2,
-                marginBottom: msg.text ? 4 : 0,
+                marginBottom: 0,
               }}
             >
               <img

@@ -59,9 +59,9 @@ export function collectCharacterHistory(
     .map((m) => ({
       senderId: m.senderId,
       type: m.type,
-      text: m.text,
-      imageUrl: m.imageUrl,
-      stickerDesc: m.stickerDesc,
+      text: m.type === 'text' || m.type === 'heartbeat_log' ? m.text : undefined,
+      imageUrl: m.type === 'image' ? m.imageUrl : undefined,
+      stickerDesc: m.type === 'sticker' ? m.stickerDesc : undefined,
       timestamp: m.timestamp,
     }));
 }
@@ -153,20 +153,8 @@ interface XingYuDataState {
   ensureAIChatConversation: (charIdA: string, charIdB: string) => string;
 }
 
-function createUserMsg(
-  convId: string,
-  type: Message['type'],
-  extra: Partial<Message>,
-): Message {
-  return {
-    id: uid(),
-    convId,
-    senderId: 'me',
-    type,
-    timestamp: Date.now(),
-    ...extra,
-  };
-}
+// createUserMsg removed — each send* method now constructs the specific
+// discriminated union variant inline for type safety.
 
 function scheduleIdolReply(convId: string, get: () => XingYuDataState) {
   const conv = get().conversations.find((c) => c.id === convId);
@@ -252,7 +240,13 @@ export function triggerCompression(
 
   const messagesToCompress = toCompress.map((m) => ({
     role: (m.senderId === 'me' ? 'user' : 'assistant') as 'user' | 'assistant',
-    content: m.text || (m.type === 'image' ? '[图片]' : m.type === 'sticker' ? `[表情：${m.stickerDesc ?? '表情包'}]` : ''),
+    content: m.type === 'text' || m.type === 'heartbeat_log'
+      ? m.text
+      : m.type === 'image'
+        ? '[图片]'
+        : m.type === 'sticker'
+          ? `[表情：${m.stickerDesc ?? '表情包'}]`
+          : '',
   }));
 
   const lastTimestamp = toCompress[toCompress.length - 1]!.timestamp;
@@ -582,7 +576,7 @@ export const useXYData = create<XingYuDataState>()(
       },
 
       sendMessage: (convId, text) => {
-        const msg = createUserMsg(convId, 'text', { text });
+        const msg: Message = { id: uid(), convId, senderId: 'me', type: 'text', text, timestamp: Date.now() };
         set((s) => ({
           messages: [...s.messages, msg],
           conversations: s.conversations.map((c) =>
@@ -597,7 +591,7 @@ export const useXYData = create<XingYuDataState>()(
       sendNoteMessage: (convId, noteRef) => {
         const previewTitle = noteRef.title || '无标题';
         const text = `[备忘录分享] ${previewTitle}\n${noteRef.body}`;
-        const msg = createUserMsg(convId, 'text', { text, noteRef });
+        const msg: Message = { id: uid(), convId, senderId: 'me', type: 'text', text, noteRef, timestamp: Date.now() };
         set((s) => ({
           messages: [...s.messages, msg],
           conversations: s.conversations.map((c) =>
@@ -613,7 +607,7 @@ export const useXYData = create<XingYuDataState>()(
         const parts = [`[音乐分享] ${songRef.title} - ${songRef.artist}`];
         if (lyricsText) parts.push(`\n歌词:\n${lyricsText}`);
         const text = parts.join('');
-        const msg = createUserMsg(convId, 'text', { text, songRef });
+        const msg: Message = { id: uid(), convId, senderId: 'me', type: 'text', text, songRef, timestamp: Date.now() };
         set((s) => ({
           messages: [...s.messages, msg],
           conversations: s.conversations.map((c) =>
@@ -626,7 +620,7 @@ export const useXYData = create<XingYuDataState>()(
       },
 
       sendImageMessage: (convId, imageUrl) => {
-        const msg = createUserMsg(convId, 'image', { imageUrl });
+        const msg: Message = { id: uid(), convId, senderId: 'me', type: 'image', imageUrl, timestamp: Date.now() };
         set((s) => ({
           messages: [...s.messages, msg],
           conversations: s.conversations.map((c) =>
@@ -639,7 +633,7 @@ export const useXYData = create<XingYuDataState>()(
       },
 
       sendStickerMessage: (convId, stickerUrl, stickerDesc) => {
-        const msg = createUserMsg(convId, 'sticker', { stickerUrl, stickerDesc });
+        const msg: Message = { id: uid(), convId, senderId: 'me', type: 'sticker', stickerUrl, stickerDesc, timestamp: Date.now() };
         set((s) => ({
           messages: [...s.messages, msg],
           conversations: s.conversations.map((c) =>

@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence, animate, useMotionValue, type PanInfo } from 'motion/react';
-import { Search, X, Trash2 } from 'lucide-react';
+import { Search, X, Trash2, MailOpen, MessageCircleHeart } from 'lucide-react';
 import { useXYNav } from '../xingYuNavStore';
 import { useXYData } from '../xingYuDataStore';
 import { getIdol, formatTime } from '../data';
@@ -67,7 +67,10 @@ export function ChatListTab() {
       if (conv.lastMsg.toLowerCase().includes(q)) return true;
       // Search message content
       const msgs = allMessages.filter((m) => m.convId === conv.id);
-      return msgs.some((m) => m.text?.toLowerCase().includes(q));
+      return msgs.some((m) => {
+        const text = (m.type === 'text' || m.type === 'heartbeat_log') ? m.text : undefined;
+        return text?.toLowerCase().includes(q);
+      });
     });
   }, [sorted, query, allMessages]);
 
@@ -165,7 +168,7 @@ export function ChatListTab() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <span style={{ fontSize: 40, marginBottom: 12 }}>📭</span>
+            <MailOpen size={40} strokeWidth={1.5} style={{ marginBottom: 12, color: T.textMuted }} />
             <span style={{ fontSize: 14, color: T.textMuted, fontWeight: 500 }}>
               没有找到相关信件
             </span>
@@ -176,7 +179,7 @@ export function ChatListTab() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            <span style={{ fontSize: 40, marginBottom: 12 }}>💌</span>
+            <MessageCircleHeart size={40} strokeWidth={1.5} style={{ marginBottom: 12, color: T.textMuted }} />
             <span style={{ fontSize: 14, color: T.textMuted, fontWeight: 500 }}>
               还没有对话,去通讯录开聊吧
             </span>
