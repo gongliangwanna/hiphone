@@ -18,6 +18,7 @@ export function ProfileTab() {
   const stickerPacks = useStickerStore((s) => s.packs);
   const conversations = useXYData((s) => s.conversations);
   const moments = useXYData((s) => s.moments);
+  const favorites = useXYData((s) => s.favorites);
   const userSignatureHistory = useXYData((s) => s.userSignatureHistory);
   const characterSignatures = useXYData((s) => s.characterSignatures);
   const characters = useCharacterStore((s) => s.characters);
@@ -198,7 +199,7 @@ export function ProfileTab() {
             <div className="mt-6 flex w-full justify-around pt-5" style={{ borderTop: `0.5px solid ${T.separator}` }}>
               {[
                 { label: '信件', value: String(totalChats) },
-                { label: '收藏', value: '42' },
+                { label: '收藏', value: String(favorites.length) },
                 { label: '星球', value: String(myMomentsCount) },
               ].map((s) => (
                 <div key={s.label} className="flex flex-col items-center gap-1">
@@ -213,7 +214,7 @@ export function ProfileTab() {
         {/* 菜单列表区域 - 实色背景确保遮盖封面 */}
         <div className="relative px-4 pb-8 flex flex-col gap-4" style={{ zIndex: 1 }}>
           <MenuSection>
-            <MenuItem icon={Star} label="我的收藏" desc="42 条内容" color="#FFD700" />
+            <MenuItem icon={Star} label="我的收藏" desc={`${favorites.length} 条内容`} color="#FFD700" />
             <MenuItem icon={Heart} label="特别关心" desc="3 人" color="#FF2D55" />
             <MenuItem icon={Clock} label="互动历史" desc="" color="#5AC8FA" isLast />
           </MenuSection>
