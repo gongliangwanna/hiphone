@@ -1,102 +1,126 @@
 ---
 date: 2026-04-17
-status: approved
-topic: Clock widget redesign
-supersedes: docs/plan/2026-04-11-1420-widgets-ios-quality.md (clock section)
+status: draft
+topic: Clock widget — add Tick-Border (2×2) + Flip Clock (4×2) styles
 ---
 
-# Clock Widget Redesign — Tick-Border + Flip Clock
+# Clock Widget — 增加 Tick-Border（2×2）与 Flip Clock（4×2）
 
 ## 目标
 
-当前 `ClockWidget.tsx` 在 3 种尺寸 × 3 种样式下提供了 9 个 variant，但用户评价"太丑"。本次重做遵循项目既有的"**质量 > 数量**"原则：砍掉低价值 variant、砍掉 4×4 尺寸，把留下来的每个样式做到 iOS 质感可交付的水平。
+在现有 `ClockWidget` 的基础上**增加**两种新样式：
+- **2×2**：Tick-Border Watch Face（带圆角矩形刻度环的数字表盘）
+- **4×2**：Flip Clock（机械翻页钟，带翻页动画）
+
+每种新样式各有 3 个配色（Mono / Paper / Navy）。
+
+**现有实现（analog / digital / minimal 等 9 个 variant）不动，4×4 尺寸也不动**——新样式作为 drawer gallery 的附加选项。
 
 ### 验收标准
 
-1. 2×2 为 Tick-Border Watch Face，3 配色（Mono / Paper / Navy）。
-2. 4×2 为机械翻页钟（Flip Clock），3 配色（Mono / Paper / Navy），翻页动画在分钟切换时触发。
-3. 4×4 尺寸从 catalog 中移除，drawer gallery 不再显示 4×4 时钟。
-4. drawer 预览与 placed 呈现视觉一致（复用 `WidgetShell` 的 drawer scale 策略）。
-5. 所有动画在非激活页面（`useIsPageActive() === false`）自动暂停，避免后台绘制。
-6. 单测通过：`widgets.test.tsx`、`WidgetDrawer.test.tsx`、`springboardLayoutStore.test.ts`。
+1. Drawer gallery 中 clock 2×2 的 style 卡片从 3 增至 **6**（原 3 + tick-border × 3 palette）。
+2. Drawer gallery 中 clock 4×2 的 style 卡片从 3 增至 **6**（原 3 + flip-clock × 3 palette）。
+3. Drawer gallery 中 clock 4×4 的 style 卡片保持 3 个，不变。
+4. 选择 tick-border 任一配色 → 桌面显示带放射状刻度的圆角方形表盘（数字 HH:MM 居中）。
+5. 选择 flip-clock 任一配色 → 桌面显示两张翻页卡（HH 和 MM），当分钟变化时触发两阶段翻页动画。
+6. 已有的 9 个 variant 渲染表现与本次改动前完全一致（零回归）。
+7. 单测：`widgets.test.tsx`、`WidgetDrawer.test.tsx`、`springboardLayoutStore.test.ts` 全部通过。
 
 ## 设计决策
 
-### 决策 1：2×2 = Tick-Border Watch Face
+### 决策 1：新样式通过 `styleIndex` 扩展到 registry
 
-```
-┌───── · · · · · ─────┐
-·                     ·
-·      北京            ·
-·                     ·
-·      14:32          ·
-·                     ·
-·      GMT+8          ·
-·                     ·
-└───── · · · · · ─────┘
-```
-
-- 内容：城市名（顶）/ HH:MM（中，40px bold-800）/ 时区偏移（底）。
-- 边框：SVG `rect` + `stroke-dasharray="1 5"`，沿路径形成均匀的"刻度点"——视觉上是机械表盘的分刻度环。
-- 字体：SF Pro Display，`font-variant-numeric: tabular-nums; letter-spacing: -0.03em`。
-
-**Why**：用户提供的参考图是"刻度外环 + 极简字重"的腕表字表盘，直接复刻。Portrait Stack 被此方案取代。
-
-### 决策 2：4×2 = 机械翻页钟（带翻页动画）
-
-```
-┌────────────────────────┐
-│                        │
-│   ┌────┐  ┌────┐       │
-│   │ 14 │  │ 32 │       │   (cards 132×132, gap 12)
-│   │────│  │────│       │
-│   │ 14 │  │ 32 │       │
-│   └────┘  └────┘       │
-│                        │
-└────────────────────────┘
-```
-
-- 两张方形"卡片"，每卡高 132px、字 104px，中间一条 1px hinge 线把卡分成上下两半。
-- 翻页动画（两阶段，各 0.35s）：
-  1. **上翻片**：`rotateX(0deg) → rotateX(-90deg)`，`transform-origin: bottom`（当前数字的上半部分向下倒下）。
-  2. **下翻片**：`rotateX(90deg) → rotateX(0deg)`，`transform-origin: top`，延迟 0.35s（新数字的下半部分立起来）。
-- 触发：仅在 `HH` 或 `MM` 实际变化的那一秒执行——分钟切换每分钟翻一次，小时切换每小时翻一次。
-- **无日期行、HH/MM 垂直水平居中**。
-
-**Why**：用户选定机械翻页钟参考图、明确要求保留翻页动画、明确"去掉日期让它居中"。
-
-**How to apply**：动画基于真实 `new Date()`，demo 模式（2s 一翻）只用于 visual companion 调试，不进入生产代码。
-
-### 决策 3：4×4 整体移除
-
-- `widgetCatalog.clock.sizes` 改为 `['2x2', '4x2']`。
-- `widgetCatalog.clock.styles['4x4']` 删除。
-- `WidgetDrawer.test.tsx` 中硬编码的 `clock-4x4` 断言改为 `clock-2x2` 或 `clock-4x2`。
-
-**Why**：用户明确"去掉 4*4 的时间组件"。4×4 占用 springboard 大量空间，而时钟信息本身不需要这么大承载——同样的空间更适合交给 Music / Photo / Calendar。
-
-**How to apply**：若 `springboardLayoutStore` 持久化中存在历史 `{kind:'clock', size:'4x4'}` 记录，store 的 `addWidget` 将来会拒绝该 size 吗？需验证：`addWidget` 目前不校验 `kind × size` 组合是否在 catalog 中（仅用 `catalogSupportsSize` 在 drawer 层过滤）。已存在的 4×4 时钟会因为 `getWidgetComponent('clock')` 仍返回组件而**继续渲染**——所以 `ClockWidget.tsx` 必须在运行时面对 `size === '4x4'` 时做 graceful fallback：降级渲染成 4×2 flip clock（或者在 component 内提前 return null，交给 Springboard 清理）。**选择 fallback 为 4×2 渲染**，这样用户即便有旧数据也不会看到白板。
-
-### 决策 4：3 配色通过 `styleIndex` 切换（0 = Mono / 1 = Paper / 2 = Navy）
-
-- `styles['2x2']`：`[{id:'mono', label:'经典黑'}, {id:'paper', label:'暖米白'}, {id:'navy', label:'深海蓝'}]`。
-- `styles['4x2']`：同上三套，label 相同。
-- 调色板在 component 内作为常量表导出：
+原 `styles['2x2']` 3 项，新增 3 项 → 6 项；`styles['4x2']` 同理。
 
 ```ts
-const PALETTES = {
-  mono:  { bg:'#000',       cardTop:['#2a2a2c','#1c1c1e'], cardBot:['#181819','#0f0f10'], hinge:'#000',                 digit:'#f5f5f7', label:'rgba(255,255,255,0.6)' },
-  paper: { bg:'#e6dcc9',    cardTop:['#fbf6e9','#f2ead4'], cardBot:['#eee4c9','#e0d4b5'], hinge:'rgba(90,65,35,0.18)',  digit:'#2a241a', label:'rgba(42,36,26,0.6)' },
-  navy:  { bg:'linear-gradient(165deg, #0f1a2e 0%, #0a1426 100%)',
-           cardTop:['#1e2d48','#162540'], cardBot:['#112038','#0a172d'], hinge:'rgba(0,0,0,0.5)',                         digit:'#f0e9d4', label:'rgba(240,233,212,0.6)' },
-};
+styles: {
+  '2x2': [
+    // —— 现有 ——
+    { id: 'analog',      label: '经典' },
+    { id: 'digital',     label: '数字' },
+    { id: 'minimal',     label: '简约' },
+    // —— 新增 tick-border ——
+    { id: 'tick-mono',   label: '刻度·黑' },
+    { id: 'tick-paper',  label: '刻度·白' },
+    { id: 'tick-navy',   label: '刻度·蓝' },
+  ],
+  '4x2': [
+    // —— 现有 ——
+    { id: 'digital-hero', label: '数字' },
+    { id: 'dual-city',    label: '双城' },
+    { id: 'classic',      label: '经典' },
+    // —— 新增 flip-clock ——
+    { id: 'flip-mono',    label: '翻页·黑' },
+    { id: 'flip-paper',   label: '翻页·米' },
+    { id: 'flip-navy',    label: '翻页·蓝' },
+  ],
+  '4x4': [ /* 不变 */ ],
+},
 ```
 
-- 2×2 Tick-Border 复用 `bg` / `digit` / `label`，另加 `tick` 颜色（= `label` 同色 alpha 升至 0.35）。
+**Why**：drawer 的 style 枚举就是"每 palette 独立一张卡"模式（用户已看到并接受），每张卡点下去就落到桌面，交互最直观。
 
-**Why**：三个配色视觉分明，覆盖 Dark / Paper / Moody 三类壁纸场景；调色板表集中管理便于后续加第 4 色。
+**How to apply**：`ClockWidget.tsx` 根据 `(size, styleIndex)` 分派：index ≥ 原有数量时走新组件。
 
-**How to apply**：`styleIndex` 超出范围时 `% 3` 安全回绕，测试已验证 drawer 给出的是 `0/1/2`。
+### 决策 2：`ClockWidget` 内部结构（分派层）
+
+```ts
+function ClockWidget({ size, styleIndex = 0, ...rest }) {
+  if (size === '2x2') {
+    if (styleIndex < 3) return <Existing2x2 variant={styleIndex} />;      // analog/digital/minimal
+    return <TickBorder2x2 palette={PALETTES[styleIndex - 3]} />;          // tick × 3
+  }
+  if (size === '4x2') {
+    if (styleIndex < 3) return <Existing4x2 variant={styleIndex} />;      // digital-hero/dual-city/classic
+    return <FlipClock4x2 palette={PALETTES[styleIndex - 3]} />;           // flip × 3
+  }
+  return <Existing4x4 variant={styleIndex} />;                            // world/classic/digital（不变）
+}
+```
+
+`PALETTES` 是长度 3 的常量数组（mono/paper/navy）。
+
+**Why**：零侵入现有代码——分派层外的函数体原样保留。
+
+### 决策 3：`TickBorder2x2` 规格
+
+- **卡片**：170×170（design cell），border-radius 22（跟 `WidgetShell` 圆角一致）。
+- **刻度**（v1 实现路径）：SVG `rect` + `stroke-dasharray="1 5"` + `stroke-width="10"`，沿路径形成 60 条 1×10px 的垂直短刻度。实现简单、开销低；视觉 "ok but not perfect"，用户已 accept。
+- **内容**（从上到下）：
+  - `北京`（13px, weight 600, opacity 0.6）
+  - `14:32`（40px, weight 800, tabular-nums, letter-spacing -0.03em）
+  - `GMT+8`（12px, weight 500, opacity 0.5）
+- **配色**（`PALETTES.mono/paper/navy`）：
+  ```ts
+  mono  : { bg:'#000',       fg:'#f5f5f7', tick:'rgba(255,255,255,0.35)' }
+  paper : { bg:'#e6dcc9',    fg:'#2a241a', tick:'rgba(90,65,35,0.35)' }
+  navy  : { bg:'linear-gradient(165deg,#0f1a2e 0%,#0a1426 100%)', fg:'#f0e9d4', tick:'rgba(240,233,212,0.35)' }
+  ```
+
+### 决策 4：`FlipClock4x2` 规格
+
+- **两张方形卡片**：132×132，gap 12，整体水平+垂直居中。
+- **每张卡**：`fc-half-top`（上半）+ `fc-half-bottom`（下半）+ 中间 1px `fc-hinge` 线。
+- **数字**：104px, weight 700, `line-height: 132px`, `tabular-nums`, `letter-spacing: -0.04em`。通过 `.fc-half-bottom .fc-digit { margin-top: -66px }` 让同一数字的下半部分显示在下半卡。
+- **翻页动画**（只在 `HH` 或 `MM` 实际变化的那一帧触发）：
+  - 阶段 1（0 → 0.35s）：挂载 `.fc-flap-top`（显示**旧**数字上半），`transform-origin: bottom`，`rotateX: 0 → -90deg`。
+  - 阶段 2（0.35 → 0.70s）：挂载 `.fc-flap-bottom`（显示**新**数字下半），`transform-origin: top`，`rotateX: 90 → 0deg`。
+  - 动画结束后移除两个 flap 节点；`.fc-half-top` 直接用新值、`.fc-half-bottom` 在 t=720ms 时切到新值（对齐翻页落位瞬间）。
+- **无日期行**，居中布局。
+- **配色**：同 Tick-Border 的 PALETTES，只多一组 `cardTop / cardBot` gradient 给卡片上下半的微妙色差。
+
+### 决策 5：数据与时钟脉冲
+
+- 复用现有 `useLiveTime()` + `useIsPageActive()`：非活跃页面不 tick，与项目既有性能约定一致。
+- **TickBorder2x2** 每分钟刷新一次显示即可；**FlipClock4x2** 也是每分钟刷新，但要用 `useEffect([hhmm])` 触发翻页动画。
+- 时区：本 spec 范围内所有 Tick-Border 硬编码 `北京 / GMT+8`，Flip Clock 不显示时区；多城市配置留给后续。
+
+### 决策 6：不修改现有代码的范围
+
+- 不改 `useLiveTime` / `useIsPageActive` / `useTimeParts` / `useDateLabel`。
+- 不改 `registry.tsx` 的 `WidgetCatalogEntry` 接口——只是在 `styles['2x2']` 和 `styles['4x2']` 的数组里追加 3 项。
+- 不改 `WidgetShell.tsx`。
+- 不改 `springboardLayoutStore` 与其测试。
 
 ## 架构
 
@@ -104,93 +128,34 @@ const PALETTES = {
 
 | 文件 | 动作 |
 |---|---|
-| `src/shell/Widgets/ClockWidget.tsx` | **重写**：删除 `WatchFace / SmallWatchFace / AnalogClock / DigitalHero / DualCity / ClassicFace / WorldClockGrid` 等所有旧子组件；新增 `TickBorder2x2` + `FlipClock4x2`；保留 `useLiveTime` / `useIsPageActive` / `useTimeParts` 工具。 |
-| `src/shell/Widgets/registry.tsx` | `sizes: ['2x2', '4x2']`；`styles['4x4']` 删除；`styles['2x2']` 和 `styles['4x2']` 改为 Mono/Paper/Navy 三项。 |
-| `src/shell/WidgetDrawer/__tests__/WidgetDrawer.test.tsx` | 把 `clock-4x4-style-*` 断言替换为 `clock-4x2-style-*` 或 `clock-2x2-style-*`；新增测试：drawer 不再出现 clock-4x4。 |
-| `src/shell/Widgets/__tests__/widgets.test.tsx` | 移除/重写 clock 4x4 相关 snapshot；新增 2x2 tick-border / 4x2 flip 的基本渲染测试（3 个 palette 各一个 case）。 |
-| `src/platform/stores/__tests__/springboardLayoutStore.test.ts` | 不改（全部用 2x2）。 |
+| `src/shell/Widgets/ClockWidget.tsx` | **追加**（不重写）：在文件末尾加 `PALETTES` 常量 + `TickBorder2x2` 组件 + `FlipClock4x2` 组件 + `FlipCard` 子组件；修改 `ClockWidget` 主函数的 switch 分派逻辑，新增 `styleIndex >= 3` 分支。 |
+| `src/shell/Widgets/registry.tsx` | `styles['2x2']` 和 `styles['4x2']` 各追加 3 项。`4x4` 完全不动。 |
+| `src/shell/WidgetDrawer/__tests__/WidgetDrawer.test.tsx` | 调整任何 hard-coded style count assertion（若有）；新增：点击 `widget-drawer-card-clock-2x2-style-3/4/5` 落到桌面后能 render。 |
+| `src/shell/Widgets/__tests__/widgets.test.tsx` | 新增 2×2 tick-border × 3 palette、4×2 flip-clock × 3 palette 的渲染测试（验证 HH:MM 文本出现、palette 颜色通过类名或 style 检查）。 |
 
-### `FlipClock4x2` 内部结构
+### 翻页动画测试策略
 
-```
-<FlipClock4x2 palette={p}>
-  ├── <FlipCard role="hh" value={hh} palette={p} />
-  └── <FlipCard role="mm" value={mm} palette={p} />
-</FlipClock4x2>
-```
+jsdom 不渲染 CSS 动画，所以测试断言策略是：
+- 渲染初始 `hh=14, mm=32`，断言 `.fc-half-top` 显示 `14` 和 `32`。
+- `act()` 中把时间推进 1 分钟，触发 rerender。
+- 断言 flap 节点 `.fc-flap-top` 和 `.fc-flap-bottom` 在 DOM 中出现（由 `useEffect` 挂载）。
+- `act()` 中 `vi.advanceTimersByTime(720)`，断言 flap 节点被移除、`.fc-half-top` 显示新值 `33`。
 
-每个 `FlipCard`：
-
-```
-<div class="fc">
-  <div class="fc-half fc-half-top"><span>14</span></div>   ← 固定显示当前 HH 上半
-  <div class="fc-half fc-half-bottom"><span>14</span></div> ← 固定显示当前 HH 下半
-  <!-- 翻页时临时追加：-->
-  <div class="fc-flap fc-flap-top"><span>13</span></div>   ← 旧数字上半（向下倒）
-  <div class="fc-flap fc-flap-bottom"><span>14</span></div> ← 新数字下半（立起来）
-  <div class="fc-hinge"></div>
-</div>
-```
-
-`FlipCard` 使用 `useEffect([value])`：value 变化时挂载两个 flap DOM，动画结束后移除（setTimeout 360ms / 720ms）。
-
-**关键 CSS**（沿用 `tick-border.html` 已验证的算式）：
-- `.fc-digit { font-size:104px; line-height:132px; height:132px; }`
-- `.fc-half-bottom .fc-digit { margin-top:-66px; }` (= -cardHeight/2)
-
-### `TickBorder2x2` 内部结构
-
-```
-<TickBorder2x2 palette={p}>
-  <svg class="ticks" viewBox="0 0 170 170">
-    <rect x=13 y=13 width=144 height=144 rx=13 ry=13
-          fill=none stroke={p.tick} stroke-width=10 stroke-dasharray="1 5" />
-  </svg>
-  <div class="label-top">北京</div>
-  <div class="time">{hh}:{mm}</div>
-  <div class="label-bot">GMT+8</div>
-</TickBorder2x2>
-```
-
-**后续扩展点（非本次范围）**：city + tz 当前硬编码"北京 / GMT+8"，后续通过 widget config 或 world-clock store 参数化；本次 spec 不包含。
-
-### 数据流
-
-```
-useLiveTime (setInterval 1s)  ──►  ClockWidget
-                                       │
-                                       ├── styleIndex → palette
-                                       ├── size=2x2 → TickBorder2x2 (hh, mm)
-                                       └── size=4x2 → FlipClock4x2 (hh, mm)
-                                                        │
-                                                        └── useEffect(hh/mm) → flip animation
-```
-
-`useIsPageActive()` 门控：非活跃页面不调用 `setInterval`，已在 `useLiveTime` 中实现，本次不改。
-
-### 错误处理 / 边界情况
-
-- **size 为 '4x4'**（旧持久化数据）：`ClockWidget` switch 默认分支返回 `FlipClock4x2`（graceful fallback，避免白板）。
-- **styleIndex 超界**：`palettes[styleIndex % 3]`。
-- **动画中切页**：`FlipCard` 的 `useEffect` cleanup 清理 `setTimeout` 与 DOM flap 节点，防止 unmount-after-timer 访问空引用。
-- **jsdom**：`rotateX` CSS 不依赖 PointerEvent，测试环境下动画节点会被渲染但不产生视觉变化——测试只断言 digit 文本，不断言 transform。
-
-### 测试
-
-新增的 3 个核心测试：
-1. `clock 2x2 tick-border renders city/time/tz for each palette`：三个 palette 都能 render `14:32` / `北京` / `GMT+8`。
-2. `clock 4x2 flip-clock renders hh/mm for each palette`：三个 palette 都能 render 当前 hh / mm。
-3. `clock 4x2 triggers flip animation on minute change`：mock timer，前后 render 不同分钟，断言 `.fc-flap-top` 与 `.fc-flap-bottom` 节点在动画期间存在。
-
-调整：
-- `WidgetDrawer.test.tsx:85, 127, 148` 中 `clock-4x4-*` → 按新 catalog 改写。
+不断言 `transform` 值（无意义）。
 
 ## 风险 & 权衡
 
-- **风险**：旧用户桌面上已经存在 4×4 时钟 → graceful fallback 解决。若未来决定彻底丢弃，可再加 migration 清理。
-- **权衡**：4×2 只有 HH:MM 没有日期——牺牲信息密度换纯粹感，与用户明确要求一致。需要看日期的用户可选装 Date widget。
-- **YAGNI**：本次不做 world-clock 多城市、不做秒针、不做 seconds-level 动画。
+- **Drawer 卡片数量**：clock 从 9 个 style 增至 15 个。drawer gallery 需要能横向滚动或分页显示——查验 `WidgetDrawer` 现行布局能否承载更多 style card，若溢出 viewport 需要 `overflow-x: auto`。本 spec 暂按"现有 drawer 已是 scroll 容器"假设，实施阶段第一步就验证。
+- **旧持久化兼容**：用户之前保存的 `styleIndex` 仍指向旧 3 个 style，无需迁移。
+- **刻度效果**：已告知用户 v1 刻度不完美（`stroke-dasharray` 伪刻度），用户已 accept。若后续决定升级为"60 根 `<line>`"方案（v2 mockup），只需替换 `TickBorder2x2` 内部 SVG，接口不变。
+- **YAGNI**：本次不做 world-clock 多城市、不做秒针、不做时区选择 UI。Tick-Border 的 `北京 / GMT+8` 是常量。
 
 ## 下一步
 
-本 spec 通过后，通过 `superpowers:writing-plans` 产出实施 plan（按 TDD 分阶段：registry → TickBorder2x2 → FlipClock4x2 → 动画 → 旧测试清理）。
+Spec 通过后，用 `superpowers:writing-plans` 生成实施 plan：
+1. 先在 `registry.tsx` 追加 6 个 style 项，跑测试确认 drawer 正确显示（可能只显示 `TickBorder2x2` 的"未实现"占位）。
+2. 实现 `TickBorder2x2`（3 palette 完成）。
+3. 实现 `FlipCard` + `FlipClock4x2`（不含动画先过测试）。
+4. 加翻页动画 + 动画测试。
+5. 验证 drawer / placed / drag overlay 三种呈现都正确。
+6. Cloudflare Pages 部署验证。
