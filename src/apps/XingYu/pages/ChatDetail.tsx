@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback, memo } from 'react';
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { ChevronLeft, Phone, Send, Image, Smile, Palette, MoreHorizontal, Play } from 'lucide-react';
 import { useXYNav } from '../xingYuNavStore';
 import { useXYData } from '../xingYuDataStore';
@@ -10,6 +10,9 @@ import { usePersonaStore } from '@/platform/stores/personaStore';
 import { usePerspective } from '@/platform/hooks/usePerspective';
 import { useAppRuntimeStore } from '@/platform/stores/appRuntimeStore';
 import { useNotesNavStore } from '@/apps/Notes/notesNavStore';
+import { useLongPress } from '@/platform/gesture/useLongPress';
+import { useToastStore } from '@/system';
+import { MessageActionBar, type ActionType } from '../components/MessageActionBar';
 
 /** Character 对话头像兜底路径,和 ContactsTab 保持一致 */
 const CHAR_FALLBACK_AVATAR = '/resource/avatars/preset-01.jpg';
@@ -52,6 +55,7 @@ export function ChatDetail() {
   const [pickerMode, setPickerMode] = useState<PickerMode>('none');
   const [highlightMsgId, setHighlightMsgId] = useState<string | null>(null);
   const [showDrawing, setShowDrawing] = useState(false);
+  const [actionMenu, setActionMenu] = useState<{ msgId: string; position: 'above' | 'below' } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -423,6 +427,44 @@ export function ChatDetail() {
     [activeChatId, sendImageMessage],
   );
 
+  const handleLongPressMsg = useCallback((msg: Message, position: 'above' | 'below') => {
+    setActionMenu({ msgId: msg.id, position });
+  }, []);
+
+  const handleCloseMenu = useCallback(() => setActionMenu(null), []);
+
+  const handleMessageAction = useCallback((type: ActionType, msg: Message) => {
+    setActionMenu(null);
+    switch (type) {
+      case 'copy':
+        if (msg.type === 'text') {
+          const txt = msg.noteRef
+            ? `${msg.noteRef.title}\n${msg.noteRef.body}`
+            : msg.songRef
+              ? `${msg.songRef.title} - ${msg.songRef.artist}`
+              : msg.text;
+          navigator.clipboard?.writeText(txt).catch(() => {});
+          useToastStore.getState().show('已复制');
+        }
+        break;
+      case 'favorite':
+        useToastStore.getState().show('已收藏');
+        break;
+      case 'quote':
+        // Wired in Task 5
+        break;
+      case 'forward':
+        // Wired in Task 8
+        break;
+      case 'multiSelect':
+        // Wired in Task 6
+        break;
+      case 'delete':
+        // Wired in Task 6
+        break;
+    }
+  }, []);
+
   if (!conv || !peer) return null;
 
   return (
@@ -537,6 +579,11 @@ export function ChatDetail() {
               skipAnimation={!shouldAnimate}
               aiChatPeers={aiChatPeers}
               highlight={msg.id === highlightMsgId}
+              actionMenuOpen={actionMenu?.msgId === msg.id}
+              menuPosition={actionMenu?.position ?? 'above'}
+              onLongPress={handleLongPressMsg}
+              onAction={handleMessageAction}
+              onCloseMenu={handleCloseMenu}
             />
           );
         })}
@@ -745,6 +792,11 @@ const MsgBubble = memo(function MsgBubble({
   skipAnimation,
   aiChatPeers,
   highlight,
+  actionMenuOpen,
+  menuPosition,
+  onLongPress,
+  onAction,
+  onCloseMenu,
 }: {
   msg: Message;
   peer: { id: string; avatar: string; ringIndex: number };
@@ -754,6 +806,11 @@ const MsgBubble = memo(function MsgBubble({
   /** For AI-AI conversations: provides both peers and which side each goes */
   aiChatPeers?: AIChatPeers;
   highlight?: boolean;
+  actionMenuOpen?: boolean;
+  menuPosition?: 'above' | 'below';
+  onLongPress?: (msg: Message, position: 'above' | 'below') => void;
+  onAction?: (type: ActionType, msg: Message) => void;
+  onCloseMenu?: () => void;
 }) {
   const { isSelf: perspectiveIsSelf, phoneOwnerId } = usePerspective();
   const isMine = aiChatPeers
@@ -776,6 +833,14 @@ const MsgBubble = memo(function MsgBubble({
     (msg.type === 'image' && !!msg.imageUrl) ||
     (msg.type === 'sticker' && !!msg.stickerUrl) ||
     msg.type === 'forward_card';
+
+  const longPress = useLongPress((e) => {
+    const el = (e.currentTarget as HTMLElement | null) ?? (e.target as HTMLElement | null);
+    const rect = el?.getBoundingClientRect();
+    const top = rect?.top ?? 0;
+    onLongPress?.(msg, top < window.innerHeight / 2 ? 'below' : 'above');
+  });
+
   if (!hasContent) return null;
 
   return (
@@ -825,7 +890,26 @@ const MsgBubble = memo(function MsgBubble({
           );
         })()}
 
-        <div style={{ maxWidth: msg.type === 'image' ? '58%' : '70%' }}>
+        <div
+          style={{ maxWidth: msg.type === 'image' ? '58%' : '70%', touchAction: 'pan-y' }}
+          onPointerDown={longPress.onPointerDown}
+          onPointerUp={longPress.onPointerUp}
+          onPointerCancel={longPress.onPointerCancel}
+          onClick={longPress.onClick}
+        >
+          {actionMenuOpen && menuPosition === 'above' && (
+            <AnimatePresence>
+              <div style={{ display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start' }}>
+                <MessageActionBar
+                  msg={msg}
+                  position="above"
+                  isMine={isMine}
+                  onAction={onAction ?? (() => {})}
+                  onClose={onCloseMenu ?? (() => {})}
+                />
+              </div>
+            </AnimatePresence>
+          )}
           {msg.type === 'sticker' && msg.stickerUrl && (
             <img
               src={msg.stickerUrl}
@@ -1048,6 +1132,19 @@ const MsgBubble = memo(function MsgBubble({
             >
               {msg.text}
             </div>
+          )}
+          {actionMenuOpen && menuPosition === 'below' && (
+            <AnimatePresence>
+              <div style={{ display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start' }}>
+                <MessageActionBar
+                  msg={msg}
+                  position="below"
+                  isMine={isMine}
+                  onAction={onAction ?? (() => {})}
+                  onClose={onCloseMenu ?? (() => {})}
+                />
+              </div>
+            </AnimatePresence>
           )}
         </div>
 
