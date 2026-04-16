@@ -1,6 +1,14 @@
 import { create } from 'zustand';
+import type { ForwardedMsg, Message } from './data';
 
 export type XYTab = 'chat' | 'contacts' | 'compose' | 'moments' | 'profile';
+
+export type ForwardMode = 'single' | 'batch' | 'merge';
+
+interface PendingForward {
+  msgs: Message[];
+  mode: ForwardMode;
+}
 
 interface XingYuNavState {
   activeTab: XYTab;
@@ -10,6 +18,10 @@ interface XingYuNavState {
   momentComposerOpen: boolean;
   stickerManagerOrigin: string | null;
   scrollToMessageId: string | null;
+  /** forward_card 详情页要展示的消息列表 */
+  forwardCardMessages: ForwardedMsg[] | null;
+  /** 打开联系人选择页时暂存的待转发载荷 */
+  pendingForward: PendingForward | null;
 
   setTab: (tab: XYTab) => void;
   openChat: (convId: string) => void;
@@ -30,6 +42,10 @@ interface XingYuNavState {
   clearScrollToMessage: () => void;
   openInteractions: () => void;
   closeInteractions: () => void;
+  openForwardDetail: (messages: ForwardedMsg[]) => void;
+  closeForwardDetail: () => void;
+  openContactSelect: (msgs: Message[], mode: ForwardMode) => void;
+  closeContactSelect: () => void;
   reset: () => void;
 }
 
@@ -41,6 +57,8 @@ export const useXYNav = create<XingYuNavState>()((set, get) => ({
   momentComposerOpen: false,
   stickerManagerOrigin: null,
   scrollToMessageId: null,
+  forwardCardMessages: null,
+  pendingForward: null,
 
   setTab: (tab) => set({ activeTab: tab, page: null, activeChatId: null, activeIdolId: null }),
   openChat: (convId) => set({ page: 'chat-detail', activeChatId: convId }),
@@ -68,5 +86,20 @@ export const useXYNav = create<XingYuNavState>()((set, get) => ({
   clearScrollToMessage: () => set({ scrollToMessageId: null }),
   openInteractions: () => set({ page: 'interactions' }),
   closeInteractions: () => set({ page: null }),
-  reset: () => set({ activeTab: 'chat', page: null, activeChatId: null, activeIdolId: null, momentComposerOpen: false, stickerManagerOrigin: null, scrollToMessageId: null }),
+  openForwardDetail: (messages) => set({ page: 'forward-detail', forwardCardMessages: messages }),
+  closeForwardDetail: () => set({ page: 'chat-detail', forwardCardMessages: null }),
+  openContactSelect: (msgs, mode) => set({ page: 'contact-select', pendingForward: { msgs, mode } }),
+  closeContactSelect: () => set({ page: 'chat-detail', pendingForward: null }),
+  reset: () =>
+    set({
+      activeTab: 'chat',
+      page: null,
+      activeChatId: null,
+      activeIdolId: null,
+      momentComposerOpen: false,
+      stickerManagerOrigin: null,
+      scrollToMessageId: null,
+      forwardCardMessages: null,
+      pendingForward: null,
+    }),
 }));
