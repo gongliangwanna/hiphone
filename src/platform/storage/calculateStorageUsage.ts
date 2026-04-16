@@ -85,13 +85,13 @@ export async function calculateStorageUsage(): Promise<StorageUsageResult> {
     // 1. Messages store → 'messages' category
     const messages = await getAllFromStore(db, MESSAGES_STORE);
     for (const msg of messages) {
-      byCategory.messages += estimateBytes(msg);
+      byCategory.messages = (byCategory.messages ?? 0) + estimateBytes(msg);
     }
 
     // 2. Moments store → 'moments' category
     const moments = await getAllFromStore(db, MOMENTS_STORE);
     for (const m of moments) {
-      byCategory.moments += estimateBytes(m);
+      byCategory.moments = (byCategory.moments ?? 0) + estimateBytes(m);
     }
 
     // 3. KV store → classify by key
