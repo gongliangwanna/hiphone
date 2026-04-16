@@ -69,41 +69,29 @@ export function ForwardDetail() {
         className="scrollbar-hide min-h-0 flex-1 overflow-y-auto"
         style={{ paddingBottom: 'max(20px, var(--safe-bottom, 0px))' }}
       >
-        {/* Title card */}
-        <div
-          className="mx-4 mt-4 mb-2"
-          style={{
-            background: T.card,
-            borderRadius: 14,
-            padding: '14px 16px',
-            border: `0.5px solid ${T.border}`,
-            boxShadow: T.shadow1,
-          }}
-        >
-          <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 4 }}>
-            转发的聊天记录
-          </div>
-          <div style={{ fontSize: 15, fontWeight: 600, color: T.textPrimary }}>
-            {view.title}
-          </div>
-          <div style={{ fontSize: 12, color: T.textSecondary, marginTop: 6 }}>
-            共 {view.messages.length} 条消息
-          </div>
-        </div>
-
-        {/* Messages */}
-        <div className="px-4 pt-2">
+        <div className="px-3 pt-3">
           {view.messages.map((m, i) => {
             const prev = view.messages[i - 1];
             const sameSender = prev && prev.senderId === m.senderId;
+            const isMine = m.senderId === 'me';
             return (
-              <div key={i} className="mb-3 flex items-start gap-2">
+              <div
+                key={i}
+                className="mb-3 flex items-start gap-2"
+                style={{ flexDirection: isMine ? 'row-reverse' : 'row' }}
+              >
                 <div className="shrink-0" style={{ width: 32 }}>
                   {!sameSender && (
                     <Avatar src={resolveAvatar(m)} size={32} ringIndex={0} />
                   )}
                 </div>
-                <div className="min-w-0 flex-1">
+                <div
+                  className="min-w-0 flex flex-col"
+                  style={{
+                    maxWidth: 'calc(100% - 48px)',
+                    alignItems: isMine ? 'flex-end' : 'flex-start',
+                  }}
+                >
                   {!sameSender && (
                     <div
                       className="mb-1 flex items-baseline gap-2"
@@ -117,7 +105,7 @@ export function ForwardDetail() {
                       </span>
                     </div>
                   )}
-                  <ForwardedBubble msg={m} />
+                  <ForwardedBubble msg={m} isMine={isMine} />
                 </div>
               </div>
             );
@@ -128,7 +116,7 @@ export function ForwardDetail() {
   );
 }
 
-function ForwardedBubble({ msg }: { msg: ForwardedMsg }) {
+function ForwardedBubble({ msg, isMine }: { msg: ForwardedMsg; isMine: boolean }) {
   if (msg.type === 'image' && msg.imageUrl) {
     return (
       <img
@@ -157,15 +145,16 @@ function ForwardedBubble({ msg }: { msg: ForwardedMsg }) {
     <div
       style={{
         display: 'inline-block',
-        maxWidth: '85%',
-        background: T.card,
+        maxWidth: '100%',
+        background: isMine ? T.accentGrad : T.card,
+        color: isMine ? T.textOnAccent : T.textPrimary,
         borderRadius: 14,
-        borderTopLeftRadius: 4,
+        borderTopRightRadius: isMine ? 4 : 14,
+        borderTopLeftRadius: isMine ? 14 : 4,
         padding: '8px 12px',
         fontSize: 14,
         lineHeight: 1.5,
-        color: T.textPrimary,
-        border: `0.5px solid ${T.border}`,
+        border: isMine ? 'none' : `0.5px solid ${T.border}`,
         boxShadow: T.shadow1,
         wordBreak: 'break-word',
         whiteSpace: 'pre-wrap',
