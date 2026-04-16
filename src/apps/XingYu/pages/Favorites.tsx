@@ -1,19 +1,42 @@
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import { motion } from 'motion/react';
 import { ChevronLeft, Trash2, Star } from 'lucide-react';
 import { useXYNav } from '../xingYuNavStore';
 import { useXYData } from '../xingYuDataStore';
 import type { Favorite } from '../data';
+import { useToastStore } from '@/system';
 import { T } from '../theme';
 
 export function Favorites() {
   const close = useXYNav((s) => s.closeFavorites);
+  const openChatToMessage = useXYNav((s) => s.openChatToMessage);
   const favorites = useXYData((s) => s.favorites);
   const removeFavorite = useXYData((s) => s.removeFavorite);
+  const conversations = useXYData((s) => s.conversations);
+  const messages = useXYData((s) => s.messages);
 
   const sorted = useMemo(
     () => [...favorites].sort((a, b) => b.favoritedAt - a.favoritedAt),
     [favorites],
+  );
+
+  const handleJump = useCallback(
+    (fav: Favorite) => {
+      const convExists = conversations.some((c) => c.id === fav.convId);
+      if (!convExists) {
+        useToastStore.getState().show('原对话已删除');
+        return;
+      }
+      const msgExists = messages.some(
+        (m) => m.id === fav.messageId && m.convId === fav.convId,
+      );
+      if (!msgExists) {
+        useToastStore.getState().show('原消息已删除');
+        return;
+      }
+      openChatToMessage(fav.convId, fav.messageId);
+    },
+    [conversations, messages, openChatToMessage],
   );
 
   return (
@@ -66,7 +89,12 @@ export function Favorites() {
         ) : (
           <div className="px-3 pt-3 flex flex-col gap-2.5">
             {sorted.map((fav) => (
-              <FavoriteItem key={fav.id} fav={fav} onRemove={() => removeFavorite(fav.id)} />
+              <FavoriteItem
+                key={fav.id}
+                fav={fav}
+                onRemove={() => removeFavorite(fav.id)}
+                onJump={() => handleJump(fav)}
+              />
             ))}
           </div>
         )}
@@ -75,12 +103,22 @@ export function Favorites() {
   );
 }
 
-function FavoriteItem({ fav, onRemove }: { fav: Favorite; onRemove: () => void }) {
+function FavoriteItem({
+  fav,
+  onRemove,
+  onJump,
+}: {
+  fav: Favorite;
+  onRemove: () => void;
+  onJump: () => void;
+}) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
+      whileTap={{ scale: 0.98 }}
       transition={{ duration: 0.2 }}
+      onClick={onJump}
       style={{
         background: T.card,
         borderRadius: 14,
@@ -90,6 +128,7 @@ function FavoriteItem({ fav, onRemove }: { fav: Favorite; onRemove: () => void }
         display: 'flex',
         flexDirection: 'column',
         gap: 8,
+        cursor: 'pointer',
       }}
     >
       <div className="flex items-center justify-between">
@@ -106,7 +145,10 @@ function FavoriteItem({ fav, onRemove }: { fav: Favorite; onRemove: () => void }
         </div>
         <motion.button
           type="button"
-          onClick={onRemove}
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
           whileTap={{ scale: 0.85 }}
           className="flex items-center justify-center"
           style={{
