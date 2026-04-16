@@ -4,7 +4,15 @@ import { idbStorage } from '@/platform/storage/idbStorage';
 import { loadAllMessages, loadAllMoments } from '@/platform/storage/idbRecordStorage';
 import { startXYDataSync } from '@/platform/storage/zustandIdbSync';
 import { uid } from '@/platform/utils/uid';
-import type { Conversation, Message, Moment, MomentInteraction } from './data';
+import type {
+  Conversation,
+  Favorite,
+  ForwardCardMessage,
+  ForwardedMsg,
+  Message,
+  Moment,
+  MomentInteraction,
+} from './data';
 import {
   SEED_CONVS,
   SEED_MSGS,
@@ -108,6 +116,8 @@ interface XingYuDataState {
   characterLastReadMsgTs: Record<string, number>;
   /** AI 角色已看过的互动总数, key = characterId */
   characterSeenInteractionCount: Record<string, number>;
+  /** 用户收藏的消息 */
+  favorites: Favorite[];
 
   sendMessage: (convId: string, text: string) => void;
   sendNoteMessage: (convId: string, noteRef: { noteId: string; title: string; body: string }) => void;
@@ -151,6 +161,26 @@ interface XingYuDataState {
    * 返回 convId。
    */
   ensureAIChatConversation: (charIdA: string, charIdB: string) => string;
+
+  /** 收藏单条消息（同 messageId 幂等去重） */
+  addFavorite: (msg: Message, senderName: string) => void;
+  /** 批量收藏（已收藏的自动跳过） */
+  addFavorites: (msgs: Message[], getSenderName: (senderId: string) => string) => void;
+  /** 按 favorite.id 删除一条收藏 */
+  removeFavorite: (id: string) => void;
+  /** 按 message id 批量删除消息 */
+  deleteMessages: (msgIds: string[]) => void;
+  /** 单条转发到目标会话 */
+  forwardMessage: (msg: Message, targetConvId: string) => void;
+  /** 逐条转发到目标会话 */
+  forwardMessages: (msgs: Message[], targetConvId: string) => void;
+  /** 合并转发为一张聊天记录卡片 */
+  forwardAsCard: (
+    msgs: Message[],
+    targetConvId: string,
+    title: string,
+    getSenderName: (senderId: string) => string,
+  ) => void;
 }
 
 // createUserMsg removed — each send* method now constructs the specific
@@ -554,6 +584,68 @@ function scheduleAICharacterReply(convId: string, get: () => XingYuDataState) {
     });
 }
 
+function extractFavoriteContent(msg: Message): Favorite['content'] {
+  switch (msg.type) {
+    case 'text':
+      return { text: msg.text, noteRef: msg.noteRef, songRef: msg.songRef };
+    case 'image':
+      return { imageUrl: msg.imageUrl };
+    case 'sticker':
+      return { stickerUrl: msg.stickerUrl };
+    case 'forward_card':
+      return { forwardCard: msg.forwardCard };
+    case 'heartbeat_log':
+      return { text: msg.text };
+  }
+}
+
+function buildForwardedMessage(
+  msg: Message,
+  targetConvId: string,
+  ts: number,
+): { newMsg: Message; preview: string } | null {
+  const base = { id: uid(), convId: targetConvId, senderId: 'me', timestamp: ts };
+  switch (msg.type) {
+    case 'text': {
+      const newMsg: Message = {
+        ...base,
+        type: 'text',
+        text: msg.text,
+        ...(msg.noteRef ? { noteRef: msg.noteRef } : {}),
+        ...(msg.songRef ? { songRef: msg.songRef } : {}),
+      };
+      const preview = msg.noteRef
+        ? `[备忘录] ${msg.noteRef.title}`
+        : msg.songRef
+          ? `[音乐] ${msg.songRef.title}`
+          : msg.text.slice(0, 60);
+      return { newMsg, preview };
+    }
+    case 'image':
+      return {
+        newMsg: { ...base, type: 'image', imageUrl: msg.imageUrl },
+        preview: '[图片]',
+      };
+    case 'sticker':
+      return {
+        newMsg: {
+          ...base,
+          type: 'sticker',
+          stickerUrl: msg.stickerUrl,
+          ...(msg.stickerDesc ? { stickerDesc: msg.stickerDesc } : {}),
+        },
+        preview: '[表情]',
+      };
+    case 'forward_card':
+      return {
+        newMsg: { ...base, type: 'forward_card', forwardCard: msg.forwardCard },
+        preview: '[聊天记录]',
+      };
+    case 'heartbeat_log':
+      return null;
+  }
+}
+
 export const useXYData = create<XingYuDataState>()(
   persist(
     (set, get) => ({
@@ -566,6 +658,7 @@ export const useXYData = create<XingYuDataState>()(
       unreadInteractionCount: 0,
       characterLastReadMsgTs: {},
       characterSeenInteractionCount: {},
+      favorites: [],
 
       userSettings: {
         nickname: '小星星',
@@ -931,6 +1024,131 @@ export const useXYData = create<XingYuDataState>()(
         }));
       },
 
+      addFavorite: (msg, senderName) => {
+        set((s) => {
+          if (s.favorites.some((f) => f.messageId === msg.id)) return s;
+          const fav: Favorite = {
+            id: uid(),
+            messageId: msg.id,
+            convId: msg.convId,
+            senderId: msg.senderId,
+            senderName,
+            type: msg.type,
+            content: extractFavoriteContent(msg),
+            timestamp: msg.timestamp,
+            favoritedAt: Date.now(),
+          };
+          return { favorites: [...s.favorites, fav] };
+        });
+      },
+
+      addFavorites: (msgs, getSenderName) => {
+        set((s) => {
+          const existingIds = new Set(s.favorites.map((f) => f.messageId));
+          const now = Date.now();
+          const newFavs: Favorite[] = msgs
+            .filter((m) => !existingIds.has(m.id))
+            .map((msg) => ({
+              id: uid(),
+              messageId: msg.id,
+              convId: msg.convId,
+              senderId: msg.senderId,
+              senderName: getSenderName(msg.senderId),
+              type: msg.type,
+              content: extractFavoriteContent(msg),
+              timestamp: msg.timestamp,
+              favoritedAt: now,
+            }));
+          if (newFavs.length === 0) return s;
+          return { favorites: [...s.favorites, ...newFavs] };
+        });
+      },
+
+      removeFavorite: (id) => {
+        set((s) => ({ favorites: s.favorites.filter((f) => f.id !== id) }));
+      },
+
+      deleteMessages: (msgIds) => {
+        const idSet = new Set(msgIds);
+        set((s) => ({
+          messages: s.messages.filter((m) => !idSet.has(m.id)),
+        }));
+      },
+
+      forwardMessage: (msg, targetConvId) => {
+        const now = Date.now();
+        const built = buildForwardedMessage(msg, targetConvId, now);
+        if (!built) return;
+        const { newMsg, preview } = built;
+        set((s) => ({
+          messages: [...s.messages, newMsg],
+          conversations: s.conversations.map((c) =>
+            c.id === targetConvId ? { ...c, lastMsg: preview, lastTime: now } : c,
+          ),
+        }));
+      },
+
+      forwardMessages: (msgs, targetConvId) => {
+        if (msgs.length === 0) return;
+        const now = Date.now();
+        const built = msgs
+          .map((m, i) => buildForwardedMessage(m, targetConvId, now + i))
+          .filter((b): b is { newMsg: Message; preview: string } => b !== null);
+        if (built.length === 0) return;
+        const newMsgs = built.map((b) => b.newMsg);
+        const lastPreview = `[转发] ${built.length}条消息`;
+        set((s) => ({
+          messages: [...s.messages, ...newMsgs],
+          conversations: s.conversations.map((c) =>
+            c.id === targetConvId
+              ? { ...c, lastMsg: lastPreview, lastTime: now + built.length }
+              : c,
+          ),
+        }));
+      },
+
+      forwardAsCard: (msgs, targetConvId, title, getSenderName) => {
+        const now = Date.now();
+        const forwarded: ForwardedMsg[] = msgs.map((m) => {
+          const flatType: 'text' | 'image' | 'sticker' =
+            m.type === 'image' ? 'image' : m.type === 'sticker' ? 'sticker' : 'text';
+          return {
+            senderId: m.senderId,
+            senderName: getSenderName(m.senderId),
+            type: flatType,
+            text:
+              m.type === 'text'
+                ? m.text
+                : m.type === 'heartbeat_log'
+                  ? m.text
+                  : m.type === 'forward_card'
+                    ? '[聊天记录]'
+                    : undefined,
+            imageUrl: m.type === 'image' ? m.imageUrl : undefined,
+            stickerUrl: m.type === 'sticker' ? m.stickerUrl : undefined,
+            timestamp: m.timestamp,
+          };
+        });
+        const preview = forwarded.slice(0, 4).map((f) => {
+          const content = f.text || (f.imageUrl ? '[图片]' : '[表情]');
+          return `${f.senderName}: ${content.slice(0, 20)}`;
+        });
+        const cardMsg: ForwardCardMessage = {
+          id: uid(),
+          convId: targetConvId,
+          senderId: 'me',
+          type: 'forward_card',
+          forwardCard: { title, messages: forwarded, preview },
+          timestamp: now,
+        };
+        set((s) => ({
+          messages: [...s.messages, cardMsg],
+          conversations: s.conversations.map((c) =>
+            c.id === targetConvId ? { ...c, lastMsg: '[聊天记录]', lastTime: now } : c,
+          ),
+        }));
+      },
+
       ensureAIChatConversation: (charIdA, charIdB) => {
         const [id1, id2] = [charIdA, charIdB].sort() as [string, string];
         const convId = `c-ai2ai-${id1}-${id2}`;
@@ -964,6 +1182,7 @@ export const useXYData = create<XingYuDataState>()(
         unreadInteractionCount: s.unreadInteractionCount,
         characterLastReadMsgTs: s.characterLastReadMsgTs,
         characterSeenInteractionCount: s.characterSeenInteractionCount,
+        favorites: s.favorites,
       }),
       storage: idbStorage,
       onRehydrateStorage: () => {
