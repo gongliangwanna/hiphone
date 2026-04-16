@@ -517,7 +517,7 @@ export function ChatDetail() {
         inputRef.current?.focus();
         break;
       case 'forward':
-        // Wired in Task 8
+        useXYNav.getState().openContactSelect([msg], 'single');
         break;
       case 'multiSelect':
         setMultiSelectMode(true);
@@ -562,14 +562,22 @@ export function ChatDetail() {
   }, [selectedMsgIds, allConvMessages, addFavorites, getSenderName, exitMultiSelect]);
 
   const handleBatchForward = useCallback(() => {
-    // Wired in Task 8
+    if (selectedMsgIds.size === 0) return;
+    const msgs = allConvMessages.filter((m) => selectedMsgIds.has(m.id));
+    if (msgs.length === 0) return;
+    useXYNav.getState().openContactSelect(msgs, 'batch');
     exitMultiSelect();
-  }, [exitMultiSelect]);
+  }, [selectedMsgIds, allConvMessages, exitMultiSelect]);
 
   const handleMergeForward = useCallback(() => {
-    // Wired in Task 8
+    if (selectedMsgIds.size === 0) return;
+    const msgs = allConvMessages
+      .filter((m) => selectedMsgIds.has(m.id))
+      .sort((a, b) => a.timestamp - b.timestamp);
+    if (msgs.length === 0) return;
+    useXYNav.getState().openContactSelect(msgs, 'merge');
     exitMultiSelect();
-  }, [exitMultiSelect]);
+  }, [selectedMsgIds, allConvMessages, exitMultiSelect]);
 
   if (!conv || !peer) return null;
 
