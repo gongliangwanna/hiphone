@@ -14,6 +14,7 @@ const DEFAULT_SIGNATURE = '还没有个性签名';
 export function ProfileTab() {
   const openSettings = useXYNav((s) => s.openSettings);
   const openStickerManager = useXYNav((s) => s.openStickerManager);
+  const openFavorites = useXYNav((s) => s.openFavorites);
   const settings = useXYData((s) => s.userSettings);
   const stickerPacks = useStickerStore((s) => s.packs);
   const conversations = useXYData((s) => s.conversations);
@@ -198,14 +199,23 @@ export function ProfileTab() {
             {/* 统计数据 */}
             <div className="mt-6 flex w-full justify-around pt-5" style={{ borderTop: `0.5px solid ${T.separator}` }}>
               {[
-                { label: '信件', value: String(totalChats) },
-                { label: '收藏', value: String(favorites.length) },
-                { label: '星球', value: String(myMomentsCount) },
+                { label: '信件', value: String(totalChats), onClick: undefined },
+                { label: '收藏', value: String(favorites.length), onClick: openFavorites },
+                { label: '星球', value: String(myMomentsCount), onClick: undefined },
               ].map((s) => (
-                <div key={s.label} className="flex flex-col items-center gap-1">
+                <motion.button
+                  key={s.label}
+                  type="button"
+                  className="flex flex-col items-center gap-1"
+                  onClick={s.onClick}
+                  whileTap={s.onClick ? { scale: 0.95, opacity: 0.7 } : undefined}
+                  transition={springs.press}
+                  disabled={!s.onClick}
+                  style={{ background: 'transparent', cursor: s.onClick ? 'pointer' : 'default' }}
+                >
                   <span style={{ fontSize: 20, fontWeight: 700, color: T.textPrimary }}>{s.value}</span>
                   <span style={{ fontSize: 12, fontWeight: 500, color: T.textSecondary }}>{s.label}</span>
-                </div>
+                </motion.button>
               ))}
             </div>
           </motion.div>
@@ -214,7 +224,7 @@ export function ProfileTab() {
         {/* 菜单列表区域 - 实色背景确保遮盖封面 */}
         <div className="relative px-4 pb-8 flex flex-col gap-4" style={{ zIndex: 1 }}>
           <MenuSection>
-            <MenuItem icon={Star} label="我的收藏" desc={`${favorites.length} 条内容`} color="#FFD700" />
+            <MenuItem icon={Star} label="我的收藏" desc={`${favorites.length} 条内容`} color="#FFD700" onClick={openFavorites} />
             <MenuItem icon={Heart} label="特别关心" desc="3 人" color="#FF2D55" />
             <MenuItem icon={Clock} label="互动历史" desc="" color="#5AC8FA" isLast />
           </MenuSection>

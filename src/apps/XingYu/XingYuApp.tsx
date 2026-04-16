@@ -19,6 +19,7 @@ import { StickerManager } from './pages/StickerManager';
 import { InteractionList } from './pages/InteractionList';
 import { ForwardDetail } from './pages/ForwardDetail';
 import { ContactSelect } from './pages/ContactSelect';
+import { Favorites } from './pages/Favorites';
 
 const SLIDE_MS = 350;
 const SLIDE_EASE = [0.32, 0.72, 0, 1] as const;
@@ -87,6 +88,7 @@ export function XingYuApp() {
               {page === 'interactions' && <InteractionList />}
               {page === 'forward-detail' && <ForwardDetail />}
               {page === 'contact-select' && <ContactSelect />}
+              {page === 'favorites' && <Favorites />}
             </motion.div>
           )}
         </AnimatePresence>

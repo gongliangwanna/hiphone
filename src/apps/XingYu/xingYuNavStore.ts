@@ -47,6 +47,8 @@ interface XingYuNavState {
   clearScrollToMessage: () => void;
   openInteractions: () => void;
   closeInteractions: () => void;
+  openFavorites: () => void;
+  closeFavorites: () => void;
   openForwardDetail: (view: ForwardCardView) => void;
   closeForwardDetail: () => void;
   openContactSelect: (msgs: Message[], mode: ForwardMode) => void;
@@ -91,6 +93,8 @@ export const useXYNav = create<XingYuNavState>()((set, get) => ({
   clearScrollToMessage: () => set({ scrollToMessageId: null }),
   openInteractions: () => set({ page: 'interactions' }),
   closeInteractions: () => set({ page: null }),
+  openFavorites: () => set({ page: 'favorites' }),
+  closeFavorites: () => set({ page: null }),
   openForwardDetail: (view) => set({ page: 'forward-detail', forwardCardView: view }),
   closeForwardDetail: () => set({ page: 'chat-detail', forwardCardView: null }),
   openContactSelect: (msgs, mode) => set({ page: 'contact-select', pendingForward: { msgs, mode } }),
