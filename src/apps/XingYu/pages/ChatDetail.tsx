@@ -16,6 +16,7 @@ import { MessageActionBar, type ActionType } from '../components/MessageActionBa
 import { QuotePreview, getQuotePreviewText } from '../components/QuotePreview';
 import { QuoteBlock } from '../components/QuoteBlock';
 import { MultiSelectToolbar } from '../components/MultiSelectToolbar';
+import { ForwardCardBubble } from '../components/ForwardCardBubble';
 import { Check } from 'lucide-react';
 
 /** Character 对话头像兜底路径,和 ContactsTab 保持一致 */
@@ -486,6 +487,11 @@ export function ChatDetail() {
     useXYNav.setState({ scrollToMessageId: msgId });
   }, []);
 
+  const handleForwardCardTap = useCallback((msg: Message) => {
+    if (msg.type !== 'forward_card') return;
+    useXYNav.getState().openForwardDetail(msg.forwardCard.messages);
+  }, []);
+
   const handleCloseMenu = useCallback(() => setActionMenu(null), []);
 
   const handleMessageAction = useCallback((type: ActionType, msg: Message) => {
@@ -712,6 +718,7 @@ export function ChatDetail() {
               multiSelectMode={multiSelectMode}
               selected={selectedMsgIds.has(msg.id)}
               onToggleSelect={toggleMsgSelection}
+              onForwardCardTap={handleForwardCardTap}
             />
           );
         })}
@@ -947,6 +954,7 @@ const MsgBubble = memo(function MsgBubble({
   multiSelectMode,
   selected,
   onToggleSelect,
+  onForwardCardTap,
 }: {
   msg: Message;
   peer: { id: string; avatar: string; ringIndex: number };
@@ -966,6 +974,7 @@ const MsgBubble = memo(function MsgBubble({
   multiSelectMode?: boolean;
   selected?: boolean;
   onToggleSelect?: (msgId: string) => void;
+  onForwardCardTap?: (msg: Message) => void;
 }) {
   const { isSelf: perspectiveIsSelf, phoneOwnerId } = usePerspective();
   const isMine = aiChatPeers
@@ -1319,6 +1328,14 @@ const MsgBubble = memo(function MsgBubble({
               )}
               {msg.text}
             </div>
+          )}
+
+          {msg.type === 'forward_card' && (
+            <ForwardCardBubble
+              msg={msg}
+              isMine={isMine}
+              onTap={(m) => onForwardCardTap?.(m)}
+            />
           )}
           {actionMenuOpen && menuPosition === 'below' && (
             <AnimatePresence>

@@ -17,6 +17,7 @@ import { ChatSearch } from './pages/ChatSearch';
 import { ComposeTab } from './tabs/ComposeTab';
 import { StickerManager } from './pages/StickerManager';
 import { InteractionList } from './pages/InteractionList';
+import { ForwardDetail } from './pages/ForwardDetail';
 
 const SLIDE_MS = 350;
 const SLIDE_EASE = [0.32, 0.72, 0, 1] as const;
@@ -83,6 +84,7 @@ export function XingYuApp() {
               {page === 'chat-search' && <ChatSearch />}
               {page === 'sticker-manager' && <StickerManager />}
               {page === 'interactions' && <InteractionList />}
+              {page === 'forward-detail' && <ForwardDetail />}
             </motion.div>
           )}
         </AnimatePresence>
