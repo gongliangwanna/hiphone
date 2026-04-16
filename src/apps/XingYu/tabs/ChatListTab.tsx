@@ -25,6 +25,8 @@ const VELOCITY_SNAP_THRESHOLD = 500;
 const TAP_SUPPRESS_MS = 280;
 /** Character 对话头像兜底 */
 const CHAR_FALLBACK_AVATAR = '/resource/avatars/preset-01.jpg';
+/** 消息搜索分页尺寸 */
+const SEARCH_PAGE_SIZE = 20;
 
 /** ChatListTab 里显示 conv 需要的 peer 信息,兼容 mock idol 和 character */
 interface ConvPeer {
@@ -47,8 +49,15 @@ export function ChatListTab() {
   const userSettings = useXYData((s) => s.userSettings);
   const { phoneOwnerId } = usePerspective();
   const [query, setQuery] = useState('');
+  /** 搜索结果分页:每次显示 PAGE_SIZE 条,点"加载更多"再追加 */
+  const [searchPage, setSearchPage] = useState(1);
   /** 当前处于"展开-露出删除按钮"状态的 conv id; 同一时刻只允许一行展开 */
   const [openRowId, setOpenRowId] = useState<string | null>(null);
+
+  // 查询变化时重置分页
+  useEffect(() => {
+    setSearchPage(1);
+  }, [query]);
 
   // 按时间倒序排列,根据视角过滤对话:
   // 玩家手机 → 过滤掉 AI-AI 对话
@@ -82,8 +91,15 @@ export function ChatListTab() {
       results.push({ msg: m, conv, text, matchIndex: idx, matchLength: q.length });
     }
     results.sort((a, b) => b.msg.timestamp - a.msg.timestamp);
-    return results.slice(0, 200);
+    return results;
   }, [query, sorted, allMessages]);
+
+  const visibleResultCount = searchPage * SEARCH_PAGE_SIZE;
+  const visibleResults = useMemo(
+    () => messageResults.slice(0, visibleResultCount),
+    [messageResults, visibleResultCount],
+  );
+  const hasMoreResults = messageResults.length > visibleResults.length;
 
   // 列表滚动时收起已展开的行 — WeChat 风格
   const handleListScroll = useCallback(() => {
@@ -186,23 +202,50 @@ export function ChatListTab() {
               </span>
             </motion.div>
           ) : (
-            messageResults.map((r, i) => (
-              <motion.div
-                key={r.msg.id}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: Math.min(i * 0.02, 0.2), ...springs.gentle }}
-              >
-                <MessageResultRow
-                  result={r}
-                  characters={characters}
-                  persona={persona ?? null}
-                  userSettingsAvatar={userSettings.avatarUrl}
-                  phoneOwnerId={phoneOwnerId}
-                  onTap={() => openChatToMessage(r.conv.id, r.msg.id)}
-                />
-              </motion.div>
-            ))
+            <>
+              {visibleResults.map((r, i) => (
+                <motion.div
+                  key={r.msg.id}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: Math.min(i * 0.02, 0.2), ...springs.gentle }}
+                >
+                  <MessageResultRow
+                    result={r}
+                    characters={characters}
+                    persona={persona ?? null}
+                    userSettingsAvatar={userSettings.avatarUrl}
+                    phoneOwnerId={phoneOwnerId}
+                    onTap={() => openChatToMessage(r.conv.id, r.msg.id)}
+                  />
+                </motion.div>
+              ))}
+              {hasMoreResults ? (
+                <motion.button
+                  type="button"
+                  className="flex w-full items-center justify-center"
+                  style={{
+                    padding: '14px 16px',
+                    fontSize: 14,
+                    fontWeight: 500,
+                    color: T.accent,
+                    background: 'transparent',
+                  }}
+                  whileTap={{ opacity: 0.5 }}
+                  transition={{ duration: 0 }}
+                  onClick={() => setSearchPage((p) => p + 1)}
+                >
+                  加载更多 (剩余 {messageResults.length - visibleResults.length} 条)
+                </motion.button>
+              ) : messageResults.length > SEARCH_PAGE_SIZE ? (
+                <div
+                  className="flex w-full items-center justify-center"
+                  style={{ padding: '14px 16px', fontSize: 12, color: T.textMuted }}
+                >
+                  共 {messageResults.length} 条结果
+                </div>
+              ) : null}
+            </>
           )
         ) : sorted.length === 0 ? (
           <motion.div
