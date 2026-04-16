@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import {
   Heart,
   Cpu,
@@ -8,8 +7,9 @@ import {
   ChevronRight,
   ShieldAlert,
   BookOpen,
-  Trash2,
   Wrench,
+  User,
+  HardDrive,
 } from 'lucide-react';
 import { useSettingsNavStore } from './settingsNavStore';
 import { usePersonaStore } from '@/platform/stores/personaStore';
@@ -24,31 +24,6 @@ export function SettingsHome() {
   const personas = usePersonaStore((s) => s.personas);
   const activePersonaId = usePersonaStore((s) => s.activePersonaId);
   const persona = personas.find((p) => p.id === activePersonaId) ?? personas[0];
-
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
-
-  const handleResetAllData = async () => {
-    try {
-      // 删除所有 IndexedDB 数据库
-      if ('databases' in indexedDB) {
-        const dbs = await indexedDB.databases();
-        for (const db of dbs) {
-          if (db.name) indexedDB.deleteDatabase(db.name);
-        }
-      }
-      // 清除 localStorage
-      localStorage.clear();
-      // 注销 Service Worker
-      if ('serviceWorker' in navigator) {
-        const regs = await navigator.serviceWorker.getRegistrations();
-        for (const r of regs) await r.unregister();
-      }
-      // 刷新页面
-      window.location.reload();
-    } catch {
-      window.location.reload();
-    }
-  };
 
   // Persona subtitle: show description snippet or default hint
   const personaSubtitle = persona?.description
@@ -90,7 +65,7 @@ export function SettingsHome() {
                 color: 'white',
               }}
             >
-              {persona?.name?.charAt(0) || '👤'}
+              {persona?.name?.charAt(0) || <User size={28} strokeWidth={1.5} />}
             </div>
           )}
           <div className="min-w-0 flex-1">
@@ -161,6 +136,13 @@ export function SettingsHome() {
           chevron
         />
         <ListRow
+          icon={<HardDrive size={16} />}
+          iconColor="#8E8E93"
+          title="存储"
+          onClick={() => push('storage')}
+          chevron
+        />
+        <ListRow
           icon={<Wrench size={16} />}
           iconColor="#8E8E93"
           title="开发者工具"
@@ -184,66 +166,6 @@ export function SettingsHome() {
         />
       </ListSection>
 
-      {/* ── Danger Zone ── */}
-      <ListSection>
-        <ListRow
-          icon={<Trash2 size={16} />}
-          iconColor="#FF3B30"
-          title={<span style={{ color: '#FF3B30' }}>删除所有数据</span>}
-          onClick={() => setShowResetConfirm(true)}
-          isLast
-        />
-      </ListSection>
-
-      {/* ── 二次确认弹窗 ── */}
-      {showResetConfirm && (
-        <div
-          className="fixed inset-0 z-[999] flex items-center justify-center"
-          style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
-          onClick={() => setShowResetConfirm(false)}
-        >
-          <div
-            className="mx-8 w-full overflow-hidden"
-            style={{
-              maxWidth: 270,
-              borderRadius: 14,
-              backgroundColor: 'rgba(255,255,255,0.95)',
-              backdropFilter: 'blur(20px)',
-              WebkitBackdropFilter: 'blur(20px)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="px-4 pt-5 pb-4 text-center">
-              <div style={{ fontSize: 17, fontWeight: 600, color: '#000' }}>
-                删除所有数据
-              </div>
-              <div style={{ fontSize: 13, color: '#666', marginTop: 8, lineHeight: 1.4 }}>
-                将清除所有聊天记录、角色数据、设置等内容，且无法恢复。确定要继续吗？
-              </div>
-            </div>
-            <div style={{ borderTop: '0.5px solid rgba(0,0,0,0.1)' }} className="flex">
-              <button
-                className="flex-1 py-3 text-center active:bg-black/5"
-                style={{
-                  fontSize: 17,
-                  color: '#007AFF',
-                  borderRight: '0.5px solid rgba(0,0,0,0.1)',
-                }}
-                onClick={() => setShowResetConfirm(false)}
-              >
-                取消
-              </button>
-              <button
-                className="flex-1 py-3 text-center active:bg-black/5"
-                style={{ fontSize: 17, fontWeight: 600, color: '#FF3B30' }}
-                onClick={handleResetAllData}
-              >
-                删除
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </List>
   );
 }

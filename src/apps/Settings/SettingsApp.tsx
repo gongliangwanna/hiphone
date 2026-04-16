@@ -19,6 +19,7 @@ import { PromptViewerPage } from './pages/PromptViewerPage';
 import { HeartbeatSettingsPage } from './pages/HeartbeatSettingsPage';
 import { ModelSelectPage } from './pages/ModelSelectPage';
 import { DeveloperToolsPage } from './pages/DeveloperToolsPage';
+import { StoragePage } from './pages/StoragePage';
 import { AppScreen, NavBar } from '@/system';
 
 const PAGE_TITLES: Record<string, string> = {
@@ -27,6 +28,7 @@ const PAGE_TITLES: Record<string, string> = {
   about: '关于本机',
   wallpaper: '壁纸',
   display: '显示与亮度',
+  storage: '存储',
   // AI
   persona: '我的身份',
   aiSettings: 'AI 设置',
@@ -49,6 +51,7 @@ const PAGE_COMPONENTS: Record<string, React.ComponentType> = {
   about: AboutPage,
   wallpaper: WallpaperPage,
   display: DisplayPage,
+  storage: StoragePage,
   persona: PersonaPage,
   aiSettings: AISettingsPage,
   characters: CharactersPage,
