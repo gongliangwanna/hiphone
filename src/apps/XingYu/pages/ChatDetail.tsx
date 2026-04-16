@@ -487,7 +487,10 @@ export function ChatDetail() {
 
   const handleForwardCardTap = useCallback((msg: Message) => {
     if (msg.type !== 'forward_card') return;
-    useXYNav.getState().openForwardDetail(msg.forwardCard.messages);
+    useXYNav.getState().openForwardDetail({
+      title: msg.forwardCard.title,
+      messages: msg.forwardCard.messages,
+    });
   }, []);
 
   const handleCloseMenu = useCallback(() => setActionMenu(null), []);
@@ -522,9 +525,8 @@ export function ChatDetail() {
         setSelectedMsgIds(new Set([msg.id]));
         break;
       case 'delete':
-        if (window.confirm('确定删除这条消息？')) {
-          deleteMessages([msg.id]);
-        }
+        deleteMessages([msg.id]);
+        useToastStore.getState().show('已删除');
         break;
     }
   }, [addFavorite, deleteMessages, getSenderName]);
@@ -545,10 +547,10 @@ export function ChatDetail() {
 
   const handleMultiDelete = useCallback(() => {
     if (selectedMsgIds.size === 0) return;
-    if (window.confirm(`确定删除 ${selectedMsgIds.size} 条消息？`)) {
-      deleteMessages([...selectedMsgIds]);
-      exitMultiSelect();
-    }
+    const count = selectedMsgIds.size;
+    deleteMessages([...selectedMsgIds]);
+    useToastStore.getState().show(`已删除 ${count} 条`);
+    exitMultiSelect();
   }, [selectedMsgIds, deleteMessages, exitMultiSelect]);
 
   const handleMultiFavorite = useCallback(() => {

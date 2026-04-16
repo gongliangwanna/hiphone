@@ -85,10 +85,21 @@ export function collectCharacterHistory(
           : m.text;
       } else if (m.type === 'heartbeat_log') {
         text = m.text;
+      } else if (m.type === 'forward_card') {
+        const lines = m.forwardCard.messages.map((fm) => {
+          const body =
+            fm.type === 'image'
+              ? '[图片]'
+              : fm.type === 'sticker'
+                ? '[表情]'
+                : (fm.text ?? '');
+          return `- ${fm.senderName}：${body}`;
+        });
+        text = `[转发的聊天记录：${m.forwardCard.title}]\n${lines.join('\n')}\n[/转发结束]`;
       }
       return {
         senderId: m.senderId,
-        type: m.type,
+        type: m.type === 'forward_card' ? 'text' : m.type,
         text,
         imageUrl: m.type === 'image' ? m.imageUrl : undefined,
         stickerDesc: m.type === 'sticker' ? m.stickerDesc : undefined,
@@ -1114,9 +1125,10 @@ export const useXYData = create<XingYuDataState>()(
         set((s) => ({
           messages: [...s.messages, newMsg],
           conversations: s.conversations.map((c) =>
-            c.id === targetConvId ? { ...c, lastMsg: preview, lastTime: now } : c,
+            c.id === targetConvId ? { ...c, lastMsg: preview, lastTime: now, unread: 0 } : c,
           ),
         }));
+        scheduleIdolReply(targetConvId, get);
       },
 
       forwardMessages: (msgs, targetConvId) => {
@@ -1132,10 +1144,11 @@ export const useXYData = create<XingYuDataState>()(
           messages: [...s.messages, ...newMsgs],
           conversations: s.conversations.map((c) =>
             c.id === targetConvId
-              ? { ...c, lastMsg: lastPreview, lastTime: now + built.length }
+              ? { ...c, lastMsg: lastPreview, lastTime: now + built.length, unread: 0 }
               : c,
           ),
         }));
+        scheduleIdolReply(targetConvId, get);
       },
 
       forwardAsCard: (msgs, targetConvId, title, getSenderName) => {
@@ -1175,9 +1188,10 @@ export const useXYData = create<XingYuDataState>()(
         set((s) => ({
           messages: [...s.messages, cardMsg],
           conversations: s.conversations.map((c) =>
-            c.id === targetConvId ? { ...c, lastMsg: '[聊天记录]', lastTime: now } : c,
+            c.id === targetConvId ? { ...c, lastMsg: '[聊天记录]', lastTime: now, unread: 0 } : c,
           ),
         }));
+        scheduleIdolReply(targetConvId, get);
       },
 
       ensureAIChatConversation: (charIdA, charIdB) => {

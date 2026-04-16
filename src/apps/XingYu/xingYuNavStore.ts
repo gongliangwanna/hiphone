@@ -10,6 +10,11 @@ interface PendingForward {
   mode: ForwardMode;
 }
 
+interface ForwardCardView {
+  title: string;
+  messages: ForwardedMsg[];
+}
+
 interface XingYuNavState {
   activeTab: XYTab;
   page: string | null;
@@ -18,8 +23,8 @@ interface XingYuNavState {
   momentComposerOpen: boolean;
   stickerManagerOrigin: string | null;
   scrollToMessageId: string | null;
-  /** forward_card 详情页要展示的消息列表 */
-  forwardCardMessages: ForwardedMsg[] | null;
+  /** forward_card 详情页要展示的数据 */
+  forwardCardView: ForwardCardView | null;
   /** 打开联系人选择页时暂存的待转发载荷 */
   pendingForward: PendingForward | null;
 
@@ -42,7 +47,7 @@ interface XingYuNavState {
   clearScrollToMessage: () => void;
   openInteractions: () => void;
   closeInteractions: () => void;
-  openForwardDetail: (messages: ForwardedMsg[]) => void;
+  openForwardDetail: (view: ForwardCardView) => void;
   closeForwardDetail: () => void;
   openContactSelect: (msgs: Message[], mode: ForwardMode) => void;
   closeContactSelect: () => void;
@@ -57,7 +62,7 @@ export const useXYNav = create<XingYuNavState>()((set, get) => ({
   momentComposerOpen: false,
   stickerManagerOrigin: null,
   scrollToMessageId: null,
-  forwardCardMessages: null,
+  forwardCardView: null,
   pendingForward: null,
 
   setTab: (tab) => set({ activeTab: tab, page: null, activeChatId: null, activeIdolId: null }),
@@ -86,8 +91,8 @@ export const useXYNav = create<XingYuNavState>()((set, get) => ({
   clearScrollToMessage: () => set({ scrollToMessageId: null }),
   openInteractions: () => set({ page: 'interactions' }),
   closeInteractions: () => set({ page: null }),
-  openForwardDetail: (messages) => set({ page: 'forward-detail', forwardCardMessages: messages }),
-  closeForwardDetail: () => set({ page: 'chat-detail', forwardCardMessages: null }),
+  openForwardDetail: (view) => set({ page: 'forward-detail', forwardCardView: view }),
+  closeForwardDetail: () => set({ page: 'chat-detail', forwardCardView: null }),
   openContactSelect: (msgs, mode) => set({ page: 'contact-select', pendingForward: { msgs, mode } }),
   closeContactSelect: () => set({ page: 'chat-detail', pendingForward: null }),
   reset: () =>
@@ -99,7 +104,7 @@ export const useXYNav = create<XingYuNavState>()((set, get) => ({
       momentComposerOpen: false,
       stickerManagerOrigin: null,
       scrollToMessageId: null,
-      forwardCardMessages: null,
+      forwardCardView: null,
       pendingForward: null,
     }),
 }));

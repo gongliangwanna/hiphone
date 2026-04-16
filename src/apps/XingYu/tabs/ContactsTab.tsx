@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { motion } from 'motion/react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Sparkles } from 'lucide-react';
 import { useCharacterStore, type CharacterCard } from '@/platform/stores/characterStore';
 import { usePersonaStore } from '@/platform/stores/personaStore';
 import { usePerspective } from '@/platform/hooks/usePerspective';
@@ -43,7 +43,7 @@ export function ContactsTab() {
             className="flex flex-col items-center justify-center py-10"
             style={{ backgroundColor: T.card, borderRadius: 12 }}
           >
-            <span style={{ fontSize: 32, marginBottom: 10 }}>✨</span>
+            <Sparkles size={32} strokeWidth={1.5} style={{ marginBottom: 10, color: T.textMuted }} />
             <span style={{ fontSize: 13, color: T.textMuted, fontWeight: 500 }}>
               还没有角色,去设置里创建吧
             </span>
