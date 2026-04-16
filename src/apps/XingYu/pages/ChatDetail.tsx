@@ -15,6 +15,8 @@ import { useToastStore } from '@/system';
 import { MessageActionBar, type ActionType } from '../components/MessageActionBar';
 import { QuotePreview, getQuotePreviewText } from '../components/QuotePreview';
 import { QuoteBlock } from '../components/QuoteBlock';
+import { MultiSelectToolbar } from '../components/MultiSelectToolbar';
+import { Check } from 'lucide-react';
 
 /** Character 对话头像兜底路径,和 ContactsTab 保持一致 */
 const CHAR_FALLBACK_AVATAR = '/resource/avatars/preset-01.jpg';
@@ -49,6 +51,9 @@ export function ChatDetail() {
   const sendImageMessage = useXYData((s) => s.sendImageMessage);
   const sendStickerMessage = useXYData((s) => s.sendStickerMessage);
   const markRead = useXYData((s) => s.markRead);
+  const addFavorite = useXYData((s) => s.addFavorite);
+  const addFavorites = useXYData((s) => s.addFavorites);
+  const deleteMessages = useXYData((s) => s.deleteMessages);
 
   const scrollToMessageId = useXYNav((s) => s.scrollToMessageId);
   const clearScrollToMessage = useXYNav((s) => s.clearScrollToMessage);
@@ -59,6 +64,8 @@ export function ChatDetail() {
   const [showDrawing, setShowDrawing] = useState(false);
   const [actionMenu, setActionMenu] = useState<{ msgId: string; position: 'above' | 'below' } | null>(null);
   const [quoteMsg, setQuoteMsg] = useState<Message | null>(null);
+  const [multiSelectMode, setMultiSelectMode] = useState(false);
+  const [selectedMsgIds, setSelectedMsgIds] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -222,6 +229,8 @@ export function ChatDetail() {
     seenMsgIdsRef.current = null;
     setActionMenu(null);
     setQuoteMsg(null);
+    setMultiSelectMode(false);
+    setSelectedMsgIds(new Set());
   }, [activeChatId]);
 
   // Track seen message IDs for animation control.
@@ -494,6 +503,7 @@ export function ChatDetail() {
         }
         break;
       case 'favorite':
+        addFavorite(msg, getSenderName(msg.senderId));
         useToastStore.getState().show('已收藏');
         break;
       case 'quote':
@@ -504,13 +514,56 @@ export function ChatDetail() {
         // Wired in Task 8
         break;
       case 'multiSelect':
-        // Wired in Task 6
+        setMultiSelectMode(true);
+        setSelectedMsgIds(new Set([msg.id]));
         break;
       case 'delete':
-        // Wired in Task 6
+        if (window.confirm('确定删除这条消息？')) {
+          deleteMessages([msg.id]);
+        }
         break;
     }
+  }, [addFavorite, deleteMessages, getSenderName]);
+
+  const toggleMsgSelection = useCallback((msgId: string) => {
+    setSelectedMsgIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(msgId)) next.delete(msgId);
+      else next.add(msgId);
+      return next;
+    });
   }, []);
+
+  const exitMultiSelect = useCallback(() => {
+    setMultiSelectMode(false);
+    setSelectedMsgIds(new Set());
+  }, []);
+
+  const handleMultiDelete = useCallback(() => {
+    if (selectedMsgIds.size === 0) return;
+    if (window.confirm(`确定删除 ${selectedMsgIds.size} 条消息？`)) {
+      deleteMessages([...selectedMsgIds]);
+      exitMultiSelect();
+    }
+  }, [selectedMsgIds, deleteMessages, exitMultiSelect]);
+
+  const handleMultiFavorite = useCallback(() => {
+    const msgs = allConvMessages.filter((m) => selectedMsgIds.has(m.id));
+    if (msgs.length === 0) return;
+    addFavorites(msgs, getSenderName);
+    useToastStore.getState().show(`已收藏 ${msgs.length} 条`);
+    exitMultiSelect();
+  }, [selectedMsgIds, allConvMessages, addFavorites, getSenderName, exitMultiSelect]);
+
+  const handleBatchForward = useCallback(() => {
+    // Wired in Task 8
+    exitMultiSelect();
+  }, [exitMultiSelect]);
+
+  const handleMergeForward = useCallback(() => {
+    // Wired in Task 8
+    exitMultiSelect();
+  }, [exitMultiSelect]);
 
   if (!conv || !peer) return null;
 
@@ -531,58 +584,81 @@ export function ChatDetail() {
         }}
       >
         <div className="flex items-center justify-between px-2" style={{ height: 44 }}>
-          <div className="flex w-1/4 items-center justify-start">
-            <motion.button
-              className="flex items-center justify-center gap-1"
-              onClick={closeChat}
-              whileTap={{ opacity: 0.5 }}
-              transition={{ duration: 0 }}
-            >
-              <ChevronLeft size={24} strokeWidth={2} color={T.accent} />
-              <span style={{ fontSize: 16, color: T.accent, marginLeft: -4 }}>消息</span>
-            </motion.button>
-          </div>
+          {multiSelectMode ? (
+            <>
+              <div className="flex w-1/4 items-center justify-start" />
+              <div className="flex flex-1 items-center justify-center">
+                <span style={{ fontSize: 16, fontWeight: 600, color: T.textPrimary }}>
+                  已选择 {selectedMsgIds.size} 条
+                </span>
+              </div>
+              <div className="flex w-1/4 items-center justify-end pr-2">
+                <motion.button
+                  onClick={exitMultiSelect}
+                  whileTap={{ opacity: 0.5 }}
+                  transition={{ duration: 0 }}
+                  style={{ fontSize: 16, color: T.accent }}
+                >
+                  取消
+                </motion.button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex w-1/4 items-center justify-start">
+                <motion.button
+                  className="flex items-center justify-center gap-1"
+                  onClick={closeChat}
+                  whileTap={{ opacity: 0.5 }}
+                  transition={{ duration: 0 }}
+                >
+                  <ChevronLeft size={24} strokeWidth={2} color={T.accent} />
+                  <span style={{ fontSize: 16, color: T.accent, marginLeft: -4 }}>消息</span>
+                </motion.button>
+              </div>
 
-          <motion.button
-            className="flex flex-1 flex-col items-center justify-center min-w-0 px-2"
-            onClick={() => openIdol(peer.id)}
-            whileTap={{ opacity: 0.5 }}
-          >
-            <div className="flex items-center gap-1.5">
-              <span className="truncate" style={{ fontSize: 16, fontWeight: 600, color: T.textPrimary }}>
-                {conv?.remarkName || peer.name}
-              </span>
-              <div
-                style={{
-                  width: 6, height: 6, borderRadius: '50%',
-                  backgroundColor: peer.online ? T.online : T.textMuted,
-                }}
-              />
-            </div>
-            {peer.isGroup && (
-              <span style={{ fontSize: 11, color: T.textMuted }}>
-                {peer.memberCount}人
-              </span>
-            )}
-          </motion.button>
+              <motion.button
+                className="flex flex-1 flex-col items-center justify-center min-w-0 px-2"
+                onClick={() => openIdol(peer.id)}
+                whileTap={{ opacity: 0.5 }}
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="truncate" style={{ fontSize: 16, fontWeight: 600, color: T.textPrimary }}>
+                    {conv?.remarkName || peer.name}
+                  </span>
+                  <div
+                    style={{
+                      width: 6, height: 6, borderRadius: '50%',
+                      backgroundColor: peer.online ? T.online : T.textMuted,
+                    }}
+                  />
+                </div>
+                {peer.isGroup && (
+                  <span style={{ fontSize: 11, color: T.textMuted }}>
+                    {peer.memberCount}人
+                  </span>
+                )}
+              </motion.button>
 
-          <div className="flex w-1/4 items-center justify-end gap-1 pr-1">
-            <motion.button
-              className="flex items-center justify-center"
-              style={{ width: 32, height: 32 }}
-              whileTap={{ opacity: 0.5 }}
-            >
-              <Phone size={18} strokeWidth={2} color={T.textSecondary} />
-            </motion.button>
-            <motion.button
-              className="flex items-center justify-center"
-              style={{ width: 32, height: 32 }}
-              whileTap={{ opacity: 0.5 }}
-              onClick={openChatSettings}
-            >
-              <MoreHorizontal size={18} strokeWidth={2} color={T.textSecondary} />
-            </motion.button>
-          </div>
+              <div className="flex w-1/4 items-center justify-end gap-1 pr-1">
+                <motion.button
+                  className="flex items-center justify-center"
+                  style={{ width: 32, height: 32 }}
+                  whileTap={{ opacity: 0.5 }}
+                >
+                  <Phone size={18} strokeWidth={2} color={T.textSecondary} />
+                </motion.button>
+                <motion.button
+                  className="flex items-center justify-center"
+                  style={{ width: 32, height: 32 }}
+                  whileTap={{ opacity: 0.5 }}
+                  onClick={openChatSettings}
+                >
+                  <MoreHorizontal size={18} strokeWidth={2} color={T.textSecondary} />
+                </motion.button>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -633,6 +709,9 @@ export function ChatDetail() {
               onCloseMenu={handleCloseMenu}
               onQuoteTap={handleQuoteTap}
               resolveSenderName={getSenderName}
+              multiSelectMode={multiSelectMode}
+              selected={selectedMsgIds.has(msg.id)}
+              onToggleSelect={toggleMsgSelection}
             />
           );
         })}
@@ -650,7 +729,7 @@ export function ChatDetail() {
       </div>
 
       {/* ── Quote preview bar (above input) ── */}
-      {quoteMsg && !conv?.aiChatParticipants && !isViewingOther && (
+      {quoteMsg && !multiSelectMode && !conv?.aiChatParticipants && !isViewingOther && (
         <QuotePreview
           msg={quoteMsg}
           senderName={getSenderName(quoteMsg.senderId)}
@@ -658,8 +737,16 @@ export function ChatDetail() {
         />
       )}
 
-      {/* ── Input (hidden for observer/read-only modes) ── */}
-      {conv?.aiChatParticipants || isViewingOther ? (
+      {/* ── Input / Multi-select toolbar (hidden for observer/read-only modes) ── */}
+      {multiSelectMode ? (
+        <MultiSelectToolbar
+          selectedCount={selectedMsgIds.size}
+          onBatchForward={handleBatchForward}
+          onMergeForward={handleMergeForward}
+          onFavorite={handleMultiFavorite}
+          onDelete={handleMultiDelete}
+        />
+      ) : conv?.aiChatParticipants || isViewingOther ? (
         <div className="flex shrink-0 items-center justify-center px-3" style={{ minHeight: 44, paddingBottom: 20, opacity: 0.5, fontSize: 13, color: T.textSecondary }}>
           {isViewingOther ? '只读模式 — 正在查看对方手机' : '旁观模式 — AI 角色间的私聊'}
         </div>
@@ -857,6 +944,9 @@ const MsgBubble = memo(function MsgBubble({
   onCloseMenu,
   onQuoteTap,
   resolveSenderName,
+  multiSelectMode,
+  selected,
+  onToggleSelect,
 }: {
   msg: Message;
   peer: { id: string; avatar: string; ringIndex: number };
@@ -873,6 +963,9 @@ const MsgBubble = memo(function MsgBubble({
   onCloseMenu?: () => void;
   onQuoteTap?: (msgId: string) => void;
   resolveSenderName?: (senderId: string) => string;
+  multiSelectMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (msgId: string) => void;
 }) {
   const { isSelf: perspectiveIsSelf, phoneOwnerId } = usePerspective();
   const isMine = aiChatPeers
@@ -897,6 +990,7 @@ const MsgBubble = memo(function MsgBubble({
     msg.type === 'forward_card';
 
   const longPress = useLongPress((e) => {
+    if (multiSelectMode) return;
     const el = (e.currentTarget as HTMLElement | null) ?? (e.target as HTMLElement | null);
     const rect = el?.getBoundingClientRect();
     const top = rect?.top ?? 0;
@@ -938,7 +1032,25 @@ const MsgBubble = memo(function MsgBubble({
         </div>
       )}
 
-      <div className={`mb-1.5 flex items-start ${isMine ? 'justify-end' : 'justify-start'}`}>
+      <div
+        className={`mb-1.5 flex items-start ${isMine ? 'justify-end' : 'justify-start'}`}
+        onClick={multiSelectMode ? () => onToggleSelect?.(msg.id) : undefined}
+        style={multiSelectMode ? { cursor: 'pointer' } : undefined}
+      >
+        {multiSelectMode && (
+          <div
+            className="mr-2 flex shrink-0 items-center justify-center self-center"
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: '50%',
+              border: selected ? 'none' : `1.5px solid ${T.textMuted}`,
+              backgroundColor: selected ? T.accent : 'transparent',
+            }}
+          >
+            {selected && <Check size={14} strokeWidth={3} color="#fff" />}
+          </div>
+        )}
         {!isMine && (() => {
           const p = aiChatPeers?.peers[msg.senderId] ?? peer;
           return (
@@ -946,6 +1058,7 @@ const MsgBubble = memo(function MsgBubble({
               className="mr-2 shrink-0"
               onClick={() => onAvatarTap?.(peer.id)}
               whileTap={{ scale: 0.9 }}
+              style={multiSelectMode ? { pointerEvents: 'none' } : undefined}
             >
               <Avatar src={p.avatar} size={36} ringIndex={p.ringIndex} />
             </motion.button>
@@ -953,11 +1066,15 @@ const MsgBubble = memo(function MsgBubble({
         })()}
 
         <div
-          style={{ maxWidth: msg.type === 'image' ? '58%' : '70%', touchAction: 'pan-y' }}
-          onPointerDown={longPress.onPointerDown}
-          onPointerUp={longPress.onPointerUp}
-          onPointerCancel={longPress.onPointerCancel}
-          onClick={longPress.onClick}
+          style={{
+            maxWidth: msg.type === 'image' ? '58%' : '70%',
+            touchAction: 'pan-y',
+            ...(multiSelectMode ? { pointerEvents: 'none' as const } : {}),
+          }}
+          onPointerDown={multiSelectMode ? undefined : longPress.onPointerDown}
+          onPointerUp={multiSelectMode ? undefined : longPress.onPointerUp}
+          onPointerCancel={multiSelectMode ? undefined : longPress.onPointerCancel}
+          onClick={multiSelectMode ? undefined : longPress.onClick}
         >
           {actionMenuOpen && menuPosition === 'above' && (
             <AnimatePresence>
@@ -1234,6 +1351,7 @@ const MsgBubble = memo(function MsgBubble({
             className="ml-2 shrink-0"
             onClick={() => onAvatarTap?.(aiP ? peer.id : phoneOwnerId || 'me')}
             whileTap={{ scale: 0.9 }}
+            style={multiSelectMode ? { pointerEvents: 'none' } : undefined}
           >
             <Avatar src={selfAvatar} size={36} ringIndex={aiP?.ringIndex ?? 0} />
           </motion.button>
