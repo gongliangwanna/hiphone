@@ -3,11 +3,13 @@ import { motion, AnimatePresence, animate, useMotionValue, type PanInfo } from '
 import { Search, X, Trash2, MailOpen, MessageCircleHeart } from 'lucide-react';
 import { useXYNav } from '../xingYuNavStore';
 import { useXYData } from '../xingYuDataStore';
-import { getIdol, formatTime } from '../data';
-import type { Conversation } from '../data';
+import { getIdol, formatTime, formatChatTime } from '../data';
+import type { Conversation, Message } from '../data';
 import { Avatar } from '../components/Avatar';
 import { useCharacterStore } from '@/platform/stores/characterStore';
+import type { CharacterCard } from '@/platform/stores/characterStore';
 import { usePersonaStore } from '@/platform/stores/personaStore';
+import type { Persona } from '@/platform/stores/personaStore';
 import { usePerspective } from '@/platform/hooks/usePerspective';
 import { T, springs } from '../theme';
 
@@ -39,6 +41,10 @@ export function ChatListTab() {
   const allMessages = useXYData((s) => s.messages);
   const deleteConversation = useXYData((s) => s.deleteConversation);
   const openChat = useXYNav((s) => s.openChat);
+  const openChatToMessage = useXYNav((s) => s.openChatToMessage);
+  const characters = useCharacterStore((s) => s.characters);
+  const persona = usePersonaStore((s) => s.getActivePersona());
+  const userSettings = useXYData((s) => s.userSettings);
   const { phoneOwnerId } = usePerspective();
   const [query, setQuery] = useState('');
   /** 当前处于"展开-露出删除按钮"状态的 conv id; 同一时刻只允许一行展开 */
@@ -58,21 +64,26 @@ export function ChatListTab() {
     return [...filtered].sort((a, b) => b.lastTime - a.lastTime);
   }, [conversations, phoneOwnerId]);
 
-  const filtered = useMemo(() => {
-    if (!query.trim()) return sorted;
+  // 当查询非空时,搜索消息(而非对话);只在视角可见的会话内搜索
+  const messageResults = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return sorted.filter((conv) => {
-      const idol = getIdol(conv.idolId);
-      if (idol?.name.toLowerCase().includes(q)) return true;
-      if (conv.lastMsg.toLowerCase().includes(q)) return true;
-      // Search message content
-      const msgs = allMessages.filter((m) => m.convId === conv.id);
-      return msgs.some((m) => {
-        const text = (m.type === 'text' || m.type === 'heartbeat_log') ? m.text : undefined;
-        return text?.toLowerCase().includes(q);
-      });
-    });
-  }, [sorted, query, allMessages]);
+    if (!q) return [];
+    const visibleConvIds = new Set(sorted.map((c) => c.id));
+    const convById = new Map(sorted.map((c) => [c.id, c]));
+    const results: MessageSearchResult[] = [];
+    for (const m of allMessages) {
+      if (!visibleConvIds.has(m.convId)) continue;
+      const text = extractSearchableText(m);
+      if (!text) continue;
+      const lower = text.toLowerCase();
+      const idx = lower.indexOf(q);
+      if (idx < 0) continue;
+      const conv = convById.get(m.convId)!;
+      results.push({ msg: m, conv, text, matchIndex: idx, matchLength: q.length });
+    }
+    results.sort((a, b) => b.msg.timestamp - a.msg.timestamp);
+    return results.slice(0, 200);
+  }, [query, sorted, allMessages]);
 
   // 列表滚动时收起已展开的行 — WeChat 风格
   const handleListScroll = useCallback(() => {
@@ -157,23 +168,43 @@ export function ChatListTab() {
         </div>
       </div>
 
-      {/* Conversation list */}
+      {/* Conversation list / search results */}
       <div
         className="scrollbar-hide min-h-0 flex-1 overflow-y-auto bg-white"
         onScroll={handleListScroll}
       >
-        {filtered.length === 0 && query.trim() ? (
-          <motion.div
-            className="flex flex-col items-center py-20"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <MailOpen size={40} strokeWidth={1.5} style={{ marginBottom: 12, color: T.textMuted }} />
-            <span style={{ fontSize: 14, color: T.textMuted, fontWeight: 500 }}>
-              没有找到相关信件
-            </span>
-          </motion.div>
-        ) : filtered.length === 0 ? (
+        {query.trim() ? (
+          messageResults.length === 0 ? (
+            <motion.div
+              className="flex flex-col items-center py-20"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <MailOpen size={40} strokeWidth={1.5} style={{ marginBottom: 12, color: T.textMuted }} />
+              <span style={{ fontSize: 14, color: T.textMuted, fontWeight: 500 }}>
+                没有找到相关消息
+              </span>
+            </motion.div>
+          ) : (
+            messageResults.map((r, i) => (
+              <motion.div
+                key={r.msg.id}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: Math.min(i * 0.02, 0.2), ...springs.gentle }}
+              >
+                <MessageResultRow
+                  result={r}
+                  characters={characters}
+                  persona={persona ?? null}
+                  userSettingsAvatar={userSettings.avatarUrl}
+                  phoneOwnerId={phoneOwnerId}
+                  onTap={() => openChatToMessage(r.conv.id, r.msg.id)}
+                />
+              </motion.div>
+            ))
+          )
+        ) : sorted.length === 0 ? (
           <motion.div
             className="flex flex-col items-center py-20"
             initial={{ opacity: 0, y: 10 }}
@@ -185,7 +216,7 @@ export function ChatListTab() {
             </span>
           </motion.div>
         ) : (
-          filtered.map((conv, i) => (
+          sorted.map((conv, i) => (
             <motion.div
               key={conv.id}
               initial={{ opacity: 0, y: 20 }}
@@ -531,5 +562,177 @@ function ConvRow({ conv, isOpen, onOpen, onCloseRequest, onTap, onDelete }: Conv
         />
       </motion.div>
     </div>
+  );
+}
+
+/* ── Message search ── */
+
+interface MessageSearchResult {
+  msg: Message;
+  conv: Conversation;
+  text: string;
+  matchIndex: number;
+  matchLength: number;
+}
+
+function extractSearchableText(m: Message): string {
+  if (m.type === 'text') return m.text ?? '';
+  if (m.type === 'heartbeat_log') return m.text ?? '';
+  if (m.type === 'forward_card') {
+    const lines = m.forwardCard.messages
+      .map((fm) => (fm.type === 'text' ? fm.text ?? '' : ''))
+      .filter(Boolean);
+    return [m.forwardCard.title, ...lines].join('\n');
+  }
+  return '';
+}
+
+function resolveConvPeer(
+  conv: Conversation,
+  characters: CharacterCard[],
+  phoneOwnerId: string | null,
+  persona: Persona | null,
+  userSettingsAvatar: string | undefined,
+): { name: string; avatar: string } | null {
+  if (conv.aiChatParticipants) {
+    const [id1, id2] = conv.aiChatParticipants;
+    const ch1 = characters.find((c) => c.id === id1);
+    const ch2 = characters.find((c) => c.id === id2);
+    if (!ch1 || !ch2) return null;
+    if (phoneOwnerId) {
+      const otherId = id1 === phoneOwnerId ? id2 : id1;
+      const other = characters.find((c) => c.id === otherId);
+      if (!other) return null;
+      return { name: other.name, avatar: other.avatar?.trim() || CHAR_FALLBACK_AVATAR };
+    }
+    return {
+      name: `${ch1.name} & ${ch2.name}`,
+      avatar: ch1.avatar?.trim() || CHAR_FALLBACK_AVATAR,
+    };
+  }
+  if (conv.groupName && conv.groupMemberIds) {
+    return { name: conv.groupName, avatar: '/resource/avatars/idol-starlight.jpg' };
+  }
+  if (conv.characterId) {
+    if (phoneOwnerId && conv.characterId === phoneOwnerId) {
+      return {
+        name: persona?.name || '用户',
+        avatar: persona?.avatar || userSettingsAvatar || CHAR_FALLBACK_AVATAR,
+      };
+    }
+    const ch = characters.find((c) => c.id === conv.characterId);
+    if (!ch) return null;
+    return { name: ch.name, avatar: ch.avatar?.trim() || CHAR_FALLBACK_AVATAR };
+  }
+  const idol = getIdol(conv.idolId);
+  if (!idol) return null;
+  return { name: idol.name, avatar: idol.avatar };
+}
+
+interface MessageResultRowProps {
+  result: MessageSearchResult;
+  characters: CharacterCard[];
+  persona: Persona | null;
+  userSettingsAvatar: string | undefined;
+  phoneOwnerId: string | null;
+  onTap: () => void;
+}
+
+function MessageResultRow({
+  result,
+  characters,
+  persona,
+  userSettingsAvatar,
+  phoneOwnerId,
+  onTap,
+}: MessageResultRowProps) {
+  const { msg, conv, text, matchIndex, matchLength } = result;
+  const peer = useMemo(
+    () => resolveConvPeer(conv, characters, phoneOwnerId, persona, userSettingsAvatar),
+    [conv, characters, phoneOwnerId, persona, userSettingsAvatar],
+  );
+  if (!peer) return null;
+
+  const isMine = msg.senderId === 'me';
+  const senderLabel = isMine ? '我' : peer.name;
+
+  return (
+    <motion.div
+      onClick={onTap}
+      whileTap={{ backgroundColor: 'rgba(0,0,0,0.04)' }}
+      transition={{ duration: 0 }}
+      className="relative flex w-full items-start gap-3"
+      style={{
+        padding: '10px 16px',
+        backgroundColor: T.card,
+        cursor: 'pointer',
+        WebkitUserSelect: 'none',
+        userSelect: 'none',
+      }}
+    >
+      <Avatar src={peer.avatar} size={40} ringIndex={0} />
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <div className="flex w-full items-center justify-between gap-2">
+          <div className="flex min-w-0 items-baseline gap-1.5">
+            <span
+              className="truncate"
+              style={{ fontSize: 15, fontWeight: 600, color: T.textPrimary }}
+            >
+              {conv.remarkName || peer.name}
+            </span>
+            <span style={{ fontSize: 11, color: T.textMuted, flexShrink: 0 }}>
+              · {senderLabel}
+            </span>
+          </div>
+          <span style={{ fontSize: 11, color: T.textMuted, flexShrink: 0 }}>
+            {formatChatTime(msg.timestamp)}
+          </span>
+        </div>
+        <span
+          style={{
+            fontSize: 13,
+            color: T.textSecondary,
+            lineHeight: 1.4,
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+            wordBreak: 'break-word',
+          }}
+        >
+          <Snippet text={text} matchIndex={matchIndex} matchLength={matchLength} />
+        </span>
+      </div>
+      <div
+        className="absolute bottom-0 right-0"
+        style={{ height: 0.5, backgroundColor: T.separator, left: 68 }}
+      />
+    </motion.div>
+  );
+}
+
+function Snippet({
+  text,
+  matchIndex,
+  matchLength,
+}: {
+  text: string;
+  matchIndex: number;
+  matchLength: number;
+}) {
+  const WINDOW = 24;
+  const start = Math.max(0, matchIndex - WINDOW);
+  const end = Math.min(text.length, matchIndex + matchLength + WINDOW);
+  const before = text.slice(start, matchIndex);
+  const match = text.slice(matchIndex, matchIndex + matchLength);
+  const after = text.slice(matchIndex + matchLength, end);
+  return (
+    <>
+      {start > 0 && '…'}
+      {before}
+      <span style={{ color: T.accent, fontWeight: 600 }}>{match}</span>
+      {after}
+      {end < text.length && '…'}
+    </>
   );
 }
