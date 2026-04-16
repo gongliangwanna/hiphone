@@ -390,7 +390,6 @@ export function ChatDetail() {
     const text = liveValue.trim();
     if (!text || !activeChatId) return;
 
-    let finalText = text;
     let ref: QuoteRef | undefined;
     if (quoteMsg) {
       const preview = getQuotePreviewText(quoteMsg);
@@ -410,11 +409,10 @@ export function ChatDetail() {
         preview,
         type: refType,
       };
-      finalText = `[引用: ${preview}] ${text}`;
       setQuoteMsg(null);
     }
 
-    sendMessage(activeChatId, finalText, ref);
+    sendMessage(activeChatId, text, ref);
     setInput('');
     setPickerMode('none');
     if (inputRef.current) inputRef.current.value = '';

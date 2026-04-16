@@ -64,16 +64,37 @@ export function collectCharacterHistory(
 
   const relevantConvIds = new Set([primaryConvId, ...aiAiConvIds]);
 
+  // Resolve sender names so quoteRef can be inlined as readable context for the AI.
+  const characters = useCharacterStore.getState().characters;
+  const persona = usePersonaStore.getState().getActivePersona();
+  const userNickname = useXYData.getState().userSettings.nickname;
+  const resolveQuoteSenderName = (senderId: string): string => {
+    if (senderId === 'me') return persona?.name || userNickname || '用户';
+    const charId = senderId.replace(/^char-/, '');
+    const ch = characters.find((c) => c.id === charId);
+    return ch?.name || senderId;
+  };
+
   return state.messages
     .filter((m) => relevantConvIds.has(m.convId))
-    .map((m) => ({
-      senderId: m.senderId,
-      type: m.type,
-      text: m.type === 'text' || m.type === 'heartbeat_log' ? m.text : undefined,
-      imageUrl: m.type === 'image' ? m.imageUrl : undefined,
-      stickerDesc: m.type === 'sticker' ? m.stickerDesc : undefined,
-      timestamp: m.timestamp,
-    }));
+    .map((m) => {
+      let text: string | undefined;
+      if (m.type === 'text') {
+        text = m.quoteRef
+          ? `[引用 ${resolveQuoteSenderName(m.quoteRef.senderId)}：${m.quoteRef.preview}] ${m.text}`
+          : m.text;
+      } else if (m.type === 'heartbeat_log') {
+        text = m.text;
+      }
+      return {
+        senderId: m.senderId,
+        type: m.type,
+        text,
+        imageUrl: m.type === 'image' ? m.imageUrl : undefined,
+        stickerDesc: m.type === 'sticker' ? m.stickerDesc : undefined,
+        timestamp: m.timestamp,
+      };
+    });
 }
 
 /* ── Auto-reply timers (module-level, not serializable) ── */
