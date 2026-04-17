@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useAppRuntimeStore, clearAppKilled } from '../appRuntimeStore';
+import { useAppRuntimeStore, wasAppKilled, clearAppKilled } from '../appRuntimeStore';
 
 function resetStore() {
   useAppRuntimeStore.setState({
@@ -102,5 +102,37 @@ describe('appRuntimeStore — lifecycle nonces', () => {
     useAppRuntimeStore.getState().openApp('settings', null);
     useAppRuntimeStore.getState().exitAppToHome();
     expect(useAppRuntimeStore.getState().appEvents.settings?.background).toBe(1);
+  });
+
+  it('removeApp emits kill and also sets wasAppKilled', () => {
+    useAppRuntimeStore.getState().openApp('settings', null);
+    useAppRuntimeStore.getState().removeApp('settings');
+
+    expect(useAppRuntimeStore.getState().appEvents.settings?.kill).toBe(1);
+    expect(wasAppKilled('settings')).toBe(true);
+  });
+
+  it('removeApp on unknown id emits kill (best-effort)', () => {
+    useAppRuntimeStore.getState().removeApp('never-opened');
+    expect(useAppRuntimeStore.getState().appEvents['never-opened']?.kill).toBe(1);
+  });
+
+  it('full lifecycle: launch → background → resume → kill → launch', () => {
+    const s = useAppRuntimeStore.getState;
+
+    s().openApp('settings', null);
+    expect(s().appEvents.settings).toEqual({ launch: 1, resume: 0, background: 0, kill: 0 });
+
+    s().goHome();
+    expect(s().appEvents.settings).toEqual({ launch: 1, resume: 0, background: 1, kill: 0 });
+
+    s().openApp('settings', null);
+    expect(s().appEvents.settings).toEqual({ launch: 1, resume: 1, background: 1, kill: 0 });
+
+    s().removeApp('settings');
+    expect(s().appEvents.settings).toEqual({ launch: 1, resume: 1, background: 1, kill: 1 });
+
+    s().openApp('settings', null);
+    expect(s().appEvents.settings).toEqual({ launch: 2, resume: 1, background: 1, kill: 1 });
   });
 });

@@ -356,6 +356,7 @@ export const useAppRuntimeStore = create<AppRuntimeState>()((set, get) => ({
         // a spurious exit animation (the "ghost app" flash-back bug).
         dismissedAppId: null,
         dismissReason: null,
+        appEvents: bumpEvent(state.appEvents, id, 'kill'),
       };
     });
   },
