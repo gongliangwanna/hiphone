@@ -186,6 +186,22 @@ export const useAppRuntimeStore = create<AppRuntimeState>()((set, get) => ({
 
   openApp: (id, origin) =>
     set((state) => {
+      const alreadyActive = state.activeAppId === id;
+      const wasKilled = wasAppKilled(id);
+      const wasInRecent = state.recentApps.some((t) => t.id === id);
+
+      let nextEvents = state.appEvents;
+      if (!alreadyActive) {
+        if (wasKilled) {
+          clearAppKilled(id);
+          nextEvents = bumpEvent(nextEvents, id, 'launch');
+        } else if (wasInRecent) {
+          nextEvents = bumpEvent(nextEvents, id, 'resume');
+        } else {
+          nextEvents = bumpEvent(nextEvents, id, 'launch');
+        }
+      }
+
       const task = { id, origin };
 
       return {
@@ -200,6 +216,7 @@ export const useAppRuntimeStore = create<AppRuntimeState>()((set, get) => ({
         dismissedAppId: null,
         dismissReason: null,
         switcherDismissing: false,
+        appEvents: nextEvents,
         ...resetCardDismissState(),
       };
     }),
