@@ -8,45 +8,38 @@ import type { ComponentType } from 'react';
  */
 export type ModuleResolver = (specifier: string) => unknown;
 
+const SHADOWED_GLOBALS = [
+  'window',
+  'document',
+  'globalThis',
+  'fetch',
+  'localStorage',
+  'sessionStorage',
+  'indexedDB',
+  'XMLHttpRequest',
+  'WebSocket',
+  'Worker',
+];
+
+const SHADOWED_VALUES = SHADOWED_GLOBALS.map(() => undefined);
+
 /**
- * Execute compiled user code in a soft sandbox (L1).
+ * Low-level sandbox execution. Runs `compiledCode` with caller-owned
+ * `require` and `module`. Used by `moduleResolver` to load each file
+ * in a multi-file user app while sharing the module cache across calls.
  *
- * Approach: `new Function(...argNames, body)` with argNames that include
- * a list of shadowed globals (all set to `undefined`) plus the needed
- * runtime (`module`, `exports`, `require`, `React`). This removes direct
- * access to common globals without breaking referential transparency for
- * things the user *should* have (React, the SDK surface via require).
- *
- * Security assessment: see parent spec — L1 is acceptable for M1-M3
- * because user-app authors don't see host code and have no motive or
- * information to escape the sandbox. Escape is possible in principle
- * (via constructor-hop tricks), but not interesting in our threat model.
- * Architecturally we leave room for L2 (iframe sandbox) in M4+.
+ * Does NOT inspect `module.exports.default`. The caller decides what to
+ * do with the populated exports (the single-file case uses
+ * `executeSandboxed` which pulls `.default`; the multi-file case
+ * stores the whole exports object in a cache keyed by file path).
  */
-export function executeSandboxed(
+export function executeInSandbox(
   compiledCode: string,
-  resolve: ModuleResolver,
-): ComponentType {
-  const shadowedNames = [
-    'window',
-    'document',
-    'globalThis',
-    'fetch',
-    'localStorage',
-    'sessionStorage',
-    'indexedDB',
-    'XMLHttpRequest',
-    'WebSocket',
-    'Worker',
-  ];
-  const shadowedValues = shadowedNames.map(() => undefined);
-
-  const moduleObj: { exports: { default?: ComponentType } } = { exports: {} };
-
-  const require = (specifier: string): unknown => resolve(specifier);
-
+  require: (specifier: string) => unknown,
+  module: { exports: any },
+): void {
   const fn = new Function(
-    ...shadowedNames,
+    ...SHADOWED_GLOBALS,
     'module',
     'exports',
     'require',
@@ -55,19 +48,9 @@ export function executeSandboxed(
   );
 
   try {
-    fn(
-      ...shadowedValues,
-      moduleObj,
-      moduleObj.exports,
-      require,
-      React,
-    );
+    fn(...SHADOWED_VALUES, module, module.exports, require, React);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    // ES2022 `{ cause }` — runtime is modern (Node 16.9+, evergreen
-    // browsers); tsconfig lib is ES2020 so the 2-arg Error() overload
-    // isn't in the type surface. Construct via typed ctor cast so we
-    // pass the options at construction time (same as ES2022 semantics).
     const ErrorWithCause = Error as new (
       message?: string,
       options?: { cause?: unknown },
@@ -77,8 +60,25 @@ export function executeSandboxed(
       { cause: err },
     );
   }
+}
 
-  const Component = moduleObj.exports.default;
+/**
+ * High-level backward-compat wrapper: execute a single compiled module
+ * and return its `default` export as a React component.
+ *
+ * Used by DEV icon path where the fake app is a single file. The
+ * multi-file installer path uses `createUserAppRuntime` in
+ * `moduleResolver.ts` instead.
+ */
+export function executeSandboxed(
+  compiledCode: string,
+  resolve: ModuleResolver,
+): ComponentType {
+  const module: { exports: { default?: ComponentType } } = { exports: {} };
+  const require = (specifier: string): unknown => resolve(specifier);
+  executeInSandbox(compiledCode, require, module);
+
+  const Component = module.exports.default;
   if (typeof Component !== 'function') {
     throw new Error(
       'User app compiled code did not export a default component (function)',

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import React from 'react';
 import { compileTsx } from '../compiler';
-import { executeSandboxed } from '../sandbox';
+import { executeInSandbox, executeSandboxed } from '../sandbox';
 
 describe('executeSandboxed', () => {
   function makeResolver(modules: Record<string, unknown>) {
@@ -113,5 +113,49 @@ throw new Error('boom');
     expect(() => executeSandboxed(handWritten, () => null)).toThrow(
       /did not export a default component/,
     );
+  });
+});
+
+describe('executeInSandbox (low-level)', () => {
+  it('populates the caller-provided module.exports', () => {
+    const code = `
+      module.exports.hello = function() { return 'world'; };
+    `;
+    const module = { exports: {} as any };
+    executeInSandbox(code, () => undefined, module);
+    expect(typeof module.exports.hello).toBe('function');
+    expect(module.exports.hello()).toBe('world');
+  });
+
+  it('allows require to return host modules', () => {
+    const code = `
+      var r = require('react');
+      module.exports.r = r;
+    `;
+    const module = { exports: {} as any };
+    executeInSandbox(code, (spec) => (spec === 'react' ? React : undefined), module);
+    expect(module.exports.r).toBe(React);
+  });
+
+  it('shadows window / document globals (returns undefined)', () => {
+    const code = `
+      module.exports.win = typeof window;
+      module.exports.doc = typeof document;
+    `;
+    const module = { exports: {} as any };
+    executeInSandbox(code, () => undefined, module);
+    expect(module.exports.win).toBe('undefined');
+    expect(module.exports.doc).toBe('undefined');
+  });
+});
+
+describe('executeSandboxed (high-level backward-compat)', () => {
+  it('still returns the default export as before', () => {
+    const code = `
+      module.exports.default = function() { return 'ok'; };
+    `;
+    const Component = executeSandboxed(code, () => undefined);
+    expect(typeof Component).toBe('function');
+    expect((Component as any)()).toBe('ok');
   });
 });
