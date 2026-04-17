@@ -1,3 +1,5 @@
+import { FAKE_USER_APP_ID, FAKE_USER_APP_NAME } from '@/platform/userApp/fakeUserApp';
+
 export interface AppInfo {
   id: string;
   name: string;
@@ -75,11 +77,12 @@ const cnApps: AppInfo[] = [
 
 // [DEV] Fake user app icon — for M1 pipeline verification. In production
 // builds, import.meta.env.DEV is false and Vite's dead-code elimination
-// drops this entry entirely.
+// drops this entry entirely. Constants imported from fakeUserApp.ts so the
+// id/name cannot drift between the two files.
 if (import.meta.env.DEV) {
   cnApps.push({
-    id: 'dev-fake-user-app',
-    name: '[DEV] 假用户 app',
+    id: FAKE_USER_APP_ID,
+    name: FAKE_USER_APP_NAME,
     icon: `${SYSTEM_ICON_BASE}/tips.jpg`,
     page: 1,
   });

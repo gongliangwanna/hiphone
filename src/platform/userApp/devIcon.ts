@@ -26,7 +26,7 @@ export async function mountFakeUserApp(): Promise<void> {
     type: 'user',
     component: WrappedComponent,
     perspectiveAware: false,
-    globalData: true, // viewing another's phone still shows the dev demo
+    globalData: false, // model a typical user app: per-owner data, shows placeholder when viewing another phone
   });
 }
 

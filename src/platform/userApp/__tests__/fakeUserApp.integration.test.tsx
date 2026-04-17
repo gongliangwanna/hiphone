@@ -7,12 +7,12 @@ import { FAKE_USER_APP_ID } from '../fakeUserApp';
 
 describe('M1 e2e — fake user app pipeline', () => {
   beforeEach(() => {
-    appRegistry.list().forEach((e) => appRegistry.unregister(e.id));
+    appRegistry.unregister(FAKE_USER_APP_ID);
   });
 
   afterEach(() => {
     cleanup();
-    appRegistry.list().forEach((e) => appRegistry.unregister(e.id));
+    appRegistry.unregister(FAKE_USER_APP_ID);
   });
 
   it('compiles, sandboxes, wraps, and registers the fake app', async () => {
@@ -33,14 +33,12 @@ describe('M1 e2e — fake user app pipeline', () => {
     expect(container.textContent).toContain('Hello from sandbox!');
   });
 
-  it('calling mountFakeUserApp twice is idempotent', async () => {
+  it('calling mountFakeUserApp twice is idempotent (single entry, not duplicated)', async () => {
     await mountFakeUserApp();
-    const firstComponent = appRegistry.get(FAKE_USER_APP_ID)?.component;
-
     await mountFakeUserApp();
-    const secondComponent = appRegistry.get(FAKE_USER_APP_ID)?.component;
 
-    expect(firstComponent).toBeDefined();
-    expect(secondComponent).toBeDefined();
+    // Registry uses Map.set, so re-register overrides — total entries should still be 1.
+    expect(appRegistry.list()).toHaveLength(1);
+    expect(appRegistry.get(FAKE_USER_APP_ID)).toBeDefined();
   });
 });
