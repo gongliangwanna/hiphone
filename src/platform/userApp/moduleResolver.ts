@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import { executeInSandbox, type ModuleResolver } from './sandbox';
+import { withUserAppContext } from './sdk/context';
 
 /**
  * Resolve a relative specifier (starting with `./` or `../`) to an
@@ -71,6 +72,7 @@ export function createUserAppRuntime(
   compiledMap: Record<string, string>,
   entryPath: string,
   sdkResolve: ModuleResolver,
+  appId: string,
 ): ComponentType {
   if (!Object.prototype.hasOwnProperty.call(compiledMap, entryPath)) {
     throw new Error(`createUserAppRuntime: entry "${entryPath}" not in compiledMap`);
@@ -90,14 +92,18 @@ export function createUserAppRuntime(
 
       const module = { exports: {} as any };
       moduleCache.set(resolved, module); // placeholder first — enables circular deps
-      executeInSandbox(compiledMap[resolved]!, requireFrom(resolved), module);
+      withUserAppContext(appId, () =>
+        executeInSandbox(compiledMap[resolved]!, requireFrom(resolved), module),
+      );
       return module.exports;
     };
   }
 
   const entryModule = { exports: {} as any };
   moduleCache.set(entryPath, entryModule);
-  executeInSandbox(compiledMap[entryPath]!, requireFrom(entryPath), entryModule);
+  withUserAppContext(appId, () =>
+    executeInSandbox(compiledMap[entryPath]!, requireFrom(entryPath), entryModule),
+  );
 
   const Component = entryModule.exports.default;
   if (typeof Component !== 'function') {
@@ -105,5 +111,10 @@ export function createUserAppRuntime(
       `Entry "${entryPath}" did not export a default React component`,
     );
   }
-  return Component;
+
+  // Wrap returned Component so render-time SDK calls (inside hooks) also
+  // see the context.
+  return function UserAppRoot(props: any) {
+    return withUserAppContext(appId, () => (Component as any)(props));
+  };
 }

@@ -58,7 +58,7 @@ describe('createUserAppRuntime — multi-file', () => {
       export const label = 'hello-util';
     `);
 
-    const Component = createUserAppRuntime(compiledMap, 'App.tsx', sdkResolveMock);
+    const Component = createUserAppRuntime(compiledMap, 'App.tsx', sdkResolveMock, 'test-app');
     const output = (Component as any)();
     expect(output.props.children).toBe('hello-util');
   });
@@ -79,7 +79,7 @@ describe('createUserAppRuntime — multi-file', () => {
       }
     `);
 
-    const Component = createUserAppRuntime(compiledMap, 'App.tsx', sdkResolveMock);
+    const Component = createUserAppRuntime(compiledMap, 'App.tsx', sdkResolveMock, 'test-app');
     const output = (Component as any)();
     expect(output.type).toBeDefined();
   });
@@ -110,6 +110,7 @@ describe('createUserAppRuntime — multi-file', () => {
       compiledMap,
       'Entry.tsx',
       sdkResolveMock,
+      'test-app',
     );
     const output = (Component as any)();
     expect(output.props.children).toBe('AB');
@@ -121,13 +122,13 @@ describe('createUserAppRuntime — multi-file', () => {
       export const x = 1;
     `);
     expect(() =>
-      createUserAppRuntime(compiledMap, 'App.tsx', sdkResolveMock),
+      createUserAppRuntime(compiledMap, 'App.tsx', sdkResolveMock, 'test-app'),
     ).toThrow(/default/i);
   });
 
   it('throws when entry path not in compiledMap', () => {
     expect(() =>
-      createUserAppRuntime({}, 'App.tsx', sdkResolveMock),
+      createUserAppRuntime({}, 'App.tsx', sdkResolveMock, 'test-app'),
     ).toThrow(/not in compiledMap/i);
   });
 });

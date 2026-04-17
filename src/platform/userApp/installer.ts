@@ -273,7 +273,7 @@ function buildUserAppComponent(
   let cache: ComponentType | null = null;
   const LazyRaw: ComponentType = function LazyUserApp() {
     if (!cache) {
-      cache = createUserAppRuntime(compiledMap, manifest.entry, resolveModule);
+      cache = createUserAppRuntime(compiledMap, manifest.entry, resolveModule, manifest.id);
     }
     return React.createElement(cache);
   };
