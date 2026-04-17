@@ -2,6 +2,11 @@ import { useEffect } from 'react';
 import { Device } from './shell/Device';
 import { MusicPlaybackHost } from './apps/Music/MusicPlaybackHost';
 import { startHeartbeatScheduler } from './platform/ai/heartbeatAgent';
+import { registerBuiltins } from './apps/registerBuiltins';
+
+// Register all builtin apps into the Registry at module load.
+// Safe to run at module scope: registerBuiltins is idempotent.
+registerBuiltins();
 
 export function App() {
   useEffect(() => {
