@@ -24,6 +24,8 @@
 | 文件格式 | 多文件 zip 包 | 支持复杂 app 结构，含 manifest.json + 多个 TSX + 资源文件 |
 | 商店形态 | 本地上传 + 远程商店 | 本地上传做 MVP，远程商店提供社区分享能力 |
 | SDK 范围 | 完整（UI + 存储 + 网络 + AI + 通知） | 最大化用户 app 能力 |
+| 数据隔离 | 双层隔离（app + perspective） | hiPhone 有"查看他人手机"能力，AI 与玩家逻辑上是两部手机。用户 app storage 自动按 `phoneOwnerId` 再加一层命名空间，沿用系统现有 `EntityStoreRegistry` 机制。详见 §8 |
+| AI 工具注册 | App 注册制（替代硬编码工具清单） | 内置 + 用户 app 统一向 AI 贡献工具；heartbeat 启动时从所有已安装 app 汇总；用户可在设置里按 app 开关 AI 的工具权限。详见 §9 |
 
 ## 系统架构
 
@@ -166,15 +168,16 @@ SDK 采用 **import 风格**，用户通过 `@hiphone/*` 命名空间和标准�
 'date-fns'     → 日期处理
 
 // ── @hiphone/* 平台 SDK 模块 ──
-'@hiphone/ui'      → AppScreen, NavBar, List, ListSection, ListRow,
-                      Material, Toast, Toggle, Slider, TextArea,
-                      WheelPicker, DateTimePicker
-'@hiphone/storage' → get, set, remove, list（per-app 隔离，自动加前缀）
-'@hiphone/fetch'   → 受控的网络请求
-'@hiphone/ai'      → AI 能力（纯 AI + 角色对话 + 心跳，详见下方 AI SDK 章节）
-'@hiphone/toast'   → Toast 通知
-'@hiphone/nav'     → 打开其他 app、返回主屏幕、Deep Link 参数传递
-'@hiphone/hooks'   → 平台生命周期 hooks（useOpenParams 等）
+'@hiphone/ui'          → AppScreen, NavBar, List, ListSection, ListRow,
+                          Material, Toast, Toggle, Slider, TextArea,
+                          WheelPicker, DateTimePicker
+'@hiphone/storage'     → get, set, remove, list（per-app + per-perspective 双层隔离；详见 §8）
+'@hiphone/fetch'       → 受控的网络请求
+'@hiphone/ai'          → AI 能力（消费：纯 AI + 角色对话 + 心跳；供给：向 AI 注册工具。详见下方 AI SDK 章节 + §9）
+'@hiphone/toast'       → Toast 通知
+'@hiphone/nav'         → 打开其他 app、返回主屏幕、Deep Link 参数传递
+'@hiphone/hooks'       → 平台生命周期 hooks（useOpenParams 等）
+'@hiphone/perspective' → 查询当前视角（玩家 or 查看某角色手机）；详见 §8
 
 // ── 不暴露的宿主依赖 ──
 // leaflet / react-leaflet — 太专用（地图 app）
@@ -220,7 +223,14 @@ export default function MyApp() {
 
 Twind 按需为用户 app 中的 Tailwind class 动态生成 CSS，与宿主构建时 Tailwind 互不干扰。
 
-**存储隔离：** 每个用户 app 的 storage 自动加 `userapp:{appId}:` 前缀，互不干扰。采用 SDK 层透明加前缀的方式实现（方案 1），无需动态创建 IndexedDB object store。
+**存储隔离：** 双层命名空间，SDK 层透明加前缀：
+
+- **App 层：** `userapp:{appId}:` 前缀，app 之间互不干扰
+- **Perspective 层：** 因为 hiPhone 支持"查看他人手机"（AI 和玩家逻辑上是两部手机），同一 app 的数据再按 `phoneOwnerId` 加一层前缀
+  - 玩家视角：`userapp:{appId}:owner:me:{key}`
+  - 查看角色 `char-001` 时：`userapp:{appId}:owner:char-001:{key}`
+
+底层沿用系统现有的 `EntityStoreRegistry` 机制，不需要动态创建 IndexedDB object store。不希望按视角隔离的全局数据（如 app 自身配置）通过 `globalGet/globalSet` 跳过 perspective 层。详细设计见 §8。
 
 **App 间通信：Deep Link 模式**
 
@@ -268,7 +278,9 @@ export default function WalletApp() {
 
 #### 5.2 AI SDK 详细设计（`@hiphone/ai`）
 
-AI 是 hiPhone 的核心系统能力。SDK 分两层：纯 AI（与角色无关）和角色 AI（带人设和记忆）。
+AI 是 hiPhone 的核心系统能力。`@hiphone/ai` 是**双向**的：app 既可以**消费** AI（让 AI 为自己打工），也可以**供给** AI（把自己的能力注册成工具，让 AI 代用户操作 app）。本节描述消费侧；供给侧（工具注册）详见 §9。
+
+SDK 消费侧分两层：纯 AI（与角色无关）和角色 AI（带人设和记忆）。
 
 **设计原则：**
 - 开发者不感知 token 数量、模型提供商、API 端点 — 这些是系统配置
@@ -586,6 +598,223 @@ tools = [
 ]
 ```
 
+#### 8. 数据隔离与 Perspective SDK
+
+hiPhone 支持"查看他人手机"——玩家可以切换视角查看某个 AI 角色的手机（消息、朋友圈、便签等都是该角色自己的）。**逻辑上 AI 和玩家的数据分属不同的两部手机**，这是系统层面已经存在的设计（见 `src/platform/hooks/usePerspective.ts` + `src/platform/storage/entityStoreRegistry.ts`）。
+
+**用户 app 必须尊重这个隔离。** 否则 AI 角色用"计算器"存的历史会和玩家混在一起，"待办事项"里玩家会看到角色的 todo。
+
+##### 8.1 双层命名空间
+
+所有 `@hiphone/storage` 的读写由 SDK 层透明加**两层前缀**：
+
+```
+userapp:{appId}:owner:{phoneOwnerId}:{用户key}
+         │                │
+         │                └── 'me' (玩家) 或 'char-xxx' (某角色)
+         └── app 之间隔离
+```
+
+**示例：** 某 todo app 在玩家视角存 `items`，在查看 `char-001` 的手机时也存 `items`，对应的 IDB key 分别是：
+- `userapp:todo-app:owner:me:items`
+- `userapp:todo-app:owner:char-001:items`
+
+两份数据完全独立。app 代码无感知——调用 `set('items', ...)` 即可，系统根据当前 `phoneOwnerId` 自动路由。底层沿用系统现有的 `EntityStoreRegistry` 机制。
+
+##### 8.2 绕过 perspective 层（全局数据）
+
+少数数据是 app 自己的全局配置（如主题、语言偏好），不应该按视角分开。SDK 提供逃生出口：
+
+```typescript
+import { get, set, globalGet, globalSet } from '@hiphone/storage';
+
+await set('items', [...]);          // 按 perspective 隔离
+await globalSet('theme', 'dark');   // 跨 perspective 共享
+```
+
+底层 key：
+- `set('items', ...)` → `userapp:todo-app:owner:me:items`
+- `globalSet('theme', ...)` → `userapp:todo-app:global:theme`
+
+##### 8.3 `@hiphone/perspective` SDK
+
+App 需要感知当前视角时用：
+
+```typescript
+import { useCurrentOwner, getCurrentOwner } from '@hiphone/perspective';
+
+function MyApp() {
+  const { ownerId, ownerName, isViewingOther } = useCurrentOwner();
+  // ownerId: null (玩家) | 'char-001' (某角色)
+  // isViewingOther: true 表示正在看别人的手机
+
+  return (
+    <NavBar title={isViewingOther ? `${ownerName} 的待办` : '我的待办'} />
+  );
+}
+```
+
+内部实现直接包 `usePerspective()` hook，不引入新状态。
+
+##### 8.4 `perspectiveAware` 字段
+
+用户 app 在 manifest 里声明是否参与 perspective 切换：
+
+- `perspectiveAware: true` — app 会响应视角切换，storage 按 owner 隔离，组件随视角切换 re-mount
+- `perspectiveAware: false`（默认）— 查看角色手机时显示只读占位（与系统内置 app 的 `PERSPECTIVE_AWARE_APPS` 白名单外行为一致）
+
+**默认 false 的理由：** 大多数新手开发者不会一开始就考虑视角隔离；默认关闭后看到占位会意识到需要显式开启，避免数据污染事故。
+
+##### 8.5 卸载时的清理
+
+卸载 app 时按 `userapp:{appId}:` 前缀批量删除，覆盖所有 owner 和 global 数据，不会残留。
+
+#### 9. App → AI 工具注册（Tool Registry）
+
+##### 9.1 为什么需要改造
+
+当前（改造前）`src/platform/ai/heartbeatTools.ts` 里硬编码了 14 个工具：`post_moment`、`view_notes`、`chat_with_character`……这些其实是 **XingYu** 和 **Notes** 两个 app 的能力被糊在一个平台文件里。
+
+正确的抽象是：**每个 app（内置 + 用户）向 AI 注册自己贡献的工具，系统在 heartbeat 启动时汇总**。这样：
+
+- 用户 app 也能给 AI 加工具（与内置 app 完全对称）
+- 用户可以按 app 开关 AI 的工具权限
+- AI 能力随 app 安装/卸载动态伸缩
+- 未来支持用户自定义 ad-hoc 工具（无需打包成 app）
+
+##### 9.2 Tool Registry 架构
+
+```
+┌──────────────────────────────────────────────┐
+│              Tool Registry (平台)              │
+│                                              │
+│   按 app 分组的工具表 + 用户启用状态            │
+│                                              │
+│   xingyu:    [post_moment, view_moments, …]  │
+│   notes:     [view_notes, create_note]       │
+│   user-todo: [add_todo, list_todos]          │
+│   __user__:  [自定义工具 A, 自定义工具 B]       │
+└────────────┬─────────────────────────────────┘
+             │
+     heartbeat 启动
+             │
+             ▼
+   assembleTools(charId) → 注入 agent prompt
+```
+
+平台文件：`src/platform/ai/toolRegistry.ts` — 提供 `register(appId, tools)` / `unregister(appId)` / `assembleTools(charId)`。
+
+##### 9.3 注册方式
+
+**内置 app：** 在 app 目录下放 `aiTools.ts`，系统启动时自动加载并注册：
+
+```typescript
+// src/apps/XingYu/aiTools.ts
+import type { ToolDefinition } from '@hiphone/ai';
+
+export default [
+  {
+    name: 'post_moment',
+    description: '发布一条朋友圈',
+    parameters: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
+    execute: async ({ text }) => { /* 调用 xingYuDataStore */ },
+  },
+  // …
+];
+```
+
+**用户 app：** manifest 声明 `aiTools` 字段指向 zip 包内文件，Installer 编译并注册；卸载时反注册：
+
+```json
+{ "id": "my-todo", "aiTools": "AITools.tsx" }
+```
+
+```typescript
+// AITools.tsx （用户 app 内）
+import { get, set } from '@hiphone/storage';
+
+export default [
+  {
+    name: 'add_todo',
+    description: '在待办 app 中添加一项',
+    parameters: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
+    execute: async ({ text }) => {
+      const items = (await get('items')) ?? [];
+      await set('items', [...items, { id: Date.now(), text, done: false }]);
+      return `已添加：${text}`;
+    },
+  },
+];
+```
+
+##### 9.4 工具执行的 Perspective 绑定
+
+Heartbeat 是**某个角色**的心跳。当 AI 调用 `add_todo` 工具时，`execute` 内部调用的 `get('items')` 必须作用在**这个角色的视角下**——也就是说，工具执行时系统自动把 `phoneOwnerId` 设成触发 heartbeat 的角色。
+
+这意味着工具函数不需要手动处理 perspective，自动继承 `@hiphone/storage` 的隔离逻辑即可，与 §8 完全对齐。
+
+##### 9.5 用户管理 UI
+
+`设置 → AI → 可用工具` 页面：
+
+```
+┌──────────────────────────────────┐
+│  可用工具                   [AI] │
+├──────────────────────────────────┤
+│  星语  (内置)                ●  │
+│    ● 发朋友圈                    │
+│    ● 查看未读消息                │
+│    ○ 与其他角色聊天              │
+├──────────────────────────────────┤
+│  便签  (内置)                ●  │
+│    ● 查看便签                    │
+│    ● 创建便签                    │
+├──────────────────────────────────┤
+│  待办  (my-todo, 用户 app)   ●  │
+│    ● 添加待办                    │
+│    ● 列出待办                    │
+├──────────────────────────────────┤
+│  自定义工具 [＋ 新建]             │
+└──────────────────────────────────┘
+```
+
+- 按 app 分组展示
+- 每个工具独立开关 + 整个 app 一键开关
+- 持久化在 `aiToolsConfigStore`（IDB）
+- `assembleTools(charId)` 汇总时只包含启用的
+- 底部"自定义工具"入口对应 M4+ 的用户 ad-hoc 工具能力（见 §9.7）
+
+##### 9.6 权限与安全
+
+- 用户 app 注册工具须在 manifest `permissions` 声明 `ai-tools` 权限
+- 工具 `execute` 跑在沙箱里，只能用 `@hiphone/*` SDK
+- 远程商店下载时权限列表展示给用户确认
+- 恶意工具最多只能操作该 app 自己的数据（storage 已隔离）+ 返回字符串给 AI
+
+##### 9.7 未来：用户自定义 ad-hoc 工具（M4+）
+
+不依赖完整 app，用户可在设置里直接新建一个工具（如"查询天气并告诉我"），类似 Shortcuts。形式：
+
+- 工具名 + description
+- 参数 JSON Schema
+- execute 代码（在沙箱中执行，能用所有 `@hiphone/*` SDK）
+
+这些工具归属到虚拟 app id `__user__`，与 app 贡献的工具并列。
+
+##### 9.8 迁移清单
+
+M3 阶段需把现有 `heartbeatTools.ts` 的 14 个工具拆到对应 app：
+
+| 工具 | 目标 app |
+|------|---------|
+| `send_message`, `view_unread_messages`, `view_unread_interactions`, `chat_with_character`, `view_characters` | `src/apps/XingYu/aiTools.ts` |
+| `post_moment`, `view_moments`, `like_moment`, `comment_moment` | 同上 |
+| `update_signature`, `view_user_signature`, `view_user_signature_history` | 同上 |
+| `view_notes`, `create_note` | `src/apps/Notes/aiTools.ts` |
+| `done` | 平台保留（不属于任何 app，永远启用） |
+
+`heartbeatAgent` 不再直接 import 工具清单，改为调用 `toolRegistry.assembleTools(charId)` 在启动时汇总。
+
 ## App 文件格式
 
 ### zip 包结构
@@ -612,12 +841,17 @@ my-app.zip
   "icon": "icon.png",
   "author": "developer@example.com",
   "description": "一个简单的待办事项管理 app",
-  "permissions": ["storage", "fetch", "ai", "notification"]
+  "permissions": ["storage", "fetch", "ai", "ai-tools", "notification"],
+  "perspectiveAware": true,
+  "aiTools": "AITools.tsx"
 }
 ```
 
 **必填字段：** `id`, `name`, `version`, `entry`
-**可选字段：** `icon`, `author`, `description`, `permissions`
+**可选字段：** `icon`, `author`, `description`, `permissions`, `perspectiveAware`, `aiTools`
+
+- `perspectiveAware` (boolean, 默认 `false`) — 设为 `true` 表示 app 会响应"查看他人手机"的视角切换，storage 按 owner 隔离；`false` 时查看角色手机显示只读占位。详见 §8.4
+- `aiTools` (string) — 指向 zip 包内的工具注册文件（例：`"AITools.tsx"`），文件 default export 一组 `ToolDefinition`。需配合 `permissions: ["ai-tools"]` 使用。详见 §9
 
 **id 规则：** 小写字母 + 数字 + 连字符，不能与内置 app id 冲突。以 `user-` 前缀为建议但不强制。
 
@@ -743,7 +977,7 @@ export default function TodoApp() {
 | **S1** | 多文件模块解析器 | `src/platform/userApp/moduleResolver.ts` | 支持 import 图构建、拓扑排序编译、自定义 require |
 | **S2** | App Installer（zip 解析 + IDB 存储） | `src/platform/userApp/installer.ts` | 接收 zip File → 解压 → 校验 manifest → 源码存入 IDB → 元数据存入 IDB |
 | **S3** | Springboard 动态化 | 改造 Springboard 相关组件 | 用户 app 图标出现在桌面；支持 IDB 中的 data URL 图标；支持卸载后从桌面移除 |
-| **S4** | @hiphone/storage SDK | `src/platform/userApp/sdk/storage.ts` | per-app 前缀隔离的 get/set/remove/list；卸载时按前缀批量清除 |
+| **S4** | @hiphone/storage + @hiphone/perspective SDK | `src/platform/userApp/sdk/storage.ts`, `sdk/perspective.ts` | per-app + per-perspective 双层前缀隔离的 get/set/remove/list；`globalGet/globalSet` 跳过 perspective 层；`useCurrentOwner()` hook；manifest `perspectiveAware` 字段生效（false 时显示占位）；卸载时按前缀批量清除所有 owner 数据 |
 | **S5** | @hiphone/hooks SDK | `src/platform/userApp/sdk/hooks.ts` | useOnLaunch/useOnResume/useOnBackground/useOnKill/useAppMemory/useOpenParams |
 | **S6** | Twind 集成 | 运行时 CSS 引擎 | 用户 app 中 Tailwind class 生效 |
 | **S7** | 端到端验证 | 示例 app zip + 测试 | 上传一个多文件 todo-app.zip → 桌面出现图标 → 点击运行 → 数据持久化 → 卸载清除 |
@@ -771,8 +1005,11 @@ export default function TodoApp() {
 
 | **S9** | AI App Builder V1 — 聊天生成 app | `src/apps/AppBuilder/` | 用户输入"帮我做一个计算器" → AI 生成代码 → 编译验证 → 自动安装 → 桌面出现图标 |
 | **S10** | AI App Builder — 迭代修改 | 同上 | 保留对话历史；用户追加"加一个历史记录" → AI 修改现有代码 → 更新安装 |
+| **S11** | Tool Registry 平台 + 内置工具迁移 | `src/platform/ai/toolRegistry.ts`、`src/apps/XingYu/aiTools.ts`、`src/apps/Notes/aiTools.ts`、改造 `heartbeatAgent` | 现有 14 个硬编码工具拆到对应 app；`heartbeatAgent` 改为 `assembleTools(charId)` 汇总；所有现有 heartbeat 行为不变（回归测试） |
+| **S12** | 用户 app 的 AI 工具注册 | Installer + 沙箱扩展 | manifest `aiTools` 字段生效；Installer 编译并注册；卸载反注册；`permissions: ["ai-tools"]` 校验 |
+| **S13** | AI 工具管理 UI | `src/apps/Settings/pages/AIToolsPage.tsx`、`aiToolsConfigStore` | 按 app 分组展示全部工具；工具级 + app 级开关；持久化；`assembleTools` 读开关状态 |
 
-**里程碑验收：** App Store 可用；三个示例 app 验证 SDK 能力；AI App Builder 能通过聊天生成并安装一个可运行的 app。
+**里程碑验收：** App Store 可用；三个示例 app 验证 SDK 能力；AI App Builder 能通过聊天生成并安装一个可运行的 app；用户可以在设置里管理 AI 可用的工具（含用户 app 贡献的工具）。
 
 ---
 
@@ -789,7 +1026,8 @@ export default function TodoApp() {
 | **S5** | @hiphone/ai — 心跳 + 自定义工具 | SDK 扩展 | triggerHeartbeat(charId, { tools, systemPrompt }) |
 | **S6** | App 更新机制 | Installer 扩展 | 检测已安装 app 的新版本；一键更新 |
 | **S7** | AI App Builder V2 — Agent 版 | 改造 `src/apps/AppBuilder/` | ReAct Agent 多步推理；自动拆分多文件；编译错误自动修复；读取现有代码修改 |
-| **S8** | 开发者文档 | `docs/app-development-guide.md` | 面向用户的 app 开发指南，包含 SDK API 参考、示例、最佳实践 |
+| **S8** | 用户自定义 ad-hoc 工具 | `src/apps/Settings/pages/CustomToolsPage.tsx` + `toolRegistry` 扩展 | 用户可在设置里直接新建工具（name + description + 参数 schema + execute 代码）；归属虚拟 app id `__user__`；在沙箱中执行，能用所有 `@hiphone/*` SDK（见 §9.7） |
+| **S9** | 开发者文档 | `docs/app-development-guide.md` | 面向用户的 app 开发指南，包含 SDK API 参考、示例、最佳实践 |
 
 **里程碑验收：** 远程商店可浏览下载；AI App Builder Agent 版能多步生成复杂 app；用户能参考文档从零编写一个使用 AI + 动效的 app。
 
