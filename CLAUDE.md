@@ -4,7 +4,9 @@
 1. **系统UI高仿iOS** — Shell层必须还原iOS的视觉与交互范式：Dock栏、毛玻璃材质、居中导航标题、左箭头返回、顶部横幅通知、SF风格排版、Dynamic Island、状态栏分层。每个系统组件（桌面、导航栏、通知、Dock）都应以iOS对应元素为参照，不做自创风格。
 
 ## 部署流程
-每次开发完成后，按照 `docs/skills/hiphone-cloudflare-pages-deploy/SKILL.md` 中的流程部署到 Cloudflare Pages。核心步骤：`pnpm build` → `npx -y wrangler pages deploy dist --project-name mini-iphone --commit-dirty=true` → 验证 https://mini-iphone.pages.dev/
+**除非用户明确要求，否则不主动部署到 Cloudflare Pages。** 开发完成后只做本地验证（`pnpm build` + 必要的 grep/smoke），部署是用户的决定，不是默认动作。
+
+用户要求部署时，按照 `docs/skills/hiphone-cloudflare-pages-deploy/SKILL.md` 中的流程执行：`pnpm build` → `npx -y wrangler pages deploy dist --project-name mini-iphone --commit-dirty=true` → 验证 https://mini-iphone.pages.dev/
 
 ## 规范要求
 1. 文档优先,构建自己的文档系统(docs/). 有效使用子目录的`CLAUDE.md`,将需要阅读该目录需要了解的规范,以及反复做错踩坑点记录在对应目录的`CLAUDE.md`中.注意维护文档的目的是避免上下文在开发中丢失,在一次开发中大部分上下文转化为代码,少部分上下文转化为关键注释,还有一部分应该变成文档,否则就会永久丢失.
