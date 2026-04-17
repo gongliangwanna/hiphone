@@ -46,7 +46,7 @@ export function validateManifest(raw: unknown): UserAppManifest {
   }
   if (!ID_PATTERN.test(id)) {
     throw new ManifestError(
-      `manifest.id "${id}" does not match pattern /^[a-z0-9][a-z0-9-]+$/`,
+      `manifest.id "${id}" does not match pattern /^[a-z][a-z0-9-]{2,31}$/`,
     );
   }
 
