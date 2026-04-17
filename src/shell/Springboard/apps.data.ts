@@ -68,7 +68,7 @@ const cnApps: AppInfo[] = [
   { id: 'soul', name: 'Soul', icon: `${CN_ICON_BASE}/soul.jpg`, page: 1 },
   { id: 'qqmail', name: 'QQ邮箱', icon: `${CN_ICON_BASE}/qqmail.jpg`, page: 1 },
   { id: 'quark', name: '夸克', icon: `${CN_ICON_BASE}/quark.jpg`, page: 1 },
-  { id: 'snapchat', name: 'Snapchat', icon: `${CN_ICON_BASE}/snapchat.svg`, page: 1 },
+
   { id: 'xingyu', name: '可爱信', icon: `${CN_ICON_BASE}/xingyu.svg`, page: 1 },
   { id: 'gomoku', name: '五子棋', icon: `${CN_ICON_BASE}/gomoku.svg`, page: 1 },
 ];

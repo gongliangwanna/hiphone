@@ -22,5 +22,5 @@
 | `camera` | `Camera/CameraApp` | 相机，全屏取景器 + 实时摄像头(带降级) + 6模式选择器 + 闪光灯/翻转 + 快门动画 |
 | `photos` | `Photos/PhotosApp` | 照片，4 Tab(图库/为你推荐/相簿/搜索) + 月份分组网格 + 全屏PhotoViewer + picsum.photos模拟数据 |
 | `safari` | `Safari/SafariApp` | 浏览器，底部URL栏 + iframe WebView + 标签页网格 + 起始页收藏夹 + DuckDuckGo搜索 |
-| `snapchat` | `Snapchat/SnapchatApp` | Snapchat，5 Tab(Map/Chat/Camera/Community/Spotlight) + Friends聊天列表 + 聊天详情 + 全屏SnapViewer + localStorage持久化 |
+
 | `xingyu` | `XingYu/XingYuApp` | 星语，原创可爱虚拟偶像聊天App，4 Tab(消息/通讯录/动态/我的) + 粉彩渐变主题 + bouncy动画 + 偶像卡片 + 朋友圈 + localStorage持久化 |

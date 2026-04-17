@@ -7,7 +7,7 @@ import { MusicApp } from './Music/MusicApp';
 import { CameraApp } from './Camera/CameraApp';
 import { SafariApp } from './Safari/SafariApp';
 import { PhotosApp } from './Photos/PhotosApp';
-import { SnapchatApp } from './Snapchat/SnapchatApp';
+
 import { XingYuApp } from './XingYu/XingYuApp';
 import { GomokuApp } from './Gomoku/GomokuApp';
 import { DemoApp } from './DemoApp';
@@ -20,7 +20,7 @@ interface AppSceneProps {
 }
 
 /** Apps that natively handle perspective switching */
-const PERSPECTIVE_AWARE_APPS = new Set(['xingyu', 'snapchat', 'settings', 'notes']);
+const PERSPECTIVE_AWARE_APPS = new Set(['xingyu', 'settings', 'notes']);
 
 /** Apps with global/shared data (no per-entity data) */
 const GLOBAL_DATA_APPS = new Set(['weather', 'maps', 'music', 'music-dock']);
@@ -51,7 +51,7 @@ function AppSceneInner({ appId }: { appId: string }) {
   if (appId === 'camera') return <CameraApp />;
   if (appId === 'safari' || appId === 'safari-dock') return <SafariApp />;
   if (appId === 'photos') return <PhotosApp />;
-  if (appId === 'snapchat') return <SnapchatApp />;
+
   if (appId === 'xingyu') return <XingYuApp />;
   if (appId === 'gomoku') return <GomokuApp />;
   return <DemoApp appId={appId} />;
