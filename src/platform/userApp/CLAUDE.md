@@ -40,15 +40,21 @@ sdk/
 
 M1 的 `mountFakeUserApp` 注册时 `globalData: false` —— 这**模拟典型用户 app 的 per-owner 数据行为**，而非"全局"。M2 真实 installer 应从 manifest 读 `perspectiveAware` 字段。
 
+## 已落地的架构决策
+
+- **ErrorBoundary in `wrapUserComponent`** (M1 follow-up, commit `315af97`). 用户组件 render 抛错由 `UserAppErrorBoundary` 接住 + 渲染 iOS 风格的 "App crashed" fallback，不冒泡到 device 根。`componentDidCatch` 把 stack log 到 console，配合下面的 source maps 可在 devtools 看到原始 TSX 位置。
+- **Sucrase source maps** (M1 follow-up, commit `30f013c`). `compileTsx` 在编译结果末尾追加 base64 inline sourceMappingURL，browser devtools 自动把 stack trace 映射回原 TSX。零运行时成本，不引入 source-map 库。`compileTsx(source, filePath?)` 新增可选 filePath 参数，threads 到 source map 的 `sources` 字段（`devIcon` 用 `'fake-user-app.tsx'`）。
+- **ModuleResolver stays synchronous** (M1 follow-up, commit `10beecb`). Rationale:
+   - Sucrase-compiled user code does `const x = _interopRequireDefault(require('react'))` — the `require` call is synchronous. Making it async would require the sandbox function itself to be async, cascading into user code changes (they'd need to `await require()` which Sucrase doesn't emit).
+   - Future SDK surfaces that have async IO (like `@hiphone/storage` backed by IDB) expose async **methods** (`await storage.get('key')`), not async imports. The module namespace itself is always sync-resolvable.
+   - If ever needed, we'd pre-resolve: statically scan compiled code for `require(...)` calls, preload async dependencies into an in-memory map, then inject a sync resolver that reads from the cache. Deferred until proven necessary.
+
 ## 已知 TODO / M2 要做
 
-1. **ErrorBoundary in `wrapUserComponent`** —— 当前用户组件 render 抛错会冒泡到 device 根，白屏风险。M2 必须加 ErrorBoundary 在 wrap.tsx 里。
-2. **Sucrase source maps** —— `compileTsx` 目前不生成 source map，用户看编译/运行错误时指向转换后代码而非原 TSX。M2 要把 map 接到 sandbox error 路径。
-3. **ModuleResolver async?** —— 当前 `(specifier: string) => unknown` 是同步的。如果 `@hiphone/storage` 等需要异步加载，要先在此处决定：widen 到 `Promise<unknown>`（连带 sandbox 改异步），还是 "所有 SDK 都预加载，同步 resolve" 的策略。
-4. **`mountFakeUserAppIfDev` 专项测试** —— 当前只测了内层 `mountFakeUserApp`。DEV-gated 包装 + try/catch 行为没被直接锁定。
-5. **Race: apps.data DEV icon 在 `mountFakeUserAppIfDev` 完成前可被点击** —— 现象是会显示 DemoApp 兜底。M1 scope 内可接受；M2 可加 loading 占位。
-6. **registerBuiltins 13 个重复调用** —— 如果 M2 要加 capability dimensions，改成 data-driven。
-7. **`music-dock` / `safari-dock` 独立 entry** —— 与 non-dock 版本共用组件。可由 AppIcon 通过 prop 传递 source 消除重复。
+1. **`mountFakeUserAppIfDev` 专项测试** —— 当前只测了内层 `mountFakeUserApp`。DEV-gated 包装 + try/catch 行为没被直接锁定。
+2. **Race: apps.data DEV icon 在 `mountFakeUserAppIfDev` 完成前可被点击** —— 现象是会显示 DemoApp 兜底。M1 scope 内可接受；M2 可加 loading 占位。
+3. **registerBuiltins 13 个重复调用** —— 如果 M2 要加 capability dimensions，改成 data-driven。
+4. **`music-dock` / `safari-dock` 独立 entry** —— 与 non-dock 版本共用组件。可由 AppIcon 通过 prop 传递 source 消除重复。
 
 ## 踩坑记录
 
