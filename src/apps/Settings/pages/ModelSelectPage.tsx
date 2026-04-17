@@ -411,7 +411,7 @@ export function ModelSelectPage() {
                 className="flex items-center justify-center rounded-full"
                 style={{ width: 18, height: 18, backgroundColor: 'var(--color-secondaryLabel)' }}
               >
-                <span style={{ fontSize: 12, color: 'white', lineHeight: 1 }}>✕</span>
+                <X size={12} strokeWidth={2.5} color="white" />
               </button>
             )}
           </div>

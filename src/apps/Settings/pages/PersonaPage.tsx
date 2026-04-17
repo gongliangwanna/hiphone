@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { Camera } from 'lucide-react';
+import { Camera, User } from 'lucide-react';
 import { usePersonaStore } from '@/platform/stores/personaStore';
 import { TextArea, List, ListSection } from '@/system';
 
@@ -70,7 +70,7 @@ export function PersonaPage() {
                   color: 'var(--color-secondaryLabel)',
                 }}
               >
-                {persona.name.charAt(0) || '👤'}
+                {persona.name.charAt(0) || <User size={32} strokeWidth={1.5} />}
               </div>
             )}
             {/* Camera badge */}

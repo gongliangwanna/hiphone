@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef } from 'react';
-import { Check, Eye, EyeOff, RefreshCw, Search, Zap } from 'lucide-react';
+import { Check, Eye, EyeOff, RefreshCw, Search, Zap, X } from 'lucide-react';
 import {
   useAIConfigStore,
   PROVIDER_ADAPTERS,
@@ -428,7 +428,7 @@ export function AIServicePage() {
                   backgroundColor: 'var(--color-secondaryLabel)',
                 }}
               >
-                <span style={{ fontSize: 12, color: 'white', lineHeight: 1 }}>✕</span>
+                <X size={12} strokeWidth={2.5} color="white" />
               </button>
             )}
           </div>
