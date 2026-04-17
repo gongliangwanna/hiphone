@@ -18,6 +18,7 @@ import { resolveModule } from './sdk';
 import { wrapUserComponent } from './sdk/wrap';
 import { validateManifest, type UserAppManifest, ManifestError } from './manifest';
 import { migrateS3ToS4Owner } from './migrations';
+import { registerMountedApp } from './sdk/context';
 
 export type InstallErrorKind =
   | 'bad-zip'
@@ -274,10 +275,22 @@ function buildUserAppComponent(
   // The UserAppErrorBoundary inside wrapUserComponent will catch and
   // display the error gracefully if the runtime throws on first render.
   let cache: ComponentType | null = null;
+  const appId = manifest.id;
   const LazyRaw: ComponentType = function LazyUserApp() {
     if (!cache) {
-      cache = createUserAppRuntime(compiledMap, manifest.entry, resolveModule, manifest.id);
+      cache = createUserAppRuntime(compiledMap, manifest.entry, resolveModule, appId);
     }
+
+    // Register this app instance via useLayoutEffect so it runs before any
+    // passive useEffect callbacks inside user app code (e.g. `get('todos')`
+    // in useEffect). React runs ALL layout effects before ANY passive effects,
+    // regardless of component depth — so this registration is guaranteed to
+    // be in place when user app useEffect callbacks fire.
+    React.useLayoutEffect(() => {
+      const unregister = registerMountedApp(appId);
+      return unregister;
+    }, []);
+
     return React.createElement(cache);
   };
   return wrapUserComponent(LazyRaw);
