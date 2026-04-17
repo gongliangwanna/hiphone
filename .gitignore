@@ -3,3 +3,6 @@ dist/
 .vitest/
 *.local
 .DS_Store
+.superpowers/
+tsconfig.tsbuildinfo
+.wrangler/
