@@ -17,8 +17,17 @@ describe('resolveModule', () => {
     expect(() => resolveModule('lodash')).toThrow(/Module not found/);
   });
 
-  it('throws for @hiphone/* submodules not yet available in M1', () => {
-    expect(() => resolveModule('@hiphone/storage')).toThrow(/Module not found/);
+  it('resolves "@hiphone/storage" to the storage SDK (M2 S3)', () => {
+    const mod = resolveModule('@hiphone/storage') as Record<string, unknown>;
+    expect(typeof mod.get).toBe('function');
+    expect(typeof mod.set).toBe('function');
+    expect(typeof mod.remove).toBe('function');
+    expect(typeof mod.list).toBe('function');
+    expect(typeof mod.globalGet).toBe('function');
+    expect(typeof mod.globalSet).toBe('function');
+  });
+
+  it('throws for @hiphone/* submodules not yet available', () => {
     expect(() => resolveModule('@hiphone/ai')).toThrow(/Module not found/);
   });
 

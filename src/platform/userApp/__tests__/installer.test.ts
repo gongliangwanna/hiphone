@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import 'fake-indexeddb/auto';
+import React from 'react';
+import { render, cleanup, act } from '@testing-library/react';
 import JSZip from 'jszip';
 import { install, uninstall, loadInstalledApps, InstallError } from '../installer';
 import { useInstalledUserAppsStore } from '@/platform/stores/installedUserAppsStore';
@@ -294,5 +296,50 @@ describe('installer — multi-file', () => {
     const result = await install(zip);
     expect(result.id).toBe('bad');
     // Open-time failure is deferred; install succeeds.
+  });
+});
+
+describe('installer — end-to-end with storage', () => {
+  beforeEach(async () => {
+    cleanup();
+    useInstalledUserAppsStore.setState({ apps: [] });
+    appRegistry.list().forEach((e) => appRegistry.unregister(e.id));
+    await resetIdb();
+  });
+
+  it('user app can write and read storage through @hiphone/storage', async () => {
+    const zip = await makeZip({
+      'manifest.json': JSON.stringify({
+        id: 'storage-test', name: 'StorageTest', version: '1.0.0', entry: 'App.tsx',
+      }),
+      'App.tsx': `
+        import React from 'react';
+        import { set } from '@hiphone/storage';
+
+        export default function App() {
+          // set() captures appId synchronously at call-entry (before any await),
+          // so it correctly records which app is writing even though the context
+          // stack is sync-only and has exited by the time the promise resolves.
+          set('greeting', 'hi').then(() => {});
+          return React.createElement('div', null, 'see storage');
+        }
+      `,
+    });
+
+    await install(zip);
+
+    // Render the installed component to trigger the lazy runtime init
+    // and execute the App function (which calls set()).
+    const entry = appRegistry.get('storage-test')!;
+    await act(async () => {
+      render(React.createElement(entry.component));
+    });
+
+    // Wait for the set() promise to resolve via IDB
+    await new Promise((r) => setTimeout(r, 50));
+
+    const { appStorageGet } = await import('../appStorage');
+    const record = await appStorageGet('storage-test', 'storage-test:greeting');
+    expect((record as { value?: unknown })?.value).toBe('hi');
   });
 });

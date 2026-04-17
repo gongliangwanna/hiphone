@@ -1,5 +1,6 @@
 import React from 'react';
 import * as hiphoneUi from './ui';
+import * as hiphoneStorage from './storage';
 
 /**
  * Module registry for the user-app sandbox.
@@ -13,6 +14,7 @@ import * as hiphoneUi from './ui';
 const moduleMap: Record<string, unknown> = {
   react: React,
   '@hiphone/ui': hiphoneUi,
+  '@hiphone/storage': hiphoneStorage,
 };
 
 /**
