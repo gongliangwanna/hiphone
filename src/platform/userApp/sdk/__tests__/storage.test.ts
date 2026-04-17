@@ -40,8 +40,9 @@ describe('@hiphone/storage (owner-aware)', () => {
     // Player writes
     await inCtx('todo', () => storage.set('items', ['player-todo']));
 
-    // Switch to char-001: should see empty, then write its own
-    usePhoneOwnerStore.setState({ phoneOwnerId: 'char-001' });
+    // Switch to char 001: should see empty, then write its own
+    // (phoneOwnerId stores bare character IDs; SDK adds the `char-` prefix)
+    usePhoneOwnerStore.setState({ phoneOwnerId: '001' });
     expect(await inCtx('todo', () => storage.get('items'))).toBeUndefined();
     await inCtx('todo', () => storage.set('items', ['char-todo']));
 
@@ -53,7 +54,7 @@ describe('@hiphone/storage (owner-aware)', () => {
   it('globalSet is shared across owners', async () => {
     await inCtx('todo', () => storage.globalSet('theme', 'dark'));
 
-    usePhoneOwnerStore.setState({ phoneOwnerId: 'char-001' });
+    usePhoneOwnerStore.setState({ phoneOwnerId: '001' });
     expect(await inCtx('todo', () => storage.globalGet('theme'))).toBe('dark');
   });
 
@@ -68,7 +69,7 @@ describe('@hiphone/storage (owner-aware)', () => {
     expect((playerKeys as string[]).sort()).toEqual(['a', 'b']);
 
     // Char-001 list: empty (no per-owner data yet)
-    usePhoneOwnerStore.setState({ phoneOwnerId: 'char-001' });
+    usePhoneOwnerStore.setState({ phoneOwnerId: '001' });
     const charKeys = await inCtx('todo', () => storage.list());
     expect(charKeys).toEqual([]);
   });
@@ -78,7 +79,7 @@ describe('@hiphone/storage (owner-aware)', () => {
     await inCtx('todo', () => storage.set('k', 'player'));
 
     // Char-001 writes key 'k', then removes it
-    usePhoneOwnerStore.setState({ phoneOwnerId: 'char-001' });
+    usePhoneOwnerStore.setState({ phoneOwnerId: '001' });
     await inCtx('todo', () => storage.set('k', 'char'));
     await inCtx('todo', () => storage.remove('k'));
     expect(await inCtx('todo', () => storage.get('k'))).toBeUndefined();
