@@ -21,14 +21,18 @@ export function AppScene({ appId }: AppSceneProps) {
   const { phoneOwnerId, isViewingOther } = usePerspective();
   const entry = appRegistry.get(appId);
 
-  if (!entry) {
-    return <DemoApp appId={appId} />;
+  // Viewing another's phone: perspective-aware or global-data apps render
+  // normally; everything else (including unregistered apps) shows the
+  // read-only placeholder. Using optional chaining so undefined entries
+  // (no registered component) are treated as "not perspective-aware and
+  // not global" — matches pre-refactor behavior where unregistered apps
+  // like 'alipay' showed the placeholder when viewing another's phone.
+  if (isViewingOther && !entry?.perspectiveAware && !entry?.globalData) {
+    return <ReadOnlyAppPlaceholder appId={appId} characterId={phoneOwnerId!} />;
   }
 
-  // Viewing another's phone: perspective-aware or global-data apps render
-  // normally; everything else shows the read-only placeholder.
-  if (isViewingOther && !entry.perspectiveAware && !entry.globalData) {
-    return <ReadOnlyAppPlaceholder appId={appId} characterId={phoneOwnerId!} />;
+  if (!entry) {
+    return <DemoApp appId={appId} />;
   }
 
   const Component = entry.component;

@@ -85,4 +85,21 @@ describe('AppScene (post-Registry refactor)', () => {
     expect(container.textContent).toContain('测试角色');
     expect(container.textContent).toContain('暂无数据');
   });
+
+  it('shows read-only placeholder for unknown appId when viewing another phone', () => {
+    // Unregistered ids (icons without a real component, e.g. 'alipay',
+    // 'messages' on the springboard) should STILL show the character-
+    // scoped placeholder — matching pre-Registry behavior. The fallback
+    // to DemoApp only applies when the player is viewing their own phone.
+    usePhoneOwnerStore.setState({ phoneOwnerId: 'char-001' });
+
+    const { container, queryByTestId } = render(<AppScene appId="unregistered-foo" />);
+    // No stub rendered (appId has no registry entry)
+    expect(queryByTestId('stub')).toBeNull();
+    // No DemoApp either
+    expect(container.querySelector('[data-testid="demo-app-unregistered-foo"]')).toBeNull();
+    // Placeholder shown instead
+    expect(container.textContent).toContain('测试角色');
+    expect(container.textContent).toContain('暂无数据');
+  });
 });
