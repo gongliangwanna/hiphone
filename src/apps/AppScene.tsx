@@ -1,15 +1,4 @@
-import { SettingsApp } from './Settings/SettingsApp';
-import { WeatherApp } from './Weather/WeatherApp';
-import { NotesApp } from './Notes/NotesApp';
-import { CalendarApp } from './Calendar/CalendarApp';
-import { MapsApp } from './Maps/MapsApp';
-import { MusicApp } from './Music/MusicApp';
-import { CameraApp } from './Camera/CameraApp';
-import { SafariApp } from './Safari/SafariApp';
-import { PhotosApp } from './Photos/PhotosApp';
-
-import { XingYuApp } from './XingYu/XingYuApp';
-import { GomokuApp } from './Gomoku/GomokuApp';
+import { appRegistry } from '@/platform/appRegistry';
 import { DemoApp } from './DemoApp';
 import { usePerspective } from '@/platform/hooks/usePerspective';
 import { useCharacterStore } from '@/platform/stores/characterStore';
@@ -19,42 +8,31 @@ interface AppSceneProps {
   appId: string;
 }
 
-/** Apps that natively handle perspective switching */
-const PERSPECTIVE_AWARE_APPS = new Set(['xingyu', 'settings', 'notes']);
-
-/** Apps with global/shared data (no per-entity data) */
-const GLOBAL_DATA_APPS = new Set(['weather', 'maps', 'music', 'music-dock']);
-
+/**
+ * AppScene — queries appRegistry to resolve the component for appId and
+ * handles "viewing another's phone" perspective semantics via the
+ * perspectiveAware / globalData flags on each registry entry.
+ *
+ * Apps not found in the registry fall through to DemoApp (preserves the
+ * prior behavior for icons without a corresponding component, e.g.
+ * 'messages', 'alipay', etc.).
+ */
 export function AppScene({ appId }: AppSceneProps) {
   const { phoneOwnerId, isViewingOther } = usePerspective();
+  const entry = appRegistry.get(appId);
 
-  // Perspective-aware and global apps render normally
-  if (
-    !isViewingOther ||
-    PERSPECTIVE_AWARE_APPS.has(appId) ||
-    GLOBAL_DATA_APPS.has(appId)
-  ) {
-    return <AppSceneInner appId={appId} />;
+  if (!entry) {
+    return <DemoApp appId={appId} />;
   }
 
-  // Category B apps: show read-only empty state when viewing another's phone
-  return <ReadOnlyAppPlaceholder appId={appId} characterId={phoneOwnerId!} />;
-}
+  // Viewing another's phone: perspective-aware or global-data apps render
+  // normally; everything else shows the read-only placeholder.
+  if (isViewingOther && !entry.perspectiveAware && !entry.globalData) {
+    return <ReadOnlyAppPlaceholder appId={appId} characterId={phoneOwnerId!} />;
+  }
 
-function AppSceneInner({ appId }: { appId: string }) {
-  if (appId === 'settings') return <SettingsApp />;
-  if (appId === 'weather') return <WeatherApp />;
-  if (appId === 'notes') return <NotesApp />;
-  if (appId === 'calendar') return <CalendarApp />;
-  if (appId === 'maps') return <MapsApp />;
-  if (appId === 'music' || appId === 'music-dock') return <MusicApp />;
-  if (appId === 'camera') return <CameraApp />;
-  if (appId === 'safari' || appId === 'safari-dock') return <SafariApp />;
-  if (appId === 'photos') return <PhotosApp />;
-
-  if (appId === 'xingyu') return <XingYuApp />;
-  if (appId === 'gomoku') return <GomokuApp />;
-  return <DemoApp appId={appId} />;
+  const Component = entry.component;
+  return <Component />;
 }
 
 const APP_NAMES: Record<string, string> = {
