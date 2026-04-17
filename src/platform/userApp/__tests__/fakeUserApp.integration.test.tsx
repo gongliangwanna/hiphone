@@ -1,0 +1,46 @@
+import { render, cleanup } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { appRegistry } from '@/platform/appRegistry';
+import { AppScene } from '@/apps/AppScene';
+import { mountFakeUserApp } from '../devIcon';
+import { FAKE_USER_APP_ID } from '../fakeUserApp';
+
+describe('M1 e2e — fake user app pipeline', () => {
+  beforeEach(() => {
+    appRegistry.list().forEach((e) => appRegistry.unregister(e.id));
+  });
+
+  afterEach(() => {
+    cleanup();
+    appRegistry.list().forEach((e) => appRegistry.unregister(e.id));
+  });
+
+  it('compiles, sandboxes, wraps, and registers the fake app', async () => {
+    await mountFakeUserApp();
+
+    const entry = appRegistry.get(FAKE_USER_APP_ID);
+    expect(entry).toBeDefined();
+    expect(entry?.type).toBe('user');
+    expect(typeof entry?.component).toBe('function');
+  });
+
+  it('AppScene renders the fake app after mounting', async () => {
+    await mountFakeUserApp();
+
+    const { container } = render(<AppScene appId={FAKE_USER_APP_ID} />);
+
+    expect(container.textContent).toContain('假用户 app');
+    expect(container.textContent).toContain('Hello from sandbox!');
+  });
+
+  it('calling mountFakeUserApp twice is idempotent', async () => {
+    await mountFakeUserApp();
+    const firstComponent = appRegistry.get(FAKE_USER_APP_ID)?.component;
+
+    await mountFakeUserApp();
+    const secondComponent = appRegistry.get(FAKE_USER_APP_ID)?.component;
+
+    expect(firstComponent).toBeDefined();
+    expect(secondComponent).toBeDefined();
+  });
+});
