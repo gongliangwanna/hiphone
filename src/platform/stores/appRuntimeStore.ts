@@ -260,19 +260,27 @@ export const useAppRuntimeStore = create<AppRuntimeState>()((set, get) => ({
   },
 
   goHome: () =>
-    set((state) => ({
-      activeAppId: null,
-      appOrigin: null,
-      switcherCardOrigin: null,
-      switcherCardViewport: null,
-      switcherAppId: state.activeAppId ?? state.switcherAppId ?? state.recentApps[0]?.id ?? null,
-      presentationMode: 'foreground',
-      switcherEnterAnimating: false,
-      dismissedAppId: null,
-      dismissReason: null,
-      switcherDismissing: false,
-      ...resetCardDismissState(),
-    })),
+    set((state) => {
+      const exitingId = state.activeAppId;
+      const nextEvents = exitingId
+        ? bumpEvent(state.appEvents, exitingId, 'background')
+        : state.appEvents;
+
+      return {
+        activeAppId: null,
+        appOrigin: null,
+        switcherCardOrigin: null,
+        switcherCardViewport: null,
+        switcherAppId: exitingId ?? state.switcherAppId ?? state.recentApps[0]?.id ?? null,
+        presentationMode: 'foreground',
+        switcherEnterAnimating: false,
+        dismissedAppId: null,
+        dismissReason: null,
+        switcherDismissing: false,
+        appEvents: nextEvents,
+        ...resetCardDismissState(),
+      };
+    }),
 
   exitAppToHome: () => {
     const state = get();
@@ -289,6 +297,7 @@ export const useAppRuntimeStore = create<AppRuntimeState>()((set, get) => ({
       dismissedAppId: exitingId,
       dismissReason: 'home',
       switcherDismissing: false,
+      appEvents: bumpEvent(state.appEvents, exitingId, 'background'),
       ...resetCardDismissState(),
     });
   },

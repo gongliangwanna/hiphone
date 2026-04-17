@@ -86,4 +86,21 @@ describe('appRuntimeStore — lifecycle nonces', () => {
     const ev = useAppRuntimeStore.getState().appEvents.settings;
     expect(ev?.launch).toBe(2);
   });
+
+  it('goHome emits background for the currently active app', () => {
+    useAppRuntimeStore.getState().openApp('settings', null);
+    useAppRuntimeStore.getState().goHome();
+    expect(useAppRuntimeStore.getState().appEvents.settings?.background).toBe(1);
+  });
+
+  it('goHome with no active app emits nothing', () => {
+    useAppRuntimeStore.getState().goHome();
+    expect(useAppRuntimeStore.getState().appEvents).toEqual({});
+  });
+
+  it('exitAppToHome emits background for active app', () => {
+    useAppRuntimeStore.getState().openApp('settings', null);
+    useAppRuntimeStore.getState().exitAppToHome();
+    expect(useAppRuntimeStore.getState().appEvents.settings?.background).toBe(1);
+  });
 });
