@@ -49,6 +49,17 @@ export interface FinishCardDismissResult {
   appId: string | null;
 }
 
+export interface AppEventNonces {
+  /** New-launch count (fresh start or after kill). */
+  launch: number;
+  /** Resume count (foreground from background). */
+  resume: number;
+  /** Background count (foreground → background). */
+  background: number;
+  /** Kill count (swiped away). */
+  kill: number;
+}
+
 export interface AppRuntimeState {
   activeAppId: string | null;
   appOrigin: AppOrigin | null;
@@ -74,6 +85,9 @@ export interface AppRuntimeState {
    *  Set when user swipes up during entrance animation. */
   switcherDismissing: boolean;
   statusBarStyle: StatusBarStyle;
+  /** Monotonically increasing lifecycle event nonces per app. Hooks
+   *  subscribe via useEffect on the relevant nonce field. */
+  appEvents: Record<string, AppEventNonces>;
   setStatusBarStyle: (style: StatusBarStyle) => void;
   openApp: (id: string, origin: AppOrigin | null) => void;
   activateApp: (id: string, source?: AppTransitionSource) => void;
@@ -131,6 +145,20 @@ function resetCardDismissState() {
   };
 }
 
+// Internal helper used by openApp / activateApp / goHome / exitAppToHome /
+// removeApp to maintain per-app lifecycle nonces. Exported for tests.
+export function bumpEvent(
+  events: Record<string, AppEventNonces>,
+  id: string,
+  kind: keyof AppEventNonces,
+): Record<string, AppEventNonces> {
+  const prev = events[id] ?? { launch: 0, resume: 0, background: 0, kill: 0 };
+  return {
+    ...events,
+    [id]: { ...prev, [kind]: prev[kind] + 1 },
+  };
+}
+
 export const useAppRuntimeStore = create<AppRuntimeState>()((set, get) => ({
   activeAppId: null,
   appOrigin: null,
@@ -145,6 +173,7 @@ export const useAppRuntimeStore = create<AppRuntimeState>()((set, get) => ({
   switcherEnterAnimating: false,
   switcherDismissing: false,
   statusBarStyle: 'dark',
+  appEvents: {},
   setStatusBarStyle: (style) => set({ statusBarStyle: style }),
   cardDismiss: {
     appId: null,
