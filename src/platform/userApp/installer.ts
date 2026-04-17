@@ -1,5 +1,5 @@
 import JSZip from 'jszip';
-import type { ComponentType } from 'react';
+import React, { type ComponentType } from 'react';
 import { appRegistry } from '@/platform/appRegistry';
 import {
   useInstalledUserAppsStore,
@@ -13,7 +13,7 @@ import {
   APP_KV_BY_APP_INDEX,
 } from '@/platform/storage/idbStorage';
 import { compileTsx } from './compiler';
-import { executeSandboxed } from './sandbox';
+import { createUserAppRuntime } from './moduleResolver';
 import { resolveModule } from './sdk';
 import { wrapUserComponent } from './sdk/wrap';
 import { validateManifest, type UserAppManifest, ManifestError } from './manifest';
@@ -266,10 +266,18 @@ function buildUserAppComponent(
   manifest: UserAppManifest,
   compiledMap: Record<string, string>,
 ): ComponentType {
-  const code = compiledMap[manifest.entry];
-  if (!code) throw new Error(`entry file "${manifest.entry}" missing in compiledMap`);
-  const Raw = executeSandboxed(code, resolveModule);
-  return wrapUserComponent(Raw);
+  // Defer createUserAppRuntime execution until first render so that
+  // missing-import errors surface at open-time (not install-time).
+  // The UserAppErrorBoundary inside wrapUserComponent will catch and
+  // display the error gracefully if the runtime throws on first render.
+  let cache: ComponentType | null = null;
+  const LazyRaw: ComponentType = function LazyUserApp() {
+    if (!cache) {
+      cache = createUserAppRuntime(compiledMap, manifest.entry, resolveModule);
+    }
+    return React.createElement(cache);
+  };
+  return wrapUserComponent(LazyRaw);
 }
 
 function toMessage(err: unknown): string {

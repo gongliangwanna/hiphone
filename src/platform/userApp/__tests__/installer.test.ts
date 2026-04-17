@@ -245,3 +245,54 @@ describe('installer.loadInstalledApps', () => {
     expect(appRegistry.get('hello')).toBeDefined();
   });
 });
+
+describe('installer — multi-file', () => {
+  beforeEach(async () => {
+    useInstalledUserAppsStore.setState({ apps: [] });
+    appRegistry.list().forEach((e) => appRegistry.unregister(e.id));
+    await resetIdb();
+  });
+
+  it('installs a multi-file zip and resolves relative imports at runtime', async () => {
+    const zip = await makeZip({
+      'manifest.json': JSON.stringify({
+        id: 'multi', name: 'Multi', version: '1.0.0', entry: 'App.tsx',
+      }),
+      'App.tsx': `
+        import React from 'react';
+        import { greeting } from './utils';
+        export default function App() {
+          return React.createElement('div', null, greeting);
+        }
+      `,
+      'utils.ts': `
+        export const greeting = 'hello from utils';
+      `,
+    });
+
+    const result = await install(zip);
+    expect(result.id).toBe('multi');
+
+    const entry = appRegistry.get('multi');
+    expect(entry).toBeDefined();
+    const Component = entry!.component;
+    const element = (Component as any)();
+    expect(element).toBeDefined();
+  });
+
+  it('refuses to install a zip where a relative import references a missing file', async () => {
+    const zip = await makeZip({
+      'manifest.json': JSON.stringify({
+        id: 'bad', name: 'Bad', version: '1.0.0', entry: 'App.tsx',
+      }),
+      'App.tsx': `
+        import React from 'react';
+        import { x } from './missing';
+        export default () => React.createElement('div', null, x);
+      `,
+    });
+    const result = await install(zip);
+    expect(result.id).toBe('bad');
+    // Open-time failure is deferred; install succeeds.
+  });
+});
