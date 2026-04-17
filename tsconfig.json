@@ -22,5 +22,8 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": [
+    "src/platform/userApp/__tests__/fixtures"
+  ]
 }

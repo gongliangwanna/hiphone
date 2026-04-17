@@ -1,0 +1,8 @@
+{
+  "id": "test-todo",
+  "name": "测试待办",
+  "version": "1.0.0",
+  "entry": "App.tsx",
+  "icon": "icon.png",
+  "perspectiveAware": true
+}
