@@ -17,6 +17,7 @@ import { createUserAppRuntime } from './moduleResolver';
 import { resolveModule } from './sdk';
 import { wrapUserComponent } from './sdk/wrap';
 import { validateManifest, type UserAppManifest, ManifestError } from './manifest';
+import { migrateS3ToS4Owner } from './migrations';
 
 export type InstallErrorKind =
   | 'bad-zip'
@@ -201,6 +202,8 @@ export async function uninstall(appId: string): Promise<void> {
 }
 
 export async function loadInstalledApps(): Promise<void> {
+  await migrateS3ToS4Owner();
+
   const db = await getDB();
 
   const metas = await new Promise<Array<{ id: string; meta: AppMeta }>>(
