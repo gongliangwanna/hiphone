@@ -14,12 +14,18 @@
 // ---------------------------------------------------------------------------
 
 const DB_NAME = 'hiPhone-storage';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_NAME = 'kv';
 
 // Per-record object stores (added in v2)
 export const MESSAGES_STORE = 'messages';
 export const MOMENTS_STORE = 'moments';
+
+// User-app storage (added in v3)
+export const APP_META_STORE = 'app-meta';
+export const APP_SRC_STORE = 'app-src';
+export const APP_KV_STORE = 'app-kv';
+export const APP_KV_BY_APP_INDEX = 'by-app-id';
 
 // ---------------------------------------------------------------------------
 // Cached connection — one IDBDatabase instance shared across all stores
@@ -44,6 +50,17 @@ export function getDB(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(MOMENTS_STORE)) {
         db.createObjectStore(MOMENTS_STORE, { keyPath: 'id' });
+      }
+      // v3: User app storage
+      if (!db.objectStoreNames.contains(APP_META_STORE)) {
+        db.createObjectStore(APP_META_STORE); // key = appId
+      }
+      if (!db.objectStoreNames.contains(APP_SRC_STORE)) {
+        db.createObjectStore(APP_SRC_STORE); // key = appId
+      }
+      if (!db.objectStoreNames.contains(APP_KV_STORE)) {
+        const kvStore = db.createObjectStore(APP_KV_STORE); // key = full key string
+        kvStore.createIndex(APP_KV_BY_APP_INDEX, 'appId', { unique: false });
       }
     };
     req.onsuccess = () => {
