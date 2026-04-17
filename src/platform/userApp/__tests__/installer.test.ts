@@ -339,7 +339,7 @@ describe('installer — end-to-end with storage', () => {
     await new Promise((r) => setTimeout(r, 50));
 
     const { appStorageGet } = await import('../appStorage');
-    const record = await appStorageGet('storage-test', 'storage-test:greeting');
+    const record = await appStorageGet('storage-test', 'storage-test:owner:me:greeting');
     expect((record as { value?: unknown })?.value).toBe('hi');
   });
 });
