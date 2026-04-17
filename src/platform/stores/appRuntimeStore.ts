@@ -88,6 +88,8 @@ export interface AppRuntimeState {
   /** Monotonically increasing lifecycle event nonces per app. Hooks
    *  subscribe via useEffect on the relevant nonce field. */
   appEvents: Record<string, AppEventNonces>;
+  /** Deep-link parameters by appId. M2 reads only; M3 @hiphone/nav.open writes. */
+  openParams: Record<string, Record<string, unknown> | null>;
   setStatusBarStyle: (style: StatusBarStyle) => void;
   openApp: (id: string, origin: AppOrigin | null) => void;
   activateApp: (id: string, source?: AppTransitionSource) => void;
@@ -174,6 +176,7 @@ export const useAppRuntimeStore = create<AppRuntimeState>()((set, get) => ({
   switcherDismissing: false,
   statusBarStyle: 'dark',
   appEvents: {},
+  openParams: {},
   setStatusBarStyle: (style) => set({ statusBarStyle: style }),
   cardDismiss: {
     appId: null,
