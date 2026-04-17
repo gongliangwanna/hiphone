@@ -67,4 +67,23 @@ describe('appRuntimeStore — lifecycle nonces', () => {
     expect(after?.launch).toBe(before?.launch);
     expect(after?.resume).toBe(before?.resume);
   });
+
+  it('activateApp (from switcher) on backgrounded app emits resume', () => {
+    useAppRuntimeStore.getState().openApp('settings', null);
+    useAppRuntimeStore.getState().goHome();
+    useAppRuntimeStore.getState().activateApp('settings');
+
+    const ev = useAppRuntimeStore.getState().appEvents.settings;
+    expect(ev?.launch).toBe(1);
+    expect(ev?.resume).toBe(1);
+  });
+
+  it('activateApp after kill emits launch', () => {
+    useAppRuntimeStore.getState().openApp('settings', null);
+    useAppRuntimeStore.getState().removeApp('settings');
+    useAppRuntimeStore.getState().activateApp('settings');
+
+    const ev = useAppRuntimeStore.getState().appEvents.settings;
+    expect(ev?.launch).toBe(2);
+  });
 });
