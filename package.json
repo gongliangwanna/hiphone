@@ -23,6 +23,7 @@
     "@tiptap/starter-kit": "^3.22.3",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "jszip": "^3.10.1",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.7.0",
     "lunar-javascript": "^1.7.7",
