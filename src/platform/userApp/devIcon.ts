@@ -17,7 +17,7 @@ import { FAKE_USER_APP_ID, FAKE_USER_APP_SOURCE } from './fakeUserApp';
  * - App.tsx: call `mountFakeUserAppIfDev()` (DEV-only)
  */
 export async function mountFakeUserApp(): Promise<void> {
-  const compiled = await compileTsx(FAKE_USER_APP_SOURCE);
+  const compiled = await compileTsx(FAKE_USER_APP_SOURCE, 'fake-user-app.tsx');
   const RawComponent = executeSandboxed(compiled, resolveModule);
   const WrappedComponent = wrapUserComponent(RawComponent);
 

@@ -50,4 +50,30 @@ export default function App() {
     const bad = `export default function Broken({ { { `;
     await expect(compileTsx(bad)).rejects.toThrow();
   });
+
+  it('emits inline source map (sourceMappingURL)', async () => {
+    const compiled = await compileTsx(`
+import React from 'react';
+export default function App() {
+  return <div>hi</div>;
+}
+    `);
+
+    // Source map is appended as a base64 data URL comment at the end.
+    expect(compiled).toMatch(/\/\/# sourceMappingURL=data:application\/json;base64,/);
+  });
+
+  it('uses the provided filePath in the source map', async () => {
+    const compiled = await compileTsx(
+      `export default function App() { return null; }`,
+      'my-todo.tsx',
+    );
+
+    const match = compiled.match(/sourceMappingURL=data:application\/json;base64,(.+)/);
+    expect(match).not.toBeNull();
+    // Decode the map and check sources field mentions our filePath
+    const mapJson = atob(match![1]!.trim());
+    const map = JSON.parse(mapJson);
+    expect(map.sources?.some((s: string) => s.includes('my-todo'))).toBe(true);
+  });
 });
