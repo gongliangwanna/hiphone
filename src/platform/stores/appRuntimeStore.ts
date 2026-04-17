@@ -145,9 +145,9 @@ function resetCardDismissState() {
   };
 }
 
-// Internal helper used by openApp / activateApp / goHome / exitAppToHome /
-// removeApp to maintain per-app lifecycle nonces. Exported for tests.
-export function bumpEvent(
+// Internal helper. Returns a new appEvents map with events[id][kind]
+// incremented by 1 (creating the entry if absent). Immutable at both levels.
+function bumpEvent(
   events: Record<string, AppEventNonces>,
   id: string,
   kind: keyof AppEventNonces,
