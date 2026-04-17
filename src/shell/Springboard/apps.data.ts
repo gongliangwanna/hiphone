@@ -73,6 +73,18 @@ const cnApps: AppInfo[] = [
   { id: 'gomoku', name: '五子棋', icon: `${CN_ICON_BASE}/gomoku.svg`, page: 1 },
 ];
 
+// [DEV] Fake user app icon — for M1 pipeline verification. In production
+// builds, import.meta.env.DEV is false and Vite's dead-code elimination
+// drops this entry entirely.
+if (import.meta.env.DEV) {
+  cnApps.push({
+    id: 'dev-fake-user-app',
+    name: '[DEV] 假用户 app',
+    icon: `${SYSTEM_ICON_BASE}/tips.jpg`,
+    page: 1,
+  });
+}
+
 /** Dock apps — fixed 4 slots */
 const dockApps: AppInfo[] = [
   { id: 'phone', name: '电话', icon: `${SYSTEM_ICON_BASE}/phone.jpg`, page: 0, isDock: true },
