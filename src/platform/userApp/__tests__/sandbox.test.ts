@@ -44,9 +44,9 @@ export default function App() {
   });
 
   it('resolver errors propagate', async () => {
-    // Sucrase `imports` transform tree-shakes unused specifiers in
-    // `production` mode, so the binding must be referenced for the
-    // `require('does-not-exist')` call to be emitted at module init.
+    // Sucrase's `imports` transform drops named imports whose bindings are
+    // never referenced (the whole require() call is elided). Reference
+    // `missing` in the body so require('does-not-exist') is emitted.
     const compiled = await compileTsx(`
 import { missing } from 'does-not-exist';
 export default function App() { return missing; }
@@ -86,5 +86,32 @@ export default function App() {
     const App = executeSandboxed(compiled, makeResolver({ react: React }));
     const rendered = (App as React.FC)({});
     expect(React.isValidElement(rendered)).toBe(true);
+  });
+
+  it('wraps module-init errors with context + preserves cause', async () => {
+    const compiled = await compileTsx(`
+export default function App() { return null; }
+throw new Error('boom');
+    `);
+
+    try {
+      executeSandboxed(compiled, makeResolver({}));
+      throw new Error('expected executeSandboxed to throw');
+    } catch (err) {
+      expect(err).toBeInstanceOf(Error);
+      expect((err as Error).message).toContain('User app module initialization failed');
+      expect((err as Error).message).toContain('boom');
+      // ES2022 cause chain preserves the original error
+      expect((err as Error & { cause?: unknown }).cause).toBeInstanceOf(Error);
+      expect(((err as Error & { cause?: Error }).cause as Error).message).toBe('boom');
+    }
+  });
+
+  it('throws the platform error when default export is not a function', async () => {
+    // Hand-written CJS (not Sucrase output) — directly assigns non-function.
+    const handWritten = 'module.exports.default = 42;';
+    expect(() => executeSandboxed(handWritten, () => null)).toThrow(
+      /did not export a default component/,
+    );
   });
 });

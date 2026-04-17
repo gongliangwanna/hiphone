@@ -54,13 +54,29 @@ export function executeSandboxed(
     compiledCode,
   );
 
-  fn(
-    ...shadowedValues,
-    moduleObj,
-    moduleObj.exports,
-    require,
-    React,
-  );
+  try {
+    fn(
+      ...shadowedValues,
+      moduleObj,
+      moduleObj.exports,
+      require,
+      React,
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    // ES2022 `{ cause }` — runtime is modern (Node 16.9+, evergreen
+    // browsers); tsconfig lib is ES2020 so the 2-arg Error() overload
+    // isn't in the type surface. Construct via typed ctor cast so we
+    // pass the options at construction time (same as ES2022 semantics).
+    const ErrorWithCause = Error as new (
+      message?: string,
+      options?: { cause?: unknown },
+    ) => Error;
+    throw new ErrorWithCause(
+      `User app module initialization failed: ${message}`,
+      { cause: err },
+    );
+  }
 
   const Component = moduleObj.exports.default;
   if (typeof Component !== 'function') {
