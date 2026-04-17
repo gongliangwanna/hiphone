@@ -1,5 +1,5 @@
 import { render, cleanup } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { wrapUserComponent } from '../wrap';
 
 describe('wrapUserComponent', () => {
@@ -28,13 +28,19 @@ describe('wrapUserComponent', () => {
     expect(() => wrapUserComponent(UserApp)).not.toThrow();
   });
 
-  it('forwards no-op when user component throws — error bubbles', () => {
+  it('catches render errors and shows the error boundary fallback', () => {
+    // Suppress React's own error logging (it's noisy when the boundary catches)
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
     function BrokenApp(): null {
       throw new Error('user code boom');
     }
     const Wrapped = wrapUserComponent(BrokenApp);
 
-    // React 19 logs errors from render — we expect the render to throw.
-    expect(() => render(<Wrapped />)).toThrow();
+    const { container } = render(<Wrapped />);
+    expect(container.textContent).toContain('App crashed');
+    expect(container.textContent).toContain('user code boom');
+
+    spy.mockRestore();
   });
 });

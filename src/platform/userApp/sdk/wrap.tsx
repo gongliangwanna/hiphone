@@ -1,8 +1,10 @@
 import type { ComponentType } from 'react';
 import { AppScreen } from '@/system';
+import { UserAppErrorBoundary } from './errorBoundary';
 
 /**
- * Wrap a user-app component with the system AppScreen shell.
+ * Wrap a user-app component with the system AppScreen shell + an
+ * ErrorBoundary so render exceptions don't crash the whole phone.
  *
  * Rationale: user-app authors shouldn't need to know about iOS safe
  * areas, status-bar styling, or AppScreen itself. The system auto-wraps
@@ -17,7 +19,9 @@ export function wrapUserComponent(UserComp: ComponentType): ComponentType {
   return function WrappedUserApp() {
     return (
       <AppScreen>
-        <UserComp />
+        <UserAppErrorBoundary>
+          <UserComp />
+        </UserAppErrorBoundary>
       </AppScreen>
     );
   };
