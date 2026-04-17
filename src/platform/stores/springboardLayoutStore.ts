@@ -233,11 +233,22 @@ export function pageAppCapacity(widgets: WidgetInstance[] | undefined): number {
  * so that app icons can backfill the leftover cells. App ids missing from
  * the registry are filtered, and newly-added apps are appended to the last
  * page (respecting the remaining capacity after widgets).
+ *
+ * @param extraApps - Dynamically-installed user apps to merge into the lookup
+ * map alongside the static builtins. Passed by Springboard so user-installed
+ * apps appear on the grid without a page reload.
  */
 export function resolveSlotPages(
   appOrder: string[][] | null,
   pageWidgets: WidgetInstance[][] | null,
+  extraApps: AppInfo[] = [],
 ): Slot[][] {
+  // Build a merged lookup map: builtins + any dynamically-installed user apps.
+  const lookupMap: Map<string, AppInfo> =
+    extraApps.length > 0
+      ? new Map([...appInfoMap, ...extraApps.map((a) => [a.id, a] as [string, AppInfo])])
+      : appInfoMap;
+
   // First, compute app-only pages. Widgets reduce the app capacity of
   // each page, so we need to slice carefully instead of hard-coding PAGE_SIZE.
   const widgetsByPage: WidgetInstance[][] = pageWidgets ?? [];
@@ -263,7 +274,7 @@ export function resolveSlotPages(
     if (rawAppPages.length === 0) rawAppPages = [[]];
   } else {
     // Keep user's page structure but filter to valid ids
-    rawAppPages = appOrder.map((page) => page.filter((id) => appInfoMap.has(id)));
+    rawAppPages = appOrder.map((page) => page.filter((id) => lookupMap.has(id)));
   }
 
   // Dedup app ids across pages (earlier pages win)
@@ -279,9 +290,13 @@ export function resolveSlotPages(
     return out;
   });
 
-  // Append new apps (not yet placed) into pages that still have capacity
+  // Append new apps (not yet placed) into pages that still have capacity.
+  // Include both builtins (defaultApps) and dynamically-installed user apps.
+  const unseenSources = extraApps.length > 0
+    ? [...defaultApps, ...extraApps.filter((a) => !defaultApps.some((d) => d.id === a.id))]
+    : defaultApps;
   const unseen: string[] = [];
-  for (const app of defaultApps) {
+  for (const app of unseenSources) {
     if (!seen.has(app.id)) unseen.push(app.id);
   }
   for (let p = 0; p < dedupedAppPages.length && unseen.length > 0; p++) {
@@ -316,7 +331,7 @@ export function resolveSlotPages(
     }
     const appIds = dedupedAppPages[p] ?? [];
     for (const id of appIds) {
-      const info = appInfoMap.get(id);
+      const info = lookupMap.get(id);
       if (info) slots.push({ type: 'app', app: info });
     }
     result.push(slots);

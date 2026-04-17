@@ -1,4 +1,5 @@
 import { FAKE_USER_APP_ID, FAKE_USER_APP_NAME } from '@/platform/userApp/fakeUserApp';
+import { useInstalledUserAppsStore } from '@/platform/stores/installedUserAppsStore';
 
 export interface AppInfo {
   id: string;
@@ -118,3 +119,21 @@ export const wallpapers = [
   { id: 'ios-26-stock-06', src: '/resource/wallpapers/ios/ios-26-stock-06.png' },
   { id: 'ios-26-stock-07', src: '/resource/wallpapers/ios/ios-26-stock-07.png' },
 ];
+
+const DEFAULT_USER_APP_ICON = `${SYSTEM_ICON_BASE}/tips.jpg`;
+
+/**
+ * Combine builtin apps with installed user apps. Used by Springboard
+ * instead of the static `apps` export so installs/uninstalls reflect
+ * on the desktop without a page reload.
+ */
+export function getAppsWithUserInstalled(): AppInfo[] {
+  const userApps = useInstalledUserAppsStore.getState().apps;
+  const userInfos: AppInfo[] = userApps.map((u) => ({
+    id: u.id,
+    name: u.name,
+    icon: u.iconDataUrl ?? DEFAULT_USER_APP_ICON,
+    page: u.page,
+  }));
+  return [...apps, ...userInfos];
+}

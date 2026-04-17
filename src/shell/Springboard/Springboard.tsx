@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { dock, type AppInfo } from './apps.data';
+import { dock, type AppInfo, getAppsWithUserInstalled } from './apps.data';
+import { useInstalledUserAppsStore } from '@/platform/stores/installedUserAppsStore';
 import { IconGrid, type AppDragPreview, type WidgetDragPreview } from './IconGrid';
 import { Dock } from './Dock';
 import { PageIndicator } from './PageIndicator';
@@ -29,6 +30,10 @@ export function Springboard({ sizeTier, viewportWidth }: SpringboardProps) {
   const openApp = useAppRuntimeStore((s) => s.openApp);
   const hideIconImages = usePerfDebugStore((s) => s.hideIconImages);
 
+  // Re-render when user apps change (subscription side-effect only)
+  useInstalledUserAppsStore((s) => s.apps);
+  const apps = getAppsWithUserInstalled();
+
   // Layout store
   const appOrder = useSpringboardLayoutStore((s) => s.appOrder);
   const pageWidgets = useSpringboardLayoutStore((s) => s.pageWidgets);
@@ -40,9 +45,10 @@ export function Springboard({ sizeTier, viewportWidth }: SpringboardProps) {
 
   // Resolve unified slot pages, then split into parallel app / widget views.
   // The drag system only touches apps; widgets render in-place via CSS grid span.
+  // Pass `apps` so user-installed apps appear alongside builtins.
   const slotPages = useMemo(
-    () => resolveSlotPages(appOrder, pageWidgets),
-    [appOrder, pageWidgets],
+    () => resolveSlotPages(appOrder, pageWidgets, apps),
+    [appOrder, pageWidgets, apps],
   );
   const appPages = useMemo<AppInfo[][]>(
     () =>
