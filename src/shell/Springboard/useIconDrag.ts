@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useMotionValue, animate as motionAnimate } from 'motion/react';
 import type { AppInfo } from './apps.data';
 import type { SpringboardMetrics } from '../Device/viewportProfile';
+import { spring } from '@/platform/design-tokens/motion';
 import {
   clampOrigin,
   packPage,
@@ -179,10 +181,12 @@ export function useIconDrag({
     _setWidgetDropPos(v);
   };
 
-  // Shared overlay coordinates (relative to gesture area). Only one entity
-  // can be dragged at a time, so we reuse a single (x, y) pair.
-  const [dragX, setDragX] = useState(0);
-  const [dragY, setDragY] = useState(0);
+  // Shared overlay coordinates (relative to gesture area). Using MotionValues
+  // so position updates bypass React re-renders — the DragOverlay reads these
+  // via style={{ x, y }} and the DOM updates directly.
+  const dragX = useMotionValue(0);
+  const dragY = useMotionValue(0);
+  const settleAnimsRef = useRef<Array<ReturnType<typeof motionAnimate>>>([]);
 
   const pointerRef = useRef<PointerState | null>(null);
   const autoScrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -233,13 +237,17 @@ export function useIconDrag({
   }, [overlayLingering]);
 
   const onSettleComplete = useCallback(() => {
+    // Stop any lingering settle springs.
+    for (const a of settleAnimsRef.current) a.stop();
+    settleAnimsRef.current = [];
+
     // Snapshot the overlay's appearance before clearing state.
     const app = dragPos ? pages[dragPos.page]?.[dragPos.localIndex] ?? null : null;
     if (app) {
       overlayLingerRef.current = {
         icon: app.icon,
-        x: dragX,
-        y: dragY,
+        x: dragX.get(),
+        y: dragY.get(),
         size: metrics.iconSize,
       };
     }
@@ -252,6 +260,11 @@ export function useIconDrag({
     // in the same frame that the main overlay unmounts.
     setOverlayLingering(true);
   }, [resetAllState, dragPos, pages, dragX, dragY, metrics.iconSize]);
+
+  // Ref for the settle callback — the imperative motionAnimate onComplete
+  // closure captures this ref, so it always calls the latest version.
+  const settleCallbackRef = useRef(onSettleComplete);
+  settleCallbackRef.current = onSettleComplete;
 
   const onDragStart = useCallback(
     (pageIndex: number, localIndex: number, e: React.PointerEvent<HTMLElement>) => {
@@ -281,8 +294,8 @@ export function useIconDrag({
       };
       dragKindRef.current = 'app';
 
-      setDragX(iconRect.left - areaRect.left);
-      setDragY(iconRect.top - areaRect.top);
+      dragX.set(iconRect.left - areaRect.left);
+      dragY.set(iconRect.top - areaRect.top);
       setDragPos({ page: pageIndex, localIndex });
       setDropPos({ page: pageIndex, localIndex });
 
@@ -330,8 +343,8 @@ export function useIconDrag({
       };
       dragKindRef.current = 'widget';
 
-      setDragX(shellRect.left - areaRect.left);
-      setDragY(shellRect.top - areaRect.top);
+      dragX.set(shellRect.left - areaRect.left);
+      dragY.set(shellRect.top - areaRect.top);
       setWidgetDrag({ widget, fromPage: pageIndex });
       setWidgetDropPos({ page: pageIndex, col: widget.col, row: widget.row });
 
@@ -357,8 +370,8 @@ export function useIconDrag({
 
       const newX = e.clientX - areaRect.left - ptr.offsetX;
       const newY = e.clientY - areaRect.top - ptr.offsetY;
-      setDragX(newX);
-      setDragY(newY);
+      dragX.set(newX);
+      dragY.set(newY);
 
       const cp = currentPageRef.current;
 
@@ -391,7 +404,11 @@ export function useIconDrag({
           metrics,
           viewportWidth,
         );
-        setDropPos(target);
+        // Only trigger re-render when the target cell actually changes.
+        const prev = dropPosRef.current;
+        if (!prev || prev.page !== target.page || prev.localIndex !== target.localIndex) {
+          setDropPos(target);
+        }
       } else if (kind === 'widget' && widgetDragRef.current) {
         // Widget drop origin is computed from the ghost's top-left corner.
         const target = getWidgetDropTarget(
@@ -401,7 +418,10 @@ export function useIconDrag({
           metrics,
           viewportWidth,
         );
-        setWidgetDropPos({ page: cp, col: target.col, row: target.row });
+        const prev = widgetDropRef.current;
+        if (!prev || prev.page !== cp || prev.col !== target.col || prev.row !== target.row) {
+          setWidgetDropPos({ page: cp, col: target.col, row: target.row });
+        }
       }
 
       // Edge detection for auto-scroll (shared for both kinds)
@@ -496,10 +516,17 @@ export function useIconDrag({
           // inside the AppIcon button. The icon image sits centered
           // horizontally in the grid column and 4px below the cell top
           // (the button's paddingTop).
-          setDragX(
-            sidePadding + tp.col * colWidth + (colWidth - metrics.iconSize) / 2,
-          );
-          setDragY(metrics.springboardTopPadding + tp.row * rowH + 4);
+          const targetX = sidePadding + tp.col * colWidth + (colWidth - metrics.iconSize) / 2;
+          const targetY = metrics.springboardTopPadding + tp.row * rowH + 4;
+          const settleSpring = { type: 'spring' as const, ...spring.interactive };
+          for (const a of settleAnimsRef.current) a.stop();
+          settleAnimsRef.current = [
+            motionAnimate(dragX, targetX, {
+              ...settleSpring,
+              onComplete: () => settleCallbackRef.current(),
+            }),
+            motionAnimate(dragY, targetY, settleSpring),
+          ];
           setIsSettling(true);
         } else {
           // Couldn't compute target — commit immediately
@@ -532,8 +559,17 @@ export function useIconDrag({
           pointerRef.current = null;
           dragKindRef.current = null;
 
-          setDragX(sidePadding + drop.col * colWidth);
-          setDragY(metrics.springboardTopPadding + drop.row * rowH);
+          const targetX = sidePadding + drop.col * colWidth;
+          const targetY = metrics.springboardTopPadding + drop.row * rowH;
+          const settleSpring = { type: 'spring' as const, ...spring.interactive };
+          for (const a of settleAnimsRef.current) a.stop();
+          settleAnimsRef.current = [
+            motionAnimate(dragX, targetX, {
+              ...settleSpring,
+              onComplete: () => settleCallbackRef.current(),
+            }),
+            motionAnimate(dragY, targetY, settleSpring),
+          ];
           setIsSettling(true);
         }
       } else {
@@ -542,7 +578,7 @@ export function useIconDrag({
     } else {
       resetAllState();
     }
-  }, [moveApp, moveWidget, clearAutoScroll, resetAllState, metrics, viewportWidth, pages, widgetPages]);
+  }, [moveApp, moveWidget, clearAutoScroll, resetAllState, metrics, viewportWidth, pages, widgetPages, dragX, dragY]);
 
   const onPointerUp = useCallback(
     (e: React.PointerEvent<HTMLElement>) => {
@@ -558,16 +594,23 @@ export function useIconDrag({
       const ptr = pointerRef.current;
       if (!ptr || e.pointerId !== ptr.pointerId) return;
       clearAutoScroll();
+      for (const a of settleAnimsRef.current) a.stop();
+      settleAnimsRef.current = [];
       resetAllState();
     },
     [clearAutoScroll, resetAllState],
   );
 
+  // Clean up settle animations on unmount.
+  useEffect(() => () => {
+    for (const a of settleAnimsRef.current) a.stop();
+  }, []);
+
   // Expose state for rendering (state, not ref — React needs the re-render)
   const dragApp = dragPos ? pages[dragPos.page]?.[dragPos.localIndex] ?? null : null;
 
   return {
-    // Shared overlay coordinates
+    // Shared overlay coordinates (MotionValues — no re-render on position change)
     dragX,
     dragY,
     // App drag
@@ -579,9 +622,8 @@ export function useIconDrag({
     widgetDrag,
     widgetDropPos,
     onWidgetDragStart,
-    // Widget settle animation
+    // Settle animation (position driven by imperative motionAnimate)
     isSettling,
-    onSettleComplete,
     // Overlay linger (static snapshot shown for 1 frame after settle)
     overlayLingering,
     overlayLingerData: overlayLingerRef.current,

@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { motion } from 'motion/react';
+import { motion, type MotionValue } from 'motion/react';
 import type { SpringboardMetrics } from '../Device/viewportProfile';
 import {
   WIDGET_COL_SPAN,
@@ -13,19 +13,16 @@ interface WidgetDragOverlayProps {
   widget: WidgetInstance;
   metrics: SpringboardMetrics;
   viewportWidth: number;
-  x: number;
-  y: number;
+  /** MotionValue — position updates bypass React re-render. */
+  x: MotionValue<number>;
+  y: MotionValue<number>;
   /** True while the overlay is animating to the target grid cell. */
   isSettling?: boolean;
-  /** Fired when the settle spring animation completes. */
-  onSettleComplete?: () => void;
 }
 
 const COLS = 4;
 
-/** Instant positioning for finger-following during drag. */
-const DRAG_TRANSITION = { duration: 0 };
-/** Spring for the settle animation (drag release → grid snap). */
+/** Spring for the scale settle animation (drag release → grid snap). */
 const SETTLE_TRANSITION = { type: 'spring' as const, ...spring.interactive };
 
 /**
@@ -35,9 +32,8 @@ const SETTLE_TRANSITION = { type: 'spring' as const, ...spring.interactive };
  * rowH × rowSpan) so the drop origin computed from the ghost's top-left
  * corner matches what the user sees under their finger.
  *
- * When `isSettling` is true, the overlay springs from its drag-release
- * position to the computed target grid cell, then fires `onSettleComplete`
- * so the caller can remove the overlay and reveal the placed widget.
+ * Position is driven by MotionValues — the hook animates them
+ * imperatively (instant during drag, spring during settle).
  */
 export const WidgetDragOverlay = memo(function WidgetDragOverlay({
   widget,
@@ -46,7 +42,6 @@ export const WidgetDragOverlay = memo(function WidgetDragOverlay({
   x,
   y,
   isSettling = false,
-  onSettleComplete,
 }: WidgetDragOverlayProps) {
   const Component = getWidgetComponent(widget.kind);
   if (!Component) return null;
@@ -60,14 +55,11 @@ export const WidgetDragOverlay = memo(function WidgetDragOverlay({
   return (
     <motion.div
       className="pointer-events-none absolute left-0 top-0 z-50"
-      animate={{
+      animate={{ scale: isSettling ? 1 : 1.03 }}
+      transition={SETTLE_TRANSITION}
+      style={{
         x,
         y,
-        scale: isSettling ? 1 : 1.03,
-      }}
-      transition={isSettling ? SETTLE_TRANSITION : DRAG_TRANSITION}
-      onAnimationComplete={isSettling ? onSettleComplete : undefined}
-      style={{
         width: `${cellW * cs}px`,
         height: `${contentHeight * rs + metrics.gridGapY * (rs - 1)}px`,
         padding: 4,

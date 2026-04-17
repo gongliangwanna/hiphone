@@ -9,6 +9,11 @@ const MOVE_THRESHOLD = 10; // px
  * Listens on `window` for pointer-move so that `setPointerCapture`
  * on a parent element cannot suppress the movement check.
  *
+ * Also dynamically registers a global `pointerup`/`pointercancel`
+ * listener while the timer is active, ensuring cancel even when a
+ * parent element has captured the pointer (setPointerCapture
+ * redirects element-level pointerup but not window-level listeners).
+ *
  * - Fires `callback` after `delay` ms of holding without moving > threshold.
  * - Moving > 10px cancels the long-press.
  * - Releasing before the timer cancels it.
@@ -24,6 +29,17 @@ export function useLongPress(
   const firedRef = useRef(false);
   const eventRef = useRef<React.PointerEvent<HTMLElement> | null>(null);
   const pointerIdRef = useRef<number | null>(null);
+  /** Dynamic global pointerup/pointercancel handler, registered only while
+   *  the timer is active. At most one instance exists at a time. */
+  const globalUpRef = useRef<((e: PointerEvent) => void) | null>(null);
+
+  const removeGlobalUp = useCallback(() => {
+    if (globalUpRef.current) {
+      window.removeEventListener('pointerup', globalUpRef.current);
+      window.removeEventListener('pointercancel', globalUpRef.current);
+      globalUpRef.current = null;
+    }
+  }, []);
 
   const cancel = useCallback(() => {
     if (timerRef.current !== null) {
@@ -32,7 +48,8 @@ export function useLongPress(
     }
     startPosRef.current = null;
     pointerIdRef.current = null;
-  }, []);
+    removeGlobalUp();
+  }, [removeGlobalUp]);
 
   // Global pointer-move listener — works even when pointer is captured elsewhere
   useEffect(() => {
@@ -51,18 +68,35 @@ export function useLongPress(
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent<HTMLElement>) => {
+      // Clean up any lingering global listener from a previous press.
+      removeGlobalUp();
+
       firedRef.current = false;
       startPosRef.current = { x: e.clientX, y: e.clientY };
       pointerIdRef.current = e.pointerId;
       eventRef.current = e;
+
+      // Dynamic global pointerup/pointercancel — ensures cancel even when a
+      // parent steals pointer capture. Only alive while the timer is pending,
+      // so at most 2 listeners exist (pointerup + pointercancel) at any time.
+      const pid = e.pointerId;
+      const handler = (ue: PointerEvent) => {
+        if (ue.pointerId !== pid) return;
+        cancel();
+      };
+      globalUpRef.current = handler;
+      window.addEventListener('pointerup', handler);
+      window.addEventListener('pointercancel', handler);
+
       timerRef.current = setTimeout(() => {
         timerRef.current = null;
         firedRef.current = true;
         if (eventRef.current) callback(eventRef.current);
         pointerIdRef.current = null;
+        removeGlobalUp();
       }, delay);
     },
-    [callback, delay],
+    [callback, delay, cancel, removeGlobalUp],
   );
 
   const onPointerUp = useCallback(() => {
@@ -87,6 +121,10 @@ export function useLongPress(
     onPointerUp,
     onPointerCancel,
     onClick,
+    /** Imperatively cancel a pending long-press timer. Call this when the
+     *  element-level onPointerUp cannot be relied upon (e.g. a parent steals
+     *  pointer capture via setPointerCapture). */
+    cancel,
     firedRef,
   };
 }

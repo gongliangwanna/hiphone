@@ -247,7 +247,6 @@ export function Springboard({ sizeTier, viewportWidth }: SpringboardProps) {
             y={iconDrag.dragY}
             hideIconImages={hideIconImages}
             isSettling={iconDrag.isSettling}
-            onSettleComplete={iconDrag.onSettleComplete}
           />
         )}
 
@@ -291,7 +290,6 @@ export function Springboard({ sizeTier, viewportWidth }: SpringboardProps) {
             x={iconDrag.dragX}
             y={iconDrag.dragY}
             isSettling={iconDrag.isSettling}
-            onSettleComplete={iconDrag.onSettleComplete}
           />
         )}
       </div>

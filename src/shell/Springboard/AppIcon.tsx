@@ -87,6 +87,11 @@ export const AppIcon = memo(function AppIcon({
   const handleClick = () => {
     // In edit mode, don't open apps
     if (isEditMode) return;
+    // Cancel any pending long-press timer. The parent gesture surface captures
+    // the pointer (setPointerCapture), so the element-level onPointerUp never
+    // fires on PC/Android. The click event is NOT affected by pointer capture,
+    // so cancelling here is reliable across all platforms.
+    longPress.cancel();
     const el = iconRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();

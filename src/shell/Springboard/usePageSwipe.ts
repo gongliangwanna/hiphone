@@ -15,6 +15,15 @@ interface UsePageSwipeOptions {
 
 type PointerReleaseKind = 'up' | 'cancel' | 'lost-capture';
 
+/**
+ * Maximum movement (px) for a gesture to be classified as a tap rather
+ * than a swipe.  When a tap is detected, we dispatch a synthetic click to
+ * the element under the pointer — necessary because `setPointerCapture`
+ * redirects `mouseup` to the gesture surface, preventing the browser from
+ * synthesizing `click` on the original target (AppIcon button).
+ */
+const TAP_THRESHOLD = 10;
+
 interface DragState {
   startX: number;
   startTrackX: number;
@@ -91,6 +100,20 @@ export function usePageSwipe({
       if (kind !== 'up') {
         animateToPage(page, vx, true);
         samplesRef.current = [];
+        return;
+      }
+
+      // Tap detection: setPointerCapture redirects mouseup to the gesture
+      // surface, so the browser synthesizes click on the surface instead of
+      // the original target (e.g. AppIcon button).  When movement is small
+      // enough to be a tap, dispatch a synthetic click to the element that
+      // was actually under the pointer.
+      if (Math.abs(dx) < TAP_THRESHOLD) {
+        samplesRef.current = [];
+        const el = document.elementFromPoint(event.clientX, event.clientY);
+        if (el instanceof HTMLElement) {
+          el.click();
+        }
         return;
       }
 
