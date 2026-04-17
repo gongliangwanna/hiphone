@@ -21,4 +21,13 @@ describe('resolveModule', () => {
     expect(() => resolveModule('@hiphone/storage')).toThrow(/Module not found/);
     expect(() => resolveModule('@hiphone/ai')).toThrow(/Module not found/);
   });
+
+  it('does NOT leak prototype-chain keys (toString, constructor, etc.)', () => {
+    // The `in` operator would walk the prototype chain; Object.hasOwn does not.
+    // Guard against future regressions that might switch back to `in`.
+    expect(() => resolveModule('toString')).toThrow(/Module not found/);
+    expect(() => resolveModule('constructor')).toThrow(/Module not found/);
+    expect(() => resolveModule('hasOwnProperty')).toThrow(/Module not found/);
+    expect(() => resolveModule('__proto__')).toThrow(/Module not found/);
+  });
 });

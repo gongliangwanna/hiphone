@@ -23,7 +23,15 @@ const moduleMap: Record<string, unknown> = {
  * surface exposed here, not arbitrary npm packages.
  */
 export function resolveModule(specifier: string): unknown {
-  if (specifier in moduleMap) return moduleMap[specifier];
+  // `Object.hasOwn` (ES2022) only checks own properties; the `in` operator
+  // would walk the prototype chain and leak e.g. `toString`, `constructor`.
+  // Runtime is modern (Node 16.9+, evergreen browsers — same promise
+  // sandbox.ts relies on for ES2022 `Error { cause }`); tsconfig lib is
+  // ES2020 so the type isn't on the default surface — cast to get it.
+  const ObjectWithHasOwn = Object as ObjectConstructor & {
+    hasOwn(o: object, v: PropertyKey): boolean;
+  };
+  if (ObjectWithHasOwn.hasOwn(moduleMap, specifier)) return moduleMap[specifier];
   throw new Error(
     `Module not found in hiPhone user-app SDK: "${specifier}". ` +
       `Available: ${Object.keys(moduleMap).join(', ')}`,
