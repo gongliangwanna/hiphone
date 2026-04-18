@@ -99,7 +99,7 @@ describe('@hiphone/hooks — lifecycle', () => {
   });
 });
 
-describe('@hiphone/hooks — useOpenParams (M2 stub)', () => {
+describe('@hiphone/hooks — useOpenParams (one-shot delivery)', () => {
   beforeEach(() => {
     useAppRuntimeStore.setState({ openParams: {} });
   });
@@ -119,6 +119,72 @@ describe('@hiphone/hooks — useOpenParams (M2 stub)', () => {
       withUserAppContext('todo', () => useOpenParams()),
     );
     expect(result.current).toEqual({ action: 'add', text: 'x' });
+  });
+
+  it('clears the store entry after the consumer has latched it', () => {
+    useAppRuntimeStore.setState({
+      openParams: { todo: { action: 'add', text: 'x' } },
+    });
+    renderHook(() =>
+      withUserAppContext('todo', () => useOpenParams()),
+    );
+    // After the effect runs, the store should no longer carry these params
+    // so a fresh mount won't re-observe them.
+    expect(useAppRuntimeStore.getState().openParams.todo).toBeUndefined();
+  });
+
+  it('returns null on a fresh mount after a previous mount consumed params', () => {
+    useAppRuntimeStore.setState({
+      openParams: { todo: { action: 'add', text: 'first' } },
+    });
+    // First mount consumes the params.
+    const first = renderHook(() =>
+      withUserAppContext('todo', () => useOpenParams()),
+    );
+    expect(first.result.current).toEqual({ action: 'add', text: 'first' });
+    first.unmount();
+
+    // Second mount (user returned to the app from springboard without a
+    // fresh nav.open) must see null — otherwise the old payload would
+    // re-trigger side effects like a payment-confirm screen.
+    const second = renderHook(() =>
+      withUserAppContext('todo', () => useOpenParams()),
+    );
+    expect(second.result.current).toBeNull();
+  });
+
+  it('picks up new params when nav.open writes to the store while mounted', () => {
+    const { result, rerender } = renderHook(() =>
+      withUserAppContext('todo', () => useOpenParams()),
+    );
+    expect(result.current).toBeNull();
+
+    act(() => {
+      useAppRuntimeStore.setState((s) => ({
+        openParams: { ...s.openParams, todo: { step: 'two' } },
+      }));
+    });
+    rerender();
+
+    expect(result.current).toEqual({ step: 'two' });
+  });
+
+  it('keeps the latched value stable across re-renders (does not flip to null after store clears)', () => {
+    useAppRuntimeStore.setState({
+      openParams: { todo: { value: 42 } },
+    });
+    const { result, rerender } = renderHook(() =>
+      withUserAppContext('todo', () => useOpenParams()),
+    );
+    expect(result.current).toEqual({ value: 42 });
+
+    // Mirror what happens in practice: the store entry is dropped by the
+    // hook's own effect. A re-render must still return the latched value
+    // so user-land `useEffect(..., [params])` doesn't spuriously refire
+    // with null.
+    rerender();
+    expect(result.current).toEqual({ value: 42 });
+    expect(useAppRuntimeStore.getState().openParams.todo).toBeUndefined();
   });
 });
 
