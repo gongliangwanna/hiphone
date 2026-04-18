@@ -1,5 +1,5 @@
 import React, { useState, type ComponentType, type ReactNode } from 'react';
-import { MessageSquare, FileText, Zap, Bell, Layers } from 'lucide-react';
+import { MessageSquare, FileText, Zap, Bell, Layers, MoreHorizontal } from 'lucide-react';
 import { show as toastShow } from '@hiphone/toast';
 import { show as bannerShow } from '@hiphone/banner';
 
@@ -55,6 +55,18 @@ export default function NotifierApp() {
       onClick: () => {
         bannerShow({ title: '你有一条新通知' });
         track('banner.show · 点通知会回到本 App');
+      },
+    },
+    {
+      label: '超长内容',
+      icon: MoreHorizontal,
+      tint: '#FF3B30',
+      onClick: () => {
+        bannerShow({
+          title:
+            '这是一条特别长的通知内容,超过了一行的宽度,用来验证单行截断效果是否工作 —— 不应该换行,应当在末尾以省略号结束。',
+        });
+        track('超长 banner(单行 · 省略号截断)');
       },
     },
     {

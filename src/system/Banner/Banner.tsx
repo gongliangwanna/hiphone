@@ -90,20 +90,20 @@ export function Banner() {
             <div
               className="flex items-start overflow-hidden"
               style={{
-                borderRadius: 20,
-                padding: '10px 14px',
+                borderRadius: 18,
+                padding: '8px 14px',
                 boxShadow: '0 8px 24px rgba(0, 0, 0, 0.18)',
                 backgroundColor: 'var(--color-systemBackground)',
               }}
               onClick={handleTap}
             >
-              {/* App icon */}
+              {/* App icon — 32×32; anchors text vertical alignment */}
               <div
                 className="flex-shrink-0 overflow-hidden"
                 style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 8,
+                  width: 32,
+                  height: 32,
+                  borderRadius: 7,
                   backgroundColor: 'rgba(0,0,0,0.06)',
                   marginRight: 10,
                 }}
@@ -118,17 +118,15 @@ export function Banner() {
                 />
               </div>
 
-              {/* Text column */}
-              <div
-                className="min-w-0 flex-1"
-                style={{ paddingTop: 1 }}
-              >
+              {/* Text column — top-aligned with icon; two compact lines. */}
+              <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-2">
                   <div
                     className="truncate"
                     style={{
                       fontSize: 13,
                       fontWeight: 600,
+                      lineHeight: 1.2,
                       color: 'var(--color-label)',
                       letterSpacing: '-0.01em',
                     }}
@@ -140,6 +138,7 @@ export function Banner() {
                     className="flex-shrink-0"
                     style={{
                       fontSize: 11,
+                      lineHeight: 1.2,
                       color: 'var(--color-secondaryLabel)',
                     }}
                   >
@@ -151,8 +150,9 @@ export function Banner() {
                   <div
                     className="truncate"
                     style={{
-                      fontSize: 13,
-                      fontWeight: 500,
+                      fontSize: 12,
+                      fontWeight: 400,
+                      lineHeight: 1.25,
                       color: 'var(--color-label)',
                       marginTop: 1,
                       letterSpacing: '-0.01em',
