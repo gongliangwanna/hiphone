@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="walletBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#34D17C"/>
+      <stop offset="1" stop-color="#1F8F4C"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#walletBg)"/>
+  <g transform="translate(18 36)">
+    <rect x="0" y="6" width="92" height="60" rx="8" fill="white"/>
+    <rect x="0" y="0" width="70" height="14" rx="4" fill="#1F8F4C"/>
+    <rect x="56" y="28" width="30" height="20" rx="4" fill="#1F8F4C"/>
+    <circle cx="66" cy="38" r="4" fill="white"/>
+  </g>
+  <text x="64" y="112" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="700" fill="white">¥</text>
+</svg>
