@@ -85,10 +85,15 @@ describe('M2 E2E — todo-app full lifecycle', () => {
   it('#3 + #5: renders the user app through AppScene with multi-file imports', async () => {
     await install(await loadFixtureZip('todo-app'));
 
-    render(React.createElement(AppScene, { appId: 'test-todo' }));
+    const { container } = render(React.createElement(AppScene, { appId: 'test-todo' }));
 
     expect(await screen.findByTestId('todo-app-root')).toBeInTheDocument();
     expect(screen.getByTestId('todo-title').textContent).toMatch(/我的待办/);
+
+    // The fixture's root div carries a Tailwind utility class that must
+    // survive through the sandbox + renderer. (Class presence only — we
+    // don't assert computed style because jsdom doesn't run CSS.)
+    expect(container.innerHTML).toContain('flex flex-col gap-2');
   });
 
   it('#3 + #4: user can write storage via SDK and it persists', async () => {

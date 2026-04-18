@@ -38,7 +38,7 @@ export default function TodoApp() {
   };
 
   return (
-    <div style={{ padding: 20 }} data-testid="todo-app-root">
+    <div className="flex flex-col gap-2" style={{ padding: 20 }} data-testid="todo-app-root">
       <h1 data-testid="todo-title">
         {isViewingOther ? `${ownerName} 的待办` : '我的待办'}
       </h1>
