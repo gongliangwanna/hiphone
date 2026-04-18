@@ -5,6 +5,9 @@ settings:
   excludeLinksFromLockfile: false
 
 dependencies:
+  '@tailwindcss/browser':
+    specifier: ^4
+    version: 4.2.2
   '@tiptap/extension-placeholder':
     specifier: ^3.22.3
     version: 3.22.3(@tiptap/extensions@3.22.3)
@@ -1749,6 +1752,10 @@ packages:
       magic-string: 0.25.9
       string.prototype.matchall: 4.0.12
     dev: true
+
+  /@tailwindcss/browser@4.2.2:
+    resolution: {integrity: sha512-JVdJBWWtvKxliBI9CtpOrqxgk8aijUWGsn0STxcOcXAYsUFAbOxN5PwawOJ+v0PoQfPcOK9eZoj9LTwvBV0Vmw==}
+    dev: false
 
   /@tailwindcss/node@4.2.2:
     resolution: {integrity: sha512-pXS+wJ2gZpVXqFaUEjojq7jzMpTGf8rU6ipJz5ovJV6PUGmlJ+jvIwGrzdHdQ80Sg+wmQxUFuoW1UAAwHNEdFA==}
