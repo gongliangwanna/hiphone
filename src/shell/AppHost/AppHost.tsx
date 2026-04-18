@@ -125,125 +125,106 @@ export function AppHost() {
   const homeExitTransition = { type: 'spring' as const, ...spring.appClose };
   const fallbackExitTransition = { type: 'spring' as const, ...spring.criticalDamped };
 
+  // Unified render: one motion.div keyed on the appId (not on active vs
+  // dismissed state) keeps the same React subtree mounted across the
+  // foreground → dismissed transition, so user app component state
+  // (e.g. async-loaded balance) is preserved during the exit animation.
+  const displayAppId = activeAppId ?? dismissedAppId;
+  const isDismissing = !activeAppId && !!dismissedAppId;
+
+  let animate: Record<string, number | string>;
+  let transition: Record<string, unknown>;
+
+  if (isDismissing && isHomeExitToIcon) {
+    animate = {
+      clipPath: `inset(${verticalInset}px 0px ${verticalInset}px 0px round ${finalClipRadius}px)`,
+      scale: finalScale,
+      x: iconCenterX,
+      y: iconCenterY,
+    };
+    transition = homeExitTransition;
+  } else if (isDismissing) {
+    animate = { opacity: 0, scale: 0.3, x: 0, y: 0 };
+    transition = fallbackExitTransition;
+  } else if (switcherDismissing) {
+    animate = { opacity: 0, scale: SWITCHER_SCALE, x: 0, y: -vpHeight };
+    transition = enterTransition;
+  } else if (inSwitcher) {
+    animate = {
+      opacity: 1,
+      scale: SWITCHER_SCALE,
+      x: 0,
+      y: switcherVerticalOffset,
+    };
+    transition = enterTransition;
+  } else {
+    animate = { opacity: 1, scale: 1, x: 0, y: 0 };
+    transition = enterTransition;
+  }
+
+  const outerBorderRadius = isDismissing && !isHomeExitToIcon
+    ? deviceCornerRadius
+    : inSwitcher
+      ? deviceCornerRadius
+      : 0;
+
+  const inSwitcherHiddenState =
+    inSwitcher && !switcherEnterAnimating && !switcherDismissing && !isDismissing;
+
   return (
     <AnimatePresence>
-      {/* ---- Foreground app ---- */}
-      {activeAppId && (
+      {displayAppId && (
         <motion.div
-          key={`foreground-app-${activeAppId}`}
+          key={`app-${displayAppId}`}
           className="absolute inset-0 overflow-hidden"
           style={{
             zIndex: 18,
-            // Only round corners when shrinking into the switcher. At fullscreen
-            // the device shell clips the content, so no borderRadius needed.
-            borderRadius: inSwitcher ? deviceCornerRadius : 0,
-            ...(inSwitcher && !switcherEnterAnimating && !switcherDismissing
+            borderRadius: outerBorderRadius,
+            ...(inSwitcherHiddenState
               ? { visibility: 'hidden' as const, pointerEvents: 'none' as const }
-              : inSwitcher
+              : inSwitcher || isDismissing
                 ? { pointerEvents: 'none' as const }
                 : {}),
           }}
           data-testid="app-host"
           data-perf-layer="app-host"
           initial={initialAnimation}
-          animate={
-            switcherDismissing
-              ? {
-                  opacity: 0,
-                  scale: SWITCHER_SCALE,
-                  x: 0,
-                  y: -(vpHeight),
-                }
-              : inSwitcher
-                ? {
-                    opacity: 1,
-                    scale: SWITCHER_SCALE,
-                    x: 0,
-                    y: switcherVerticalOffset,
-                  }
-                : {
-                    opacity: 1,
-                    scale: 1,
-                    x: 0,
-                    y: 0,
-                  }
-          }
+          animate={animate}
           exit={{ opacity: 0, transition: { duration: 0 } }}
-          transition={enterTransition}
+          transition={transition}
           onAnimationComplete={() => {
-            if (switcherDismissing) {
+            if (isDismissing) {
+              prevOriginRef.current = null;
+              clearDismissedApp();
+            } else if (switcherDismissing) {
               finishSwitcherDismiss();
             } else if (inSwitcher && switcherEnterAnimating) {
               finishSwitcherEnter();
             }
           }}
         >
-          <FixedAppContent appId={activeAppId} vpWidth={vpWidth} vpHeight={vpHeight} />
-        </motion.div>
-      )}
-
-      {/* ---- Dismissed: home exit → shape-morph to icon ---- */}
-      {dismissedAppId && !activeAppId && isHomeExitToIcon && (
-        <motion.div
-          key={`dismissed-home-${dismissedAppId}`}
-          className="absolute inset-0"
-          style={{ zIndex: 18, pointerEvents: 'none' }}
-          initial={{
-            clipPath: `inset(0px 0px 0px 0px round ${deviceCornerRadius}px)`,
-            scale: 1,
-            x: 0,
-            y: 0,
-          }}
-          animate={{
-            clipPath: `inset(${verticalInset}px 0px ${verticalInset}px 0px round ${finalClipRadius}px)`,
-            scale: finalScale,
-            x: iconCenterX,
-            y: iconCenterY,
-          }}
-          transition={homeExitTransition}
-          onAnimationComplete={() => {
-            prevOriginRef.current = null;
-            clearDismissedApp();
-          }}
-        >
+          {/* Inner opacity layer: fades the app content during the
+              home-dismiss animation (matches the pre-refactor two-motion
+              layout). Kept as a motion.div in all states so the subtree
+              shape is stable — the FixedAppContent mount never gets
+              recreated mid-transition, preserving user app state. */}
           <motion.div
             className="absolute inset-0 overflow-hidden"
-            initial={{ opacity: 1 }}
-            animate={{ opacity: 0 }}
-            transition={{ duration: 0.3, ease: 'easeIn' }}
+            animate={{
+              opacity: isDismissing && isHomeExitToIcon ? 0 : 1,
+            }}
+            transition={
+              isDismissing && isHomeExitToIcon
+                ? { duration: 0.3, ease: 'easeIn' }
+                : { duration: 0 }
+            }
           >
-            <FixedAppContent appId={dismissedAppId} vpWidth={vpWidth} vpHeight={vpHeight} />
+            <FixedAppContent
+              appId={displayAppId}
+              vpWidth={vpWidth}
+              vpHeight={vpHeight}
+            />
           </motion.div>
-        </motion.div>
-      )}
-
-      {/* ---- Dismissed: fallback (no icon origin) ---- */}
-      {dismissedAppId && !activeAppId && !isHomeExitToIcon && (
-        <motion.div
-          key={`dismissed-fallback-${dismissedAppId}`}
-          className="absolute inset-0 overflow-hidden"
-          style={{ zIndex: 18 }}
-          initial={{
-            borderRadius: deviceCornerRadius,
-            opacity: 1,
-            scale: 1,
-            x: 0,
-            y: 0,
-          }}
-          animate={{
-            borderRadius: deviceCornerRadius,
-            opacity: 0,
-            scale: 0.3,
-            x: 0,
-            y: 0,
-          }}
-          transition={fallbackExitTransition}
-          onAnimationComplete={() => {
-            prevOriginRef.current = null;
-            clearDismissedApp();
-          }}
-        >
-          <FixedAppContent appId={dismissedAppId} vpWidth={vpWidth} vpHeight={vpHeight} />
         </motion.div>
       )}
     </AnimatePresence>
