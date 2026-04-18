@@ -93,7 +93,7 @@ export function Banner() {
           >
             <Material
               variant="thick"
-              className="flex items-start overflow-hidden"
+              className="flex items-center overflow-hidden"
               style={{
                 borderRadius: 18,
                 padding: '8px 14px',
