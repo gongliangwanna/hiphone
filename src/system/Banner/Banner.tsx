@@ -131,7 +131,7 @@ export function Banner() {
                   <div
                     className="truncate"
                     style={{
-                      fontSize: 13,
+                      fontSize: 12,
                       fontWeight: 600,
                       lineHeight: 1.2,
                       color: 'var(--color-label)',
@@ -157,7 +157,7 @@ export function Banner() {
                   <div
                     className="truncate"
                     style={{
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: 400,
                       lineHeight: 1.25,
                       color: 'var(--color-label)',
