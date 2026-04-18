@@ -1,5 +1,7 @@
-import type { ComponentType } from 'react';
+import { useEffect, type ComponentType } from 'react';
 import { AppScreen } from '@/system';
+import { useAppRuntimeStore } from '@/platform/stores/appRuntimeStore';
+import type { StatusBarStyle } from '../manifest';
 import { UserAppErrorBoundary } from './errorBoundary';
 
 /**
@@ -11,14 +13,36 @@ import { UserAppErrorBoundary } from './errorBoundary';
  * their component so `export default MyApp` is enough to render
  * correctly inside hiPhone.
  *
- * If in the future we need per-app customization (e.g. a user app
- * opting out of status-bar integration), this is the one place to add
- * a config hook.
+ * `options` carries per-app chrome preferences declared in the manifest:
+ *   - edgeToEdge: extend content behind the status bar (maps/camera style)
+ *   - statusBarStyle: 'light' (white glyphs) or 'dark' (default). The
+ *     effect sets it on mount and restores 'dark' on unmount so the next
+ *     app / the springboard gets a clean default.
  */
-export function wrapUserComponent(UserComp: ComponentType): ComponentType {
+export interface WrapOptions {
+  edgeToEdge?: boolean;
+  statusBarStyle?: StatusBarStyle;
+}
+
+export function wrapUserComponent(
+  UserComp: ComponentType,
+  options: WrapOptions = {},
+): ComponentType {
+  const { edgeToEdge = false, statusBarStyle } = options;
+
   return function WrappedUserApp() {
+    const setStatusBarStyle = useAppRuntimeStore((s) => s.setStatusBarStyle);
+
+    useEffect(() => {
+      if (!statusBarStyle) return;
+      setStatusBarStyle(statusBarStyle);
+      return () => {
+        setStatusBarStyle('dark');
+      };
+    }, [setStatusBarStyle]);
+
     return (
-      <AppScreen>
+      <AppScreen edgeToEdge={edgeToEdge}>
         <UserAppErrorBoundary>
           <UserComp />
         </UserAppErrorBoundary>

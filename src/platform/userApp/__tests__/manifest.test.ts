@@ -26,6 +26,39 @@ describe('validateManifest', () => {
     expect(result.icon).toBe('icon.png');
   });
 
+  it('accepts edgeToEdge + statusBarStyle', () => {
+    const result = validateManifest({
+      id: 'immersive',
+      name: 'X',
+      version: '1.0.0',
+      entry: 'App.tsx',
+      edgeToEdge: true,
+      statusBarStyle: 'light',
+    });
+    expect(result.edgeToEdge).toBe(true);
+    expect(result.statusBarStyle).toBe('light');
+  });
+
+  it('defaults edgeToEdge + statusBarStyle to undefined when absent', () => {
+    const result = validateManifest({
+      id: 'plain', name: 'X', version: '1.0.0', entry: 'App.tsx',
+    });
+    expect(result.edgeToEdge).toBeUndefined();
+    expect(result.statusBarStyle).toBeUndefined();
+  });
+
+  it('rejects invalid statusBarStyle value', () => {
+    expect(() =>
+      validateManifest({
+        id: 'bad',
+        name: 'X',
+        version: '1.0.0',
+        entry: 'App.tsx',
+        statusBarStyle: 'blue',
+      }),
+    ).toThrow(/statusBarStyle/);
+  });
+
   it('ignores unknown optional fields (author, description, permissions, aiTools)', () => {
     const result = validateManifest({
       id: 'app3', name: 'X', version: '1.0.0', entry: 'App.tsx',

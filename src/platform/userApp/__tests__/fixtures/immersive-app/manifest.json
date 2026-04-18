@@ -1,0 +1,10 @@
+{
+  "id": "test-immersive",
+  "name": "沉浸",
+  "version": "1.0.0",
+  "entry": "App.tsx",
+  "icon": "icon.svg",
+  "perspectiveAware": false,
+  "edgeToEdge": true,
+  "statusBarStyle": "light"
+}

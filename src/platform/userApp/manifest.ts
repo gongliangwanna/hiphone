@@ -17,6 +17,8 @@ export class ManifestError extends Error {
   }
 }
 
+export type StatusBarStyle = 'light' | 'dark';
+
 export interface UserAppManifest {
   id: string;
   name: string;
@@ -24,6 +26,20 @@ export interface UserAppManifest {
   entry: string;
   icon?: string;
   perspectiveAware: boolean;
+  /**
+   * Opt into edge-to-edge rendering. When true, the system's AppScreen
+   * does NOT reserve the status-bar safe area — app content extends to
+   * the very top of the screen and sits behind the status-bar text.
+   * Required for fullscreen visuals (maps, camera, media players).
+   */
+  edgeToEdge?: boolean;
+  /**
+   * Override the global status-bar glyph colour while this app is in
+   * the foreground. `light` renders white text (for dark-content apps);
+   * `dark` (default) is the system default. Restored to `dark` on
+   * unmount.
+   */
+  statusBarStyle?: StatusBarStyle;
   // M3+ fields — allowed but ignored in M2
   author?: string;
   description?: string;
@@ -54,6 +70,16 @@ export function validateManifest(raw: unknown): UserAppManifest {
   const version = requireString(obj, 'version');
   const entry = requireString(obj, 'entry');
 
+  const statusBarStyle =
+    obj.statusBarStyle === 'light' || obj.statusBarStyle === 'dark'
+      ? obj.statusBarStyle
+      : undefined;
+  if (obj.statusBarStyle !== undefined && statusBarStyle === undefined) {
+    throw new ManifestError(
+      `manifest.statusBarStyle must be "light" or "dark" (got ${JSON.stringify(obj.statusBarStyle)})`,
+    );
+  }
+
   return {
     id,
     name,
@@ -61,6 +87,8 @@ export function validateManifest(raw: unknown): UserAppManifest {
     entry,
     icon: typeof obj.icon === 'string' ? obj.icon : undefined,
     perspectiveAware: obj.perspectiveAware === true,
+    edgeToEdge: obj.edgeToEdge === true ? true : undefined,
+    statusBarStyle,
     author: typeof obj.author === 'string' ? obj.author : undefined,
     description: typeof obj.description === 'string' ? obj.description : undefined,
     permissions: Array.isArray(obj.permissions)

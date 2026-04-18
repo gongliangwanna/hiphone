@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="immersiveBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1B1247"/>
+      <stop offset="0.55" stop-color="#4932B8"/>
+      <stop offset="1" stop-color="#F26A9D"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#immersiveBg)"/>
+  <circle cx="94" cy="40" r="11" fill="#FFDE85"/>
+  <path d="M 8 92 L 44 60 L 64 78 L 88 52 L 120 92 Z" fill="#0D0728" opacity="0.92"/>
+  <path d="M 8 108 L 120 108 L 120 128 L 8 128 Z" fill="#09051C" opacity="0.98"/>
+</svg>

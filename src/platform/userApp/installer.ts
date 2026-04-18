@@ -338,7 +338,10 @@ function buildUserAppComponent(
 
     return React.createElement(cache);
   };
-  return wrapUserComponent(LazyRaw);
+  return wrapUserComponent(LazyRaw, {
+    edgeToEdge: manifest.edgeToEdge === true,
+    statusBarStyle: manifest.statusBarStyle,
+  });
 }
 
 function toMessage(err: unknown): string {

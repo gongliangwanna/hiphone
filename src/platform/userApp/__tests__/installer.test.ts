@@ -278,8 +278,11 @@ describe('installer — multi-file', () => {
     const entry = appRegistry.get('multi');
     expect(entry).toBeDefined();
     const Component = entry!.component;
-    const element = (Component as any)();
-    expect(element).toBeDefined();
+    // Calling the wrapped component as a plain function is enough to
+    // confirm registration — we don't render it. Wrap uses a hook
+    // (useAppRuntimeStore), so actually invoking here would violate
+    // React rules-of-hooks; just assert the component reference exists.
+    expect(typeof Component).toBe('function');
   });
 
   it('refuses to install a zip where a relative import references a missing file', async () => {
