@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import { AnimatePresence, motion, type PanInfo } from 'motion/react';
+import { Material } from '@/system/Material';
 import { spring } from '@/platform/design-tokens/motion';
 import { appRegistry } from '@/platform/appRegistry';
 import { useAppRuntimeStore } from '@/platform/stores/appRuntimeStore';
@@ -20,9 +21,13 @@ const APP_ICON_FALLBACK =
  * Animation: `spring.criticalDamped` on entry (confident drop, no
  * overshoot); explicit 220 ms cubic-bezier ease-in on exit so the banner
  * gets out of the way faster than it came in — matches iOS banner feel.
- * Surface is fully opaque (systemBackground) — no Material / no opacity
- * animation, so background content is never visible through the banner
- * during motion.
+ *
+ * Surface uses the Liquid Glass <Material variant="thick"> — iOS banners
+ * are translucent frosted glass. We do NOT animate opacity (was the
+ * cause of the earlier "see through during drop" regression); only
+ * y-translation. Width stretches with the viewport via
+ * `calc(100% - 16px)` so the 8 px side inset matches iOS behavior
+ * across all device profiles.
  */
 export function Banner() {
   const current = useBannerStore((s) => s.current);
@@ -81,19 +86,18 @@ export function Banner() {
             className="pointer-events-auto"
             style={{
               width: 'calc(100% - 16px)',
-              maxWidth: 380,
               cursor: 'pointer',
               touchAction: 'pan-y',
             }}
             data-testid="banner"
           >
-            <div
+            <Material
+              variant="thick"
               className="flex items-start overflow-hidden"
               style={{
                 borderRadius: 18,
                 padding: '8px 14px',
                 boxShadow: '0 8px 24px rgba(0, 0, 0, 0.18)',
-                backgroundColor: 'var(--color-systemBackground)',
               }}
               onClick={handleTap}
             >
@@ -163,7 +167,7 @@ export function Banner() {
                   </div>
                 ) : null}
               </div>
-            </div>
+            </Material>
           </motion.div>
         </div>
       )}
