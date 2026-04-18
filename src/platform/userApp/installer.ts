@@ -41,6 +41,18 @@ export class InstallError extends Error {
   }
 }
 
+export type InstallProgressEvent =
+  | { stage: 'unzip'; progress: number }
+  | { stage: 'validate'; progress: number }
+  | { stage: 'compile'; progress: number; fileIndex: number; total: number }
+  | { stage: 'persist'; progress: number }
+  | { stage: 'done' }
+  | { stage: 'error'; error: Error };
+
+export interface InstallOptions {
+  onProgress?: (event: InstallProgressEvent) => void;
+}
+
 export interface InstallResult {
   id: string;
   installedAt: number;
@@ -60,114 +72,141 @@ interface AppSrc {
 
 const USER_APP_PAGE = 1; // default: land user apps on page 1 (next to builtins)
 
-export async function install(file: Blob): Promise<InstallResult> {
-  // 1. Unzip
-  let zip: JSZip;
-  try {
-    zip = await JSZip.loadAsync(file);
-  } catch (err) {
-    throw new InstallError('bad-zip', `failed to unzip: ${toMessage(err)}`, err);
-  }
-
-  // 2. Read + validate manifest
-  const manifestFile = zip.file('manifest.json');
-  if (!manifestFile) {
-    throw new InstallError('bad-manifest', 'zip is missing manifest.json');
-  }
-  let manifest: UserAppManifest;
-  try {
-    const raw = await manifestFile.async('string');
-    const parsed: unknown = JSON.parse(raw);
-    manifest = validateManifest(parsed);
-  } catch (err) {
-    if (err instanceof InstallError) throw err;
-    if (err instanceof ManifestError) {
-      throw new InstallError('bad-manifest', err.message, err);
-    }
-    throw new InstallError('bad-manifest', `manifest.json: ${toMessage(err)}`, err);
-  }
-
-  // 3. id conflict check
-  const existing = appRegistry.get(manifest.id);
-  if (existing && existing.type === 'builtin') {
-    throw new InstallError(
-      'id-conflict',
-      `manifest.id "${manifest.id}" conflicts with a builtin app`,
-    );
-  }
-  const isUpgrade = !!existing && existing.type === 'user';
-
-  // 4. Read entry file + compile all .tsx/.ts
-  const filesToCompile = findCompilableFiles(zip);
-  if (!filesToCompile.includes(manifest.entry)) {
-    throw new InstallError(
-      'entry-missing',
-      `manifest.entry "${manifest.entry}" not found in zip`,
-    );
-  }
-  const compiledMap: Record<string, string> = {};
-  for (const path of filesToCompile) {
-    const fileEntry = zip.file(path);
-    if (!fileEntry) {
-      throw new InstallError('entry-missing', `file ${path} referenced but missing`);
-    }
-    const source = await fileEntry.async('string');
+export async function install(
+  file: Blob,
+  options?: InstallOptions,
+): Promise<InstallResult> {
+  const emit = (event: InstallProgressEvent): void => {
     try {
-      compiledMap[path] = await compileTsx(source, `${manifest.id}/${path}`);
+      options?.onProgress?.(event);
+    } catch (cbErr) {
+      console.warn('[installer] onProgress callback threw:', cbErr);
+    }
+  };
+
+  try {
+    // 1. Unzip
+    emit({ stage: 'unzip', progress: 0 });
+    let zip: JSZip;
+    try {
+      zip = await JSZip.loadAsync(file);
     } catch (err) {
+      throw new InstallError('bad-zip', `failed to unzip: ${toMessage(err)}`, err);
+    }
+    emit({ stage: 'unzip', progress: 1 });
+
+    // 2. Read + validate manifest
+    emit({ stage: 'validate', progress: 0 });
+    const manifestFile = zip.file('manifest.json');
+    if (!manifestFile) {
+      throw new InstallError('bad-manifest', 'zip is missing manifest.json');
+    }
+    let manifest: UserAppManifest;
+    try {
+      const raw = await manifestFile.async('string');
+      const parsed: unknown = JSON.parse(raw);
+      manifest = validateManifest(parsed);
+    } catch (err) {
+      if (err instanceof InstallError) throw err;
+      if (err instanceof ManifestError) {
+        throw new InstallError('bad-manifest', err.message, err);
+      }
+      throw new InstallError('bad-manifest', `manifest.json: ${toMessage(err)}`, err);
+    }
+    emit({ stage: 'validate', progress: 1 });
+
+    // 3. id conflict check (no emit — sub-step of validate)
+    const existing = appRegistry.get(manifest.id);
+    if (existing && existing.type === 'builtin') {
       throw new InstallError(
-        'compile',
-        `failed to compile ${path}: ${toMessage(err)}`,
-        err,
+        'id-conflict',
+        `manifest.id "${manifest.id}" conflicts with a builtin app`,
       );
     }
-  }
+    const isUpgrade = !!existing && existing.type === 'user';
 
-  // 5. Icon → data URL
-  let iconDataUrl: string | null = null;
-  if (manifest.icon) {
-    const iconFile = zip.file(manifest.icon);
-    if (iconFile) {
-      const bytes = await iconFile.async('uint8array');
-      iconDataUrl = bytesToDataUrl(bytes, mimeOf(manifest.icon));
+    // 4. Read entry file + compile all .tsx/.ts
+    const filesToCompile = findCompilableFiles(zip);
+    if (!filesToCompile.includes(manifest.entry)) {
+      throw new InstallError(
+        'entry-missing',
+        `manifest.entry "${manifest.entry}" not found in zip`,
+      );
     }
+    const compiledMap: Record<string, string> = {};
+    const total = filesToCompile.length;
+    for (let i = 0; i < total; i++) {
+      const path = filesToCompile[i];
+      emit({ stage: 'compile', progress: i / total, fileIndex: i, total });
+      const fileEntry = zip.file(path);
+      if (!fileEntry) {
+        throw new InstallError('entry-missing', `file ${path} referenced but missing`);
+      }
+      const source = await fileEntry.async('string');
+      try {
+        compiledMap[path] = await compileTsx(source, `${manifest.id}/${path}`);
+      } catch (err) {
+        throw new InstallError(
+          'compile',
+          `failed to compile ${path}: ${toMessage(err)}`,
+          err,
+        );
+      }
+    }
+    emit({ stage: 'compile', progress: 1, fileIndex: total, total });
+
+    // 5. Icon → data URL (sub-step, no emit)
+    let iconDataUrl: string | null = null;
+    if (manifest.icon) {
+      const iconFile = zip.file(manifest.icon);
+      if (iconFile) {
+        const bytes = await iconFile.async('uint8array');
+        iconDataUrl = bytesToDataUrl(bytes, mimeOf(manifest.icon));
+      }
+    }
+
+    const installedAt = Date.now();
+
+    // 6. IDB atomic write (app-meta + app-src in one tx)
+    emit({ stage: 'persist', progress: 0 });
+    const db = await getDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction([APP_META_STORE, APP_SRC_STORE], 'readwrite');
+      const meta: AppMeta = { manifest, installedAt, iconDataUrl };
+      const src: AppSrc = { compiledMap, installedAt };
+      tx.objectStore(APP_META_STORE).put(meta, manifest.id);
+      tx.objectStore(APP_SRC_STORE).put(src, manifest.id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(new InstallError('io', 'failed to write IDB', tx.error));
+    });
+    emit({ stage: 'persist', progress: 1 });
+
+    // 7. Update installedUserAppsStore
+    const record: InstalledUserApp = {
+      id: manifest.id,
+      name: manifest.name,
+      iconDataUrl,
+      page: USER_APP_PAGE,
+      perspectiveAware: manifest.perspectiveAware,
+    };
+    useInstalledUserAppsStore.getState().add(record);
+
+    // 8. Register in appRegistry
+    const component = buildUserAppComponent(manifest, compiledMap);
+    appRegistry.register({
+      id: manifest.id,
+      type: 'user',
+      component,
+      perspectiveAware: manifest.perspectiveAware,
+      globalData: false,
+    });
+
+    emit({ stage: 'done' });
+    return { id: manifest.id, installedAt, isUpgrade };
+  } catch (err) {
+    emit({ stage: 'error', error: err instanceof Error ? err : new Error(String(err)) });
+    throw err;
   }
-
-  const installedAt = Date.now();
-
-  // 6. IDB atomic write (app-meta + app-src in one tx)
-  const db = await getDB();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction([APP_META_STORE, APP_SRC_STORE], 'readwrite');
-    const meta: AppMeta = { manifest, installedAt, iconDataUrl };
-    const src: AppSrc = { compiledMap, installedAt };
-    tx.objectStore(APP_META_STORE).put(meta, manifest.id);
-    tx.objectStore(APP_SRC_STORE).put(src, manifest.id);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(new InstallError('io', 'failed to write IDB', tx.error));
-  });
-
-  // 7. Update installedUserAppsStore
-  const record: InstalledUserApp = {
-    id: manifest.id,
-    name: manifest.name,
-    iconDataUrl,
-    page: USER_APP_PAGE,
-    perspectiveAware: manifest.perspectiveAware,
-  };
-  useInstalledUserAppsStore.getState().add(record);
-
-  // 8. Register in appRegistry
-  const component = buildUserAppComponent(manifest, compiledMap);
-  appRegistry.register({
-    id: manifest.id,
-    type: 'user',
-    component,
-    perspectiveAware: manifest.perspectiveAware,
-    globalData: false,
-  });
-
-  return { id: manifest.id, installedAt, isUpgrade };
 }
 
 export async function uninstall(appId: string): Promise<void> {
