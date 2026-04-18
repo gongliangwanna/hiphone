@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, type ComponentType } from 'react';
+import { Sword, Shield, Beaker, Gem } from 'lucide-react';
 import { open } from '@hiphone/nav';
 import { show as toastShow } from '@hiphone/toast';
 import { useOpenParams } from '@hiphone/hooks';
@@ -6,17 +7,18 @@ import { useOpenParams } from '@hiphone/hooks';
 interface Item {
   id: string;
   name: string;
-  emoji: string;
+  icon: ComponentType<{ size?: number; strokeWidth?: number; color?: string }>;
+  tint: string;
   price: number;
   description: string;
 }
 
 // Primary item (ITEMS[0]) is assumed by E2E tests: name=宝剑, price=100.
 const ITEMS: Item[] = [
-  { id: 'sword', name: '宝剑', emoji: '⚔️', price: 100, description: '传说中的利刃' },
-  { id: 'shield', name: '盾牌', emoji: '🛡️', price: 80, description: '不破之盾' },
-  { id: 'potion', name: '药水', emoji: '🧪', price: 30, description: '恢复满血' },
-  { id: 'gem', name: '宝石', emoji: '💎', price: 200, description: '闪闪发光' },
+  { id: 'sword', name: '宝剑', icon: Sword, tint: '#007AFF', price: 100, description: '传说中的利刃' },
+  { id: 'shield', name: '盾牌', icon: Shield, tint: '#5856D6', price: 80, description: '不破之盾' },
+  { id: 'potion', name: '药水', icon: Beaker, tint: '#34C759', price: 30, description: '恢复满血' },
+  { id: 'gem', name: '宝石', icon: Gem, tint: '#FF2D55', price: 200, description: '闪闪发光' },
 ];
 
 export default function ShopApp() {
@@ -58,13 +60,23 @@ export default function ShopApp() {
         <div className="grid grid-cols-2 gap-3">
           {ITEMS.map((item, i) => {
             const isPrimary = i === 0;
+            const Icon = item.icon;
             return (
               <div
                 key={item.id}
                 data-testid={isPrimary ? 'shop-item' : undefined}
                 className="bg-white rounded-2xl p-4 flex flex-col items-center shadow-sm border border-gray-100"
               >
-                <div className="text-5xl mb-3">{item.emoji}</div>
+                <div
+                  className="flex items-center justify-center rounded-2xl mb-3"
+                  style={{
+                    width: 56,
+                    height: 56,
+                    backgroundColor: item.tint + '18', // ~10% alpha tint background
+                  }}
+                >
+                  <Icon size={32} strokeWidth={1.8} color={item.tint} />
+                </div>
                 <div className="font-semibold text-gray-900 text-base">
                   {item.name}
                 </div>

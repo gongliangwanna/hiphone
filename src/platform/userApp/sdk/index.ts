@@ -1,4 +1,5 @@
 import React from 'react';
+import * as lucide from 'lucide-react';
 import * as hiphoneUi from './ui';
 import * as hiphoneStorage from './storage';
 import * as hiphonePerspective from './perspective';
@@ -17,6 +18,11 @@ import * as hiphoneToast from './toast';
  */
 const moduleMap: Record<string, unknown> = {
   react: React,
+  // Host-provided UI icon library (project convention: all icons from
+  // lucide-react, never hand-drawn SVG). Zero bundle cost — host already
+  // imports it. User apps import specific icons by name:
+  //   import { Sword, Shield } from 'lucide-react';
+  'lucide-react': lucide,
   '@hiphone/ui': hiphoneUi,
   '@hiphone/storage': hiphoneStorage,
   '@hiphone/perspective': hiphonePerspective,

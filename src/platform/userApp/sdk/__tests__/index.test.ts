@@ -44,6 +44,15 @@ describe('resolveModule', () => {
     expect(typeof mod.error).toBe('function');
   });
 
+  it('resolves "lucide-react" to the host icon library namespace', () => {
+    const mod = resolveModule('lucide-react') as Record<string, unknown>;
+    // Sample icons the user apps would typically import. Any one missing
+    // would indicate the namespace re-export broke.
+    expect(mod.Sword).toBeDefined();
+    expect(mod.Shield).toBeDefined();
+    expect(mod.Gem).toBeDefined();
+  });
+
   it('does NOT leak prototype-chain keys (toString, constructor, etc.)', () => {
     // The `in` operator would walk the prototype chain; Object.hasOwn does not.
     // Guard against future regressions that might switch back to `in`.
