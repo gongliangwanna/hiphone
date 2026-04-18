@@ -6,12 +6,14 @@
  * `@hiphone/storage.set()` read `getCurrentAppId()` to know which
  * app they're serving.
  *
- * Two-level context system:
+ * Three-level context system (fallback chain):
  *   1. `stack` — synchronous call-stack context pushed during render/init.
- *   2. `mountedApps` — mounted app registry: an app registers itself when
- *      its UserAppRoot mounts and unregisters on unmount. When the call
- *      stack is empty (e.g. inside useEffect / event handlers), and exactly
- *      one app is mounted, that app's id is used as fallback.
+ *   2. If exactly one app is mounted → that app.
+ *   3. If multiple apps are mounted (transition animation / switcher
+ *      previews) → prefer the foreground app (`activeAppId` from the
+ *      runtime store), as long as it's among the mounted apps. This
+ *      resolves the AnimatePresence race where the outgoing app is
+ *      still mounted while the incoming app's useEffect fires.
  *
  * Sync-only by design: user app code that Sucrase emits is synchronous
  * (CommonJS require calls). Async SDK methods (await storage.get) may
@@ -19,6 +21,8 @@
  * capture the appId at the time of the call (which is inside the
  * runtime's synchronous execution) before awaiting anything.
  */
+
+import { useAppRuntimeStore } from '@/platform/stores/appRuntimeStore';
 
 const stack: string[] = [];
 
@@ -43,10 +47,20 @@ export function getCurrentAppId(): string {
   const top = stack[stack.length - 1];
   if (top !== undefined) return top;
 
-  // Fallback: if exactly one app is currently mounted (event handlers,
-  // useEffect callbacks, async continuations), use that app's id.
+  // Fallback 1: exactly one app mounted — unambiguous.
   if (mountedApps.size === 1) {
     return mountedApps.keys().next().value as string;
+  }
+
+  // Fallback 2: multiple apps mounted simultaneously (AnimatePresence
+  // exit animation keeps the outgoing app mounted while the incoming
+  // app's useEffect fires; or switcher previews render recent apps).
+  // Prefer the currently foreground app.
+  if (mountedApps.size > 1) {
+    const activeAppId = useAppRuntimeStore.getState().activeAppId;
+    if (activeAppId && mountedApps.has(activeAppId)) {
+      return activeAppId;
+    }
   }
 
   throw new NoUserAppContextError();
