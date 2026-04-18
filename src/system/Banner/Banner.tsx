@@ -96,7 +96,7 @@ export function Banner() {
               className="flex items-center overflow-hidden"
               style={{
                 borderRadius: 18,
-                padding: '8px 14px',
+                padding: '10px 14px',
                 boxShadow: '0 8px 24px rgba(0, 0, 0, 0.18)',
               }}
               onClick={handleTap}
