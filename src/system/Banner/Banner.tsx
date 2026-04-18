@@ -1,6 +1,5 @@
 import { useRef } from 'react';
 import { AnimatePresence, motion, type PanInfo } from 'motion/react';
-import { Material } from '@/system/Material';
 import { spring } from '@/platform/design-tokens/motion';
 import { appRegistry } from '@/platform/appRegistry';
 import { useAppRuntimeStore } from '@/platform/stores/appRuntimeStore';
@@ -21,6 +20,9 @@ const APP_ICON_FALLBACK =
  * Animation: `spring.criticalDamped` on entry (confident drop, no
  * overshoot); explicit 220 ms cubic-bezier ease-in on exit so the banner
  * gets out of the way faster than it came in — matches iOS banner feel.
+ * Surface is fully opaque (systemBackground) — no Material / no opacity
+ * animation, so background content is never visible through the banner
+ * during motion.
  */
 export function Banner() {
   const current = useBannerStore((s) => s.current);
@@ -64,10 +66,9 @@ export function Banner() {
         >
           <motion.div
             key={`banner-${current.id}`}
-            initial={{ opacity: 0, y: -120 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ y: -120 }}
+            animate={{ y: 0 }}
             exit={{
-              opacity: 0,
               y: -120,
               transition: { duration: 0.22, ease: [0.4, 0, 1, 1] },
             }}
@@ -86,13 +87,13 @@ export function Banner() {
             }}
             data-testid="banner"
           >
-            <Material
-              variant="thick"
+            <div
               className="flex items-start overflow-hidden"
               style={{
                 borderRadius: 20,
                 padding: '10px 14px',
                 boxShadow: '0 8px 24px rgba(0, 0, 0, 0.18)',
+                backgroundColor: 'var(--color-systemBackground)',
               }}
               onClick={handleTap}
             >
@@ -162,7 +163,7 @@ export function Banner() {
                   </div>
                 ) : null}
               </div>
-            </Material>
+            </div>
           </motion.div>
         </div>
       )}
