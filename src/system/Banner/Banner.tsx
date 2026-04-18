@@ -2,6 +2,8 @@ import { useRef } from 'react';
 import { AnimatePresence, motion, type PanInfo } from 'motion/react';
 import { Material } from '@/system/Material';
 import { spring } from '@/platform/design-tokens/motion';
+import { appRegistry } from '@/platform/appRegistry';
+import { useAppRuntimeStore } from '@/platform/stores/appRuntimeStore';
 import { useBannerStore } from './bannerStore';
 
 const APP_ICON_FALLBACK =
@@ -11,9 +13,14 @@ const APP_ICON_FALLBACK =
  * iOS-style banner notification.
  *
  * Slides in from above the status bar, renders a Liquid Glass Material
- * capsule with: app icon (28px rounded square) + title (semibold
- * subhead) + subtitle (footnote). Tap fires onTap and dismisses; swipe
- * upward (≥30 px) dismisses early.
+ * rounded-rect with: app icon (36px rounded square) + bold source-app
+ * name + title. Tap returns the user to the source app (APNs-style:
+ * banner tap → open posting app) and dismisses. Swipe up (≥30 px) or
+ * upward flick dismisses early.
+ *
+ * Animation: `spring.criticalDamped` on entry (confident drop, no
+ * overshoot); explicit 220 ms cubic-bezier ease-in on exit so the banner
+ * gets out of the way faster than it came in — matches iOS banner feel.
  */
 export function Banner() {
   const current = useBannerStore((s) => s.current);
@@ -35,7 +42,12 @@ export function Banner() {
 
   const handleTap = (): void => {
     if (!current) return;
-    current.onTap?.();
+    const target = current.sourceAppId;
+    // Silently skip navigation if the source app was uninstalled since
+    // the banner was queued — no crash, no secondary toast.
+    if (target && appRegistry.has(target)) {
+      useAppRuntimeStore.getState().openApp(target, null);
+    }
     dismiss();
   };
 
@@ -52,10 +64,14 @@ export function Banner() {
         >
           <motion.div
             key={`banner-${current.id}`}
-            initial={{ opacity: 0, y: -80 }}
+            initial={{ opacity: 0, y: -120 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -80 }}
-            transition={{ type: 'spring', ...spring.snappy }}
+            exit={{
+              opacity: 0,
+              y: -120,
+              transition: { duration: 0.22, ease: [0.4, 0, 1, 1] },
+            }}
+            transition={{ type: 'spring', ...spring.criticalDamped }}
             drag="y"
             dragConstraints={{ top: -40, bottom: 8 }}
             dragElastic={0.3}
@@ -140,27 +156,9 @@ export function Banner() {
                       marginTop: 1,
                       letterSpacing: '-0.01em',
                     }}
-                    data-testid="banner-subtitle-primary"
+                    data-testid="banner-message"
                   >
                     {current.title}
-                  </div>
-                ) : null}
-
-                {current.subtitle ? (
-                  <div
-                    style={{
-                      fontSize: 12,
-                      color: 'var(--color-secondaryLabel)',
-                      marginTop: 1,
-                      lineHeight: 1.3,
-                      overflow: 'hidden',
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
-                    }}
-                    data-testid="banner-subtitle"
-                  >
-                    {current.subtitle}
                   </div>
                 ) : null}
               </div>

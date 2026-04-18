@@ -6,8 +6,10 @@
  * which auto-dismisses after ~2s (same behavior as all callers of
  * useToastStore in the app — see `system/Toast/toastStore.ts`).
  *
- * warn/error are convenience prefixes — do NOT use these for flow
- * control (they don't change the store's behavior, only the display).
+ * `warn` / `error` are currently aliased to `show()` — kept as named
+ * exports for API stability and reserved for a future visual variant
+ * (e.g. coloured stripe, leading icon). They behave identically to
+ * `show()` today; do NOT use them for control flow.
  */
 import { useToastStore } from '@/system';
 
@@ -16,9 +18,9 @@ export function show(message: string): void {
 }
 
 export function warn(message: string): void {
-  show(`⚠️ ${message}`);
+  show(message);
 }
 
 export function error(message: string): void {
-  show(`❌ ${message}`);
+  show(message);
 }

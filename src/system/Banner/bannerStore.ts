@@ -5,18 +5,18 @@ import { create } from 'zustand';
  *
  * One banner visible at a time; incoming banners are queued. Each banner
  * auto-dismisses after `duration` ms (default 4000). Tapping the banner
- * fires the optional `onTap` callback and dismisses.
+ * re-opens the source app (see Banner.tsx handleTap) and dismisses.
  */
 
 export interface BannerEntry {
   /** Stable id so consumers can deduplicate. Auto-generated if omitted. */
   id: string;
   title: string;
-  subtitle?: string;
   appIcon?: string;
   appName?: string;
+  /** id of the app that posted this banner. Tap → openApp(sourceAppId). */
+  sourceAppId?: string;
   duration: number;
-  onTap?: () => void;
   /** Wall-clock time of arrival, used for "now" / "X 分钟前" stamps. */
   arrivedAt: number;
 }
@@ -49,11 +49,10 @@ export const useBannerStore = create<BannerState>()((set, get) => ({
     const entry: BannerEntry = {
       id: partial.id ?? `banner-${Date.now()}-${autoIdCounter++}`,
       title: partial.title,
-      subtitle: partial.subtitle,
       appIcon: partial.appIcon,
       appName: partial.appName,
+      sourceAppId: partial.sourceAppId,
       duration: partial.duration ?? DEFAULT_DURATION,
-      onTap: partial.onTap,
       arrivedAt: Date.now(),
     };
 

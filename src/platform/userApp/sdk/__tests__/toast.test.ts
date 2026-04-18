@@ -14,14 +14,14 @@ describe('@hiphone/toast', () => {
     expect(state.visible).toBe(true);
   });
 
-  it('warn() prefixes with ⚠️', () => {
+  it('warn() currently passes the message through unchanged (aliased to show)', () => {
     warn('careful');
-    expect(useToastStore.getState().message).toBe('⚠️ careful');
+    expect(useToastStore.getState().message).toBe('careful');
   });
 
-  it('error() prefixes with ❌', () => {
+  it('error() currently passes the message through unchanged (aliased to show)', () => {
     error('boom');
-    expect(useToastStore.getState().message).toBe('❌ boom');
+    expect(useToastStore.getState().message).toBe('boom');
   });
 
   it('subsequent show() replaces the prior message', () => {

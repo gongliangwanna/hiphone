@@ -1,6 +1,6 @@
 import React, { useState, type ComponentType, type ReactNode } from 'react';
-import { Bell, BellRing, CheckCircle, AlertTriangle, XCircle, Zap, MessageSquare, Gift } from 'lucide-react';
-import { show as toastShow, warn as toastWarn, error as toastError } from '@hiphone/toast';
+import { MessageSquare, FileText, Zap, Bell, Layers } from 'lucide-react';
+import { show as toastShow } from '@hiphone/toast';
 import { show as bannerShow } from '@hiphone/banner';
 
 interface Action {
@@ -17,8 +17,8 @@ export default function NotifierApp() {
 
   const toastActions: Action[] = [
     {
-      label: '普通 toast',
-      icon: CheckCircle,
+      label: '简短提示',
+      icon: MessageSquare,
       tint: '#34C759',
       onClick: () => {
         toastShow('已保存');
@@ -26,21 +26,12 @@ export default function NotifierApp() {
       },
     },
     {
-      label: '警告 toast',
-      icon: AlertTriangle,
-      tint: '#FF9500',
+      label: '长消息',
+      icon: FileText,
+      tint: '#007AFF',
       onClick: () => {
-        toastWarn('网络较慢');
-        track('toast.warn("网络较慢")');
-      },
-    },
-    {
-      label: '错误 toast',
-      icon: XCircle,
-      tint: '#FF3B30',
-      onClick: () => {
-        toastError('操作失败');
-        track('toast.error("操作失败")');
+        toastShow('这是一条较长的消息内容,用来检查换行与位置');
+        track('toast.show(长消息)');
       },
     },
     {
@@ -60,45 +51,20 @@ export default function NotifierApp() {
     {
       label: '简单 banner',
       icon: Bell,
-      tint: '#007AFF',
-      onClick: () => {
-        bannerShow({ title: '你有一条新通知' });
-        track('banner.show({ title })');
-      },
-    },
-    {
-      label: '带副标题',
-      icon: MessageSquare,
-      tint: '#5856D6',
-      onClick: () => {
-        bannerShow({
-          title: '新消息',
-          subtitle: '看看今天的活动吧 🎉',
-        });
-        track('banner.show({ title, subtitle })');
-      },
-    },
-    {
-      label: '带跳转回调',
-      icon: BellRing,
       tint: '#FF9500',
       onClick: () => {
-        bannerShow({
-          title: '点我打开 toast',
-          subtitle: '这条 banner 支持 tap 回调',
-          onTap: () => toastShow('你点击了 banner 回调 ✓'),
-        });
-        track('banner.show({ onTap })');
+        bannerShow({ title: '你有一条新通知' });
+        track('banner.show · 点通知会回到本 App');
       },
     },
     {
       label: '连排队 3 条',
-      icon: Gift,
-      tint: '#AF52DE',
+      icon: Layers,
+      tint: '#5856D6',
       onClick: () => {
-        bannerShow({ title: '第一条', subtitle: '排队中,依次显示' });
-        bannerShow({ title: '第二条', subtitle: '上一条消失后自动出现' });
-        bannerShow({ title: '第三条', subtitle: '这是队列中的最后一条' });
+        bannerShow({ title: '第一条 · 排队中' });
+        bannerShow({ title: '第二条 · 依次显示' });
+        bannerShow({ title: '第三条 · 队列末尾' });
         track('连排队 3 条 banner');
       },
     },
@@ -140,7 +106,7 @@ export default function NotifierApp() {
         </div>
 
         <div className="text-center text-[11px] text-gray-400 pb-2">
-          Banner 可轻点触发回调 · 向上滑可提前关闭
+          点 banner 返回 App · 向上滑可提前关闭
         </div>
       </div>
     </div>

@@ -87,4 +87,12 @@ describe('bannerStore', () => {
     useBannerStore.getState().show({ id: 'my-banner', title: 'x' });
     expect(useBannerStore.getState().current?.id).toBe('my-banner');
   });
+
+  it('round-trips sourceAppId through show() to current', () => {
+    useBannerStore.getState().show({
+      title: 'from shop',
+      sourceAppId: 'test-shop',
+    });
+    expect(useBannerStore.getState().current?.sourceAppId).toBe('test-shop');
+  });
 });
