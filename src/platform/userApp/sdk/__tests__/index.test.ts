@@ -31,6 +31,19 @@ describe('resolveModule', () => {
     expect(() => resolveModule('@hiphone/ai')).toThrow(/Module not found/);
   });
 
+  it('resolves "@hiphone/nav" to an object with open and goHome', () => {
+    const mod = resolveModule('@hiphone/nav') as { open: unknown; goHome: unknown };
+    expect(typeof mod.open).toBe('function');
+    expect(typeof mod.goHome).toBe('function');
+  });
+
+  it('resolves "@hiphone/toast" to an object with show/warn/error', () => {
+    const mod = resolveModule('@hiphone/toast') as { show: unknown; warn: unknown; error: unknown };
+    expect(typeof mod.show).toBe('function');
+    expect(typeof mod.warn).toBe('function');
+    expect(typeof mod.error).toBe('function');
+  });
+
   it('does NOT leak prototype-chain keys (toString, constructor, etc.)', () => {
     // The `in` operator would walk the prototype chain; Object.hasOwn does not.
     // Guard against future regressions that might switch back to `in`.
