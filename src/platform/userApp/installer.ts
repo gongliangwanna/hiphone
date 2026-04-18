@@ -19,6 +19,7 @@ import { wrapUserComponent } from './sdk/wrap';
 import { validateManifest, type UserAppManifest, ManifestError } from './manifest';
 import { migrateS3ToS4Owner } from './migrations';
 import { registerMountedApp } from './sdk/context';
+import { ensureTwindInstalled } from './twindRuntime';
 
 export type InstallErrorKind =
   | 'bad-zip'
@@ -286,7 +287,12 @@ function buildUserAppComponent(
     // in useEffect). React runs ALL layout effects before ANY passive effects,
     // regardless of component depth — so this registration is guaranteed to
     // be in place when user app useEffect callbacks fire.
+    //
+    // Also kick off runtime Tailwind bootstrap so user app className="flex"
+    // etc. get their CSS generated. The first user app mount triggers the
+    // import; subsequent mounts are no-ops.
     React.useLayoutEffect(() => {
+      void ensureTwindInstalled();
       const unregister = registerMountedApp(appId);
       return unregister;
     }, []);
