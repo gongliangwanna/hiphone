@@ -3,6 +3,6 @@
   "name": "通知测试台",
   "version": "1.0.0",
   "entry": "App.tsx",
-  "icon": "icon.svg",
+  "icon": "icon.jpg",
   "perspectiveAware": false
 }
