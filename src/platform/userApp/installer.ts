@@ -136,7 +136,7 @@ export async function install(
     const compiledMap: Record<string, string> = {};
     const total = filesToCompile.length;
     for (let i = 0; i < total; i++) {
-      const path = filesToCompile[i];
+      const path = filesToCompile[i]!;
       emit({ stage: 'compile', progress: i / total, fileIndex: i, total });
       const fileEntry = zip.file(path);
       if (!fileEntry) {

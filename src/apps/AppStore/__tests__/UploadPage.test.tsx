@@ -37,7 +37,7 @@ describe('UploadPage', () => {
     });
 
     expect(installSpy).toHaveBeenCalledOnce();
-    expect(installSpy.mock.calls[0][0]).toBeInstanceOf(File);
+    expect(installSpy.mock.calls[0]![0]).toBeInstanceOf(File);
   });
 
   it('shows progress text while installing and success toast on done', async () => {

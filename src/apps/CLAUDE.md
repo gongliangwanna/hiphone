@@ -24,3 +24,4 @@
 | `safari` | `Safari/SafariApp` | 浏览器，底部URL栏 + iframe WebView + 标签页网格 + 起始页收藏夹 + DuckDuckGo搜索 |
 
 | `xingyu` | `XingYu/XingYuApp` | 星语，原创可爱虚拟偶像聊天App，4 Tab(消息/通讯录/动态/我的) + 粉彩渐变主题 + bouncy动画 + 偶像卡片 + 朋友圈 + localStorage持久化 |
+| `app-store` | `AppStore/AppStoreApp` | App Store，两 tab(上传/已装) + 文件上传 + 进度显示 |

@@ -10,6 +10,7 @@ import { SafariApp } from './Safari/SafariApp';
 import { PhotosApp } from './Photos/PhotosApp';
 import { XingYuApp } from './XingYu/XingYuApp';
 import { GomokuApp } from './Gomoku/GomokuApp';
+import { AppStoreApp } from './AppStore/AppStoreApp';
 
 /**
  * Register all builtin apps into appRegistry.
@@ -30,6 +31,7 @@ export function registerBuiltins(): void {
   appRegistry.register({ id: 'maps', type: 'builtin', component: MapsApp, perspectiveAware: false, globalData: true });
   appRegistry.register({ id: 'music', type: 'builtin', component: MusicApp, perspectiveAware: false, globalData: true });
   appRegistry.register({ id: 'music-dock', type: 'builtin', component: MusicApp, perspectiveAware: false, globalData: true });
+  appRegistry.register({ id: 'app-store', type: 'builtin', component: AppStoreApp, perspectiveAware: false, globalData: true });
 
   // Neither perspective-aware nor global: show read-only placeholder when viewing another's phone
   appRegistry.register({ id: 'calendar', type: 'builtin', component: CalendarApp, perspectiveAware: false, globalData: false });

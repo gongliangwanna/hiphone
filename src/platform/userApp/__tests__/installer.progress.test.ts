@@ -41,7 +41,7 @@ describe('installer.install — progress events', () => {
     expect(stages[stages.length - 1]).toBe('done');
 
     // Order invariant: indexOf of each stage is strictly monotonic
-    const order = ['unzip', 'validate', 'compile', 'persist', 'done'];
+    const order: InstallProgressEvent['stage'][] = ['unzip', 'validate', 'compile', 'persist', 'done'];
     let lastIdx = -1;
     for (const stage of order) {
       const idx = stages.indexOf(stage);
@@ -81,7 +81,7 @@ describe('installer.install — progress events', () => {
     await expect(install(badZip, { onProgress: (ev) => events.push(ev) })).rejects.toThrow();
     const errorEvents = events.filter((e): e is Extract<InstallProgressEvent, { stage: 'error' }> => e.stage === 'error');
     expect(errorEvents.length).toBe(1);
-    expect(errorEvents[0].error).toBeInstanceOf(Error);
+    expect(errorEvents[0]!.error).toBeInstanceOf(Error);
   });
 
   it('install still returns a valid result when onProgress is not passed', async () => {
