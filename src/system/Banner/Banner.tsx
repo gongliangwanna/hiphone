@@ -101,13 +101,16 @@ export function Banner() {
               }}
               onClick={handleTap}
             >
-              {/* App icon — 32×32; anchors text vertical alignment */}
+              {/* App icon — 32×32; anchors text vertical alignment. Corner
+                  radius 10 keeps the same ~30 % ratio as home-screen icons
+                  (--radius-icon 18 on 54–64 px), so the banner icon reads
+                  as a scaled-down home icon rather than a generic thumb. */}
               <div
                 className="flex-shrink-0 overflow-hidden"
                 style={{
                   width: 32,
                   height: 32,
-                  borderRadius: 7,
+                  borderRadius: 10,
                   backgroundColor: 'rgba(0,0,0,0.06)',
                   marginRight: 10,
                 }}
