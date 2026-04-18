@@ -9,7 +9,7 @@
 M2 让 hiPhone 能吃真 zip 包（DEV API → installer → IDB → Springboard）；M3 把这条链路暴露给用户可见的 UI 层，并补齐 user app 之间的互联能力。**M3 的目标是"看得见的 App Store + 能跨 app 跳转 + 给用户反馈 + 写 Tailwind 就能样式化"。**
 
 **M3 做什么：**
-- **Twind 集成** —— user app 可直接写 `className="flex gap-4 p-4"`，运行时生成 CSS
+- **运行时 Tailwind 集成** —— user app 可直接写 `className="flex gap-4 p-4"`，由 `@tailwindcss/browser` 运行时生成 CSS（选它而非 Twind：Tailwind 官方维护，v4 对齐宿主构建时版本，语义一致）
 - **App Store app** —— 内置 app，两页：本地上传（zip 选择 + 拖拽 + 进度）、已装管理（列表 + 卸载）
 - **`@hiphone/nav`** —— user app 可 `open(appId, params)` 跳转另一 app 并传参；`goHome()` 回桌面
 - **`@hiphone/toast`** —— user app 可 `toast.show('...')` 调用系统 Toast
@@ -43,7 +43,7 @@ Brainstorming 阶段的两个核心决策：
 | **Q1: M3 范围** | "能用的商店 + app 互联"（5 阶段，砍 AI/Builder/Tool Registry/远程商店） | M2 打通了装&跑；M3 的自然延伸是"看得见的入口 + app 之间能对话"。AI 是独立抽象（provider/heartbeat/工具注册），强塞进 M3 会让验收链太长、上下文切换过频。远程商店是 M5（那时引入 permissions 系统更有意义） |
 | **Q2: `@hiphone/fetch` 是否做** | 不做，unshadow 原生 fetch，承认"管不住" | L1 软沙箱（`new Function` 作用域遮蔽）本就能绕过。@hiphone/fetch 做成薄 re-export 只是形式主义。诚实方案：让 user app 直接调 `fetch()`；等升级 iframe 沙箱（L2）时再把 fetch 包成 postMessage RPC，那时才有真实的隔离语义 |
 | **Q3: Permissions 是否生效** | 继续"识别不消费"（同 M2） | fetch 砍了之后 permissions 在 M3 没有被校验的动作（nav.open 打开已装 app 属于低风险操作，不值得引入权限层）；等 M5 远程商店时 permissions 字段才会面对"陌生人的 app" 的真实语义需要 |
-| **Approach: 实现顺序** | Walking skeleton（每 stage 末尾 `pnpm test` + `pnpm build` 全绿） | 沿用 M2 的做法；Twind 是基础设施，先铺；UI 层 → SDK 层逐层增厚；E2E 做最后一 stage 粘合 |
+| **Approach: 实现顺序** | Walking skeleton（每 stage 末尾 `pnpm test` + `pnpm build` 全绿） | 沿用 M2 的做法；Tailwind runtime 是基础设施，先铺；UI 层 → SDK 层逐层增厚；E2E 做最后一 stage 粘合 |
 
 ## 架构
 
@@ -61,7 +61,7 @@ src/apps/AppStore/                     【新】
     └── UninstallConfirm.tsx            S3 — "卸载 XXX？同时删除数据" 对话框
 
 src/platform/userApp/
-├── twindRuntime.ts                    【新】S1 — Twind 实例 + style 注入
+├── twindRuntime.ts                    【新】S1 — 动态 import @tailwindcss/browser
 ├── installer.ts                       【改】S2 — 带进度事件（InstallProgressEvent）
 └── sdk/
     ├── nav.ts                         【新】S4 — @hiphone/nav (open, goHome)
@@ -83,12 +83,12 @@ src/platform/userApp/__tests__/fixtures/
 
 **注意：**
 - `app-store` 作为 app id 已经在 `apps.data.ts` 第 30 行定义（系统 iTunes Store 图标）；M3 S2 只需通过 `registerBuiltins.ts` 往 appRegistry 里塞一条 entry
-- `twind` 依赖通过 `pnpm add twind` 引入（预计 ~12 KB gzip）
+- 运行时 Tailwind 通过 `pnpm add @tailwindcss/browser` 引入（预计 ~55 KB gzip，与宿主构建时 Tailwind 同版本 v4）
 - 示例 app fixture 结构严格对齐 M2 的 `todo-app` fixture，以复用 `loadFixtureZip` helper
 
 ### 核心模块
 
-#### 1. Twind 运行时（`src/platform/userApp/twindRuntime.ts`）
+#### 1. 运行时 Tailwind（`src/platform/userApp/twindRuntime.ts`）
 
 **职责：** 让 user app 用的 Tailwind class 在运行时被识别并生成 CSS。
 
@@ -97,25 +97,23 @@ src/platform/userApp/__tests__/fixtures/
 **实现方式：**
 ```typescript
 // twindRuntime.ts
-import { install as installTwind } from 'twind';
-
 let installed = false;
-export function ensureTwindInstalled(): void {
+
+export async function ensureTwindInstalled(): Promise<void> {
   if (installed) return;
-  installTwind({
-    // Scope 到 user app 根容器，避免污染宿主 shell
-    prefix: '.user-app-root ',  // 可选，但推荐做法
-    // 允许的 class 模式参考 tailwind 默认 preset
-  });
   installed = true;
+  // @tailwindcss/browser auto-activates on import: 扫描 DOM 的 class 属性并向
+  // document.head 注入生成的 CSS；后续 DOM 变化由内置 MutationObserver 处理。
+  // 动态 import 让 Sucrase + 宿主 bundle 不强依赖此包（走按需路径）。
+  await import('@tailwindcss/browser');
 }
 ```
 
-**挂载时机：** `UserAppRoot` 在 `useLayoutEffect` 里调 `ensureTwindInstalled()`（复用 M2 里注册 mountedApps 的那次 effect）。全局一次注入，所有 user app 共享。
+**挂载时机：** `UserAppRoot` 在 `useLayoutEffect` 里调 `ensureTwindInstalled()`（复用 M2 里注册 mountedApps 的那次 effect）。全局一次注入，所有 user app 共享；多次调用幂等。
 
-**Scope 策略：** Twind 的 `install({ prefix: '.user-app-root ' })` 会把生成的 `.text-blue-500` 变成 `.user-app-root .text-blue-500`。user app 的根 `<div>` 上加 `className="user-app-root"`，保证 class 不泄露到宿主。
+**Scope 策略：** `@tailwindcss/browser` 生成的 CSS 是全局 class 选择器（如 `.flex{display:flex}`）。宿主 shell 早已在构建时把自己用到的 class 打进 CSS，运行时再生成一遍对应规则也无副作用（浏览器 CSSOM 去重）。**不需要** 加 `.user-app-root` 前缀；M3 阶段默认不做 scoping，若未来出现冲突再引入（prefix / layer / cascade layer）。
 
-**容错：** Twind install 失败（配置错）或 class 名未识别，退化成不生成 CSS（样式失效但 app 不崩）。ErrorBoundary 不拦 Twind 层错误。
+**容错：** `import('@tailwindcss/browser')` 失败时捕获并 `console.warn`，installed 标志重置为 false（下次再试），user app 继续渲染（样式失效但 app 不崩）。
 
 #### 2. Installer 进度事件（`installer.ts` 改）
 
@@ -321,7 +319,7 @@ Springboard 桌面图标消失
 
 | 阶段 | 内容 | 交付物 | 验收标准 |
 |------|------|--------|---------|
-| **S1** | Twind 集成 | `twindRuntime.ts` + 宿主集成点 | fixture app 中 `className="flex bg-red-500 p-4"` 渲染后 computed style 正确；宿主 shell 视觉无任何变化 |
+| **S1** | 运行时 Tailwind 集成 | `twindRuntime.ts` + 宿主集成点 | fixture app 中 `className="flex bg-red-500 p-4"` 渲染后 computed style 正确；宿主 shell 视觉无任何变化 |
 | **S2** | App Store app + 上传页 | `AppStoreApp.tsx`, `UploadPage.tsx`, installer progress events | 桌面 tap App Store 图标 → 选 zip → 进度条显示 → 安装成功 → 回桌面看到新图标 |
 | **S3** | 已装管理页 | `ManagePage.tsx`, `InstalledAppRow.tsx`, `UninstallConfirm.tsx` | 切到"已装" tab → 列表显示 → tap "-" → 确认 → 卸载完成 → 列表 + Springboard 同步更新 |
 | **S4** | `@hiphone/nav` + `@hiphone/toast` | `sdk/nav.ts`, `sdk/toast.ts`, SDK index 更新 | user app 可 `open(appId, params)` + `useOpenParams` 读回；`toast.show(msg)` 触发系统 Toast；单元测试覆盖 |
@@ -335,7 +333,7 @@ Springboard 桌面图标消失
 - 手测验收清单（spec 每阶段定义的"验收标准"）可跑通
 
 **绿基线维护：**
-- S1 只加 Twind，不动 installer/SDK → 既有 M2 测试全绿
+- S1 只加 Tailwind runtime，不动 installer/SDK → 既有 M2 测试全绿
 - S2 改 installer 仅叠加回调，不改语义 → 既有测试全绿
 - S3 新增 UI，installer 已支持 uninstall → 既有测试全绿
 - S4 新增 SDK 模块，不改既有 → 既有测试全绿
@@ -345,8 +343,9 @@ Springboard 桌面图标消失
 
 | 风险 | 影响 | 缓解 |
 |------|------|------|
-| Twind 样式穿透到宿主 shell | 宿主视觉 regression | Twind `install({ prefix: '.user-app-root ' })` 生成的 CSS 带 scope；user app 根容器 className 加 `user-app-root`；视觉 regression 通过 stage-1 独立截图检查 |
-| Twind 与 user app 自带的 `<style>` 冲突 | 样式优先级错乱 | user app 写 `<style>` 的 CSS 优先级天然高于 twind 注入的（twind 是类名选择器，`<style>` 内如果更 specific 会赢）；这符合常规 CSS 语义，不另行处理 |
+| `@tailwindcss/browser` 重复生成已存在的 class | CSSOM 冗余 | 浏览器会把重复 CSS 规则合并（同选择器 + 同属性），视觉无副作用；bundle size 已计入 |
+| User app Tailwind 样式影响宿主 shell | 宿主视觉 regression | Tailwind 生成的 class 都是原子 utility（`.flex {display:flex}`），与宿主 v4 同版本 → 语义一致，不会有差异；S1 验证里加一步"宿主首屏 before/after 截图对比" |
+| User app 的 `<style>` 覆盖 runtime Tailwind | 样式优先级错乱 | 一贯 CSS 语义：后加载或更 specific 者赢；不处理，属于 user app 作者的合理自由 |
 | Deep Link 调用方传入不存在 appId | 调用 crash | `nav.open` 预检 `appRegistry.has(id)`，未注册时 `toast.show('App 未安装')` 且 return，不崩 |
 | 连续 `open` 导致 openParams 错乱 | 目标 app 收到错误参数 | openParams 是 per-appId 的覆盖语义；M2 的 useOpenParams 已通过单测；M3 不改其语义 |
 | 上传 UI 在 mobile WebView 体验差（`<input type=file>` 样式） | 用户体验打折 | M3 MVP 用原生 input 样式；后续（M5）按需改进；不 block M3 验收 |
@@ -358,11 +357,10 @@ Springboard 桌面图标消失
 
 ### 单元测试
 
-**S1 Twind：**
+**S1 Tailwind runtime：**
 - `twindRuntime.test.ts`
-  - `ensureTwindInstalled` 幂等（多次调用仅 install 一次）
-  - install 后 document.head 里有 twind style 标签
-  - 失败时不抛（只 warn）
+  - `ensureTwindInstalled` 幂等（多次并发/串行调用仅 `import()` 一次）
+  - `import()` rejection 时不抛给调用方（console.warn + installed 标志重置以允许重试）
 
 **S2 上传页：**
 - `installer.progress.test.ts`
@@ -408,7 +406,7 @@ Springboard 桌面图标消失
 ### 构建验证
 
 - 每 stage `pnpm typecheck` + `pnpm test` + `pnpm build` 三件套
-- M3 最终交付后，bundle size 变化 < +20 KB gzip（Twind ~12 KB + SDK ~3 KB + AppStore UI ~5 KB 估算）
+- M3 最终交付后，bundle size 变化 ≲ +60 KB gzip（@tailwindcss/browser ~55 KB 通过动态 import 按需加载 + SDK ~3 KB + AppStore UI ~5 KB）；@tailwindcss/browser 进 chunk 而非主 bundle
 
 ## 验收标准
 
