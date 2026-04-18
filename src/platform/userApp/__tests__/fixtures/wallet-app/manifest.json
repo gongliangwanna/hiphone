@@ -1,0 +1,8 @@
+{
+  "id": "test-wallet",
+  "name": "测试钱包",
+  "version": "1.0.0",
+  "entry": "App.tsx",
+  "icon": "icon.png",
+  "perspectiveAware": false
+}
