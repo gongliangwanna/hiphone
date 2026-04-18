@@ -53,6 +53,12 @@ describe('resolveModule', () => {
     expect(mod.Gem).toBeDefined();
   });
 
+  it('resolves "@hiphone/banner" to an object with show and dismiss', () => {
+    const mod = resolveModule('@hiphone/banner') as { show: unknown; dismiss: unknown };
+    expect(typeof mod.show).toBe('function');
+    expect(typeof mod.dismiss).toBe('function');
+  });
+
   it('does NOT leak prototype-chain keys (toString, constructor, etc.)', () => {
     // The `in` operator would walk the prototype chain; Object.hasOwn does not.
     // Guard against future regressions that might switch back to `in`.

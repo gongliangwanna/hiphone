@@ -10,6 +10,7 @@ import { AppSwitcher } from '../AppSwitcher/AppSwitcher';
 import { WidgetDrawer } from '../WidgetDrawer/WidgetDrawer';
 import { PerformanceHUD } from '../PerformanceHUD/PerformanceHUD';
 import { Toast } from '@/system/Toast/Toast';
+import { Banner } from '@/system/Banner/Banner';
 import { PhoneOwnerBanner } from '../PhoneOwnerBanner/PhoneOwnerBanner';
 import {
   PERF_DEBUG_STORAGE_KEY,
@@ -247,9 +248,14 @@ export function Device() {
       el.style.transform = 'scale(0.96)';
       el.style.opacity = '0.7';
     } else if (appDismissing) {
-      // App is closing — animate Springboard back to normal
+      // App close: AppHost's shape-morph starts with clipPath inset(0) fully
+      // covering the screen, so snapping desktop back to 1.0/opacity 1 is
+      // invisible to the user. Transitioning (as we used to with a 350ms
+      // ease-out) produced a perceptible scale-out-from-center on the icons
+      // — edge icons drifted ~3px before the AppHost clipPath exposed them,
+      // reading as a faint left-to-right shimmer across the home screen.
       el.style.visibility = 'visible';
-      el.style.transition = 'filter 350ms ease-out, transform 350ms ease-out, opacity 350ms ease-out';
+      el.style.transition = 'none';
       el.style.filter = 'none';
       el.style.transform = 'scale(1)';
       el.style.opacity = '1';
@@ -418,6 +424,7 @@ export function Device() {
 
       <StatusBar />
       <PhoneOwnerBanner />
+      <Banner />
       <Toast />
 
       {!isLocked && !activeAppId && presentationMode === 'foreground' && (
