@@ -95,7 +95,7 @@ describe('buildMemoryEntry — quoteRef expansion', () => {
     const entry = buildMemoryEntry(
       baseText({
         type: 'text', text: '当然啦', senderId: 'char-001',
-        quoteRef: { senderId: 'me', preview: '你今天吃饭了吗' },
+        quoteRef: { msgId: 'q1', senderId: 'me', preview: '你今天吃饭了吗', type: 'text' },
       }),
       'xingyu',
       ctx,
@@ -107,7 +107,7 @@ describe('buildMemoryEntry — quoteRef expansion', () => {
     const entry = buildMemoryEntry(
       baseText({
         type: 'text', text: '就是这个意思', senderId: 'me',
-        quoteRef: { senderId: 'char-001', preview: '没问题' },
+        quoteRef: { msgId: 'q2', senderId: 'char-001', preview: '没问题', type: 'text' },
       }),
       'xingyu',
       ctx,
@@ -119,7 +119,7 @@ describe('buildMemoryEntry — quoteRef expansion', () => {
     const entry = buildMemoryEntry(
       baseText({
         type: 'text', text: '好', senderId: 'char-001',
-        quoteRef: { senderId: 'char-002', preview: '一起吃饭吧' },
+        quoteRef: { msgId: 'q3', senderId: 'char-002', preview: '一起吃饭吧', type: 'text' },
       }),
       'xingyu',
       ctx,
@@ -131,7 +131,7 @@ describe('buildMemoryEntry — quoteRef expansion', () => {
     const entry = buildMemoryEntry(
       baseText({
         type: 'text', text: 'ok', senderId: 'char-001',
-        quoteRef: { senderId: 'char-ghost', preview: '...' },
+        quoteRef: { msgId: 'q4', senderId: 'char-ghost', preview: '...', type: 'text' },
       }),
       'xingyu',
       ctx,
@@ -188,9 +188,9 @@ describe('buildMemoryEntry — image / sticker / forward_card / heartbeat_log', 
         forwardCard: {
           title: '和小月的聊天',
           messages: [
-            { type: 'text', senderName: '小月', text: '想你了' },
-            { type: 'sticker', senderName: '我', text: '' },
-            { type: 'image', senderName: '小月', text: '' },
+            { type: 'text', senderId: 'char-002', senderName: '小月', text: '想你了', timestamp: 1 },
+            { type: 'sticker', senderId: 'me', senderName: '我', text: '', timestamp: 2 },
+            { type: 'image', senderId: 'char-002', senderName: '小月', text: '', timestamp: 3 },
           ],
           preview: ['想你了'],
         },

@@ -28,7 +28,7 @@ import { useCharacterStore } from '@/platform/stores/characterStore';
 import { useAIConfigStore } from '@/platform/stores/aiConfigStore';
 import { usePersonaStore } from '@/platform/stores/personaStore';
 import { useWorldBookStore } from '@/platform/stores/worldBookStore';
-import { useXYData, collectCharacterHistory, triggerCompression } from '@/apps/XingYu/xingYuDataStore';
+import { useXYData, triggerCompression } from '@/apps/XingYu/xingYuDataStore';
 import { useCharacterMemory } from './characterMemoryStore';
 import { useStickerStore } from '@/apps/XingYu/stickerStore';
 import { getAdapter } from '@/platform/ai/providers';
@@ -196,7 +196,6 @@ async function runHeartbeat(
   const persona = usePersonaStore.getState().getActivePersona();
   const worldBookChunk = useWorldBookStore.getState().buildSystemPromptChunk();
   const convId = `c-char-${characterId}`;
-  const conv = useXYData.getState().conversations.find((c) => c.id === convId);
 
   // Stickers not needed for agent mode, but included for context awareness
   const allStickers = useStickerStore.getState().packs.flatMap((pack) =>

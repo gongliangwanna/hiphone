@@ -4,8 +4,9 @@ import { useCharacterStore } from '@/platform/stores/characterStore';
 import { useAIConfigStore } from '@/platform/stores/aiConfigStore';
 import { usePersonaStore } from '@/platform/stores/personaStore';
 import { useWorldBookStore } from '@/platform/stores/worldBookStore';
-import { useXYData, collectCharacterHistory, triggerCompression } from '@/apps/XingYu/xingYuDataStore';
+import { useXYData, triggerCompression } from '@/apps/XingYu/xingYuDataStore';
 import { useStickerStore } from '@/apps/XingYu/stickerStore';
+import { useCharacterMemory } from '@/platform/ai/characterMemoryStore';
 import { buildDeviceContext } from '@/platform/ai/deviceContext';
 import { getAdapter } from '@/platform/ai/providers';
 import { inspectPrompt, type PromptSection } from '@/platform/ai/promptAssembly';
@@ -166,21 +167,8 @@ export function PromptViewerPage() {
   const inspection = useMemo(() => {
     if (!char) return null;
 
-    const convId = `c-char-${char.id}`;
-    const conv = conversations.find((c) => c.id === convId);
-    const characterSenderId = `char-${char.id}`;
-
-    const historyMsgs = collectCharacterHistory(char.id, { messages, conversations });
-
-    // Build sender name map for other characters in history
-    const senderNames: Record<string, string> = {};
-    for (const m of historyMsgs) {
-      if (m.senderId !== 'me' && m.senderId !== characterSenderId && !senderNames[m.senderId]) {
-        const charId = m.senderId.replace(/^char-/, '');
-        const found = characters.find((c) => c.id === charId);
-        if (found) senderNames[m.senderId] = found.name;
-      }
-    }
+    const charactersById = new Map(characters.map((c) => [c.id, { id: c.id, name: c.name }]));
+    const memoryEntries = useCharacterMemory.getState().getAll(char.id);
 
     const allStickers = useStickerStore.getState().packs.flatMap((pack) =>
       pack.stickers.map((s) => ({ id: s.id, description: s.description })),
@@ -210,14 +198,12 @@ export function PromptViewerPage() {
         enableVision: aiConfig.enableVision,
       },
       worldBookChunk,
-      history: historyMsgs,
+      memoryEntries,
+      currentCharId: char.id,
+      charactersById,
       now: new Date(),
-      summary: conv?.summary,
-      summaryUpToTimestamp: conv?.summaryUpToTimestamp,
       deviceContext: buildDeviceContext(),
       availableStickers: allStickers.length > 0 ? allStickers : undefined,
-      characterSenderId,
-      senderNames,
     });
   }, [char, characters, conversations, messages, aiConfig, persona, worldBookChunk]);
 

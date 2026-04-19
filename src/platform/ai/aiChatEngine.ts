@@ -14,7 +14,7 @@ import { useCharacterStore } from '@/platform/stores/characterStore';
 import { useAIConfigStore } from '@/platform/stores/aiConfigStore';
 import { usePersonaStore } from '@/platform/stores/personaStore';
 import { useWorldBookStore } from '@/platform/stores/worldBookStore';
-import { useXYData, collectCharacterHistory } from '@/apps/XingYu/xingYuDataStore';
+import { useXYData } from '@/apps/XingYu/xingYuDataStore';
 import { useCharacterMemory } from './characterMemoryStore';
 import { getAdapter } from '@/platform/ai/providers';
 import { chatComplete } from './chatComplete';

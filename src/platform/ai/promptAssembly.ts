@@ -45,15 +45,6 @@ export interface PromptAIConfig {
   enableVision?: boolean;
 }
 
-export interface HistoryMessage {
-  senderId: string;
-  type: 'text' | 'image' | 'sticker' | string;
-  text?: string;
-  imageUrl?: string;
-  stickerDesc?: string;
-  timestamp: number;
-}
-
 export interface AvailableSticker {
   id: string;
   description: string;
@@ -65,25 +56,12 @@ export interface PromptInput {
   aiConfig: PromptAIConfig;
   worldBookChunk: string;
 
-  // ── M4.1 path (preferred) ────────────────────────────────────────
-  /** Character's AI memory entries (raw content, speakerId). Takes precedence over `history` when set. */
-  memoryEntries?: readonly MemoryEntry[];
+  /** Character's AI memory entries (raw content, speakerId). */
+  memoryEntries: readonly MemoryEntry[];
   /** Current character's ID — assistant turns are attributed to this character. */
-  currentCharId?: string;
+  currentCharId: string;
   /** Character map for speaker-name resolution in render. */
-  charactersById?: Map<string, { id: string; name: string }>;
-
-  // ── Pre-M4.1 legacy path (deprecated, kept for compat) ───────────
-  /** @deprecated Use `memoryEntries` instead. */
-  history?: HistoryMessage[];
-  /** @deprecated Summary is now an inline MemoryEntry with compressed=true. */
-  summary?: string;
-  /** @deprecated Same as above. */
-  summaryUpToTimestamp?: number;
-  /** @deprecated First-person labeled mode is superseded by role alternation + name prefix. */
-  characterSenderId?: string;
-  /** @deprecated See characterSenderId. */
-  senderNames?: Record<string, string>;
+  charactersById: Map<string, { id: string; name: string }>;
 
   now: Date;
   /** Device context block (active app, weather, etc.) — injected into post-history */
@@ -374,239 +352,6 @@ function buildSystemBlock(
 }
 
 // ---------------------------------------------------------------------------
-// Phase 2: Chat history
-// ---------------------------------------------------------------------------
-
-function messageToContent(msg: HistoryMessage, enableVision: boolean): string | ContentPart[] | null {
-  switch (msg.type) {
-    case 'text':
-      // Filter out error messages — they contain raw JSON error bodies that
-      // pollute the context and can cause nested-escape parse failures.
-      if (msg.text?.startsWith('[AI 回复失败]') || msg.text?.startsWith('[未配置 AI 服务]')) {
-        return null;
-      }
-      return msg.text ?? '';
-    case 'image':
-      // If vision is enabled and we have the image data, send as multimodal
-      if (enableVision && msg.imageUrl) {
-        return [
-          { type: 'image_url', image_url: { url: msg.imageUrl, detail: 'low' } },
-        ];
-      }
-      return '[用户发送了一张图片]';
-    case 'sticker':
-      return `[发送了一个表情${msg.stickerDesc ? `：${msg.stickerDesc}` : ''}]`;
-    case 'heartbeat_log':
-      return msg.text ? `[自主活动记录]\n${msg.text}` : null;
-    default:
-      return msg.text ?? '';
-  }
-}
-
-interface BuildHistoryResult {
-  messages: ChatMessage[];
-  /** Token count of mapped history BEFORE trimming (used for ratio calculation) */
-  preTrimTokens: number;
-}
-
-function buildHistory(
-  history: HistoryMessage[],
-  tokenBudget: number,
-  keepRecentMessages: number,
-  summary?: string,
-  summaryUpToTimestamp?: number,
-  enableVision = false,
-  /** The character's senderId — when provided, enables first-person mode */
-  characterSenderId?: string,
-  /** Display name for the user / persona */
-  personaName?: string,
-  /** Map senderId → display name for other participants */
-  senderNames?: Record<string, string>,
-): BuildHistoryResult {
-  const sorted = [...history].sort((a, b) => a.timestamp - b.timestamp);
-
-  // Windowing: keep all messages that are either:
-  //   1. Within the last N (keepRecentMessages) — guaranteed minimum context
-  //   2. Not yet covered by the summary (after summaryUpToTimestamp)
-  // This prevents losing uncompressed messages. Token budget trimming
-  // handles the case where too many uncompressed messages accumulate.
-  const windowStart = Math.max(0, sorted.length - keepRecentMessages);
-  let uncoveredStart = 0;
-  if (summaryUpToTimestamp) {
-    const idx = sorted.findIndex((m) => m.timestamp > summaryUpToTimestamp);
-    uncoveredStart = idx >= 0 ? idx : sorted.length;
-  }
-  const effectiveStart = Math.min(uncoveredStart, windowStart);
-  const windowed = sorted.slice(effectiveStart);
-
-  // ── First-person mode (characterSenderId provided) ──
-  // All history is packed into a single system message as labeled text.
-  // This avoids role-alternation issues with multi-party conversations
-  // (AI-AI + AI-user mixed history). Only the last non-self message is
-  // kept as a `user` role message to trigger the model's response.
-  if (characterSenderId && personaName) {
-    return buildLabeledHistory(
-      windowed, tokenBudget, summary, enableVision,
-      characterSenderId, personaName, senderNames,
-    );
-  }
-
-  // ── Legacy mode (no characterSenderId) — standard user/assistant roles ──
-  const mapped: ChatMessage[] = [];
-
-  if (summary) {
-    mapped.push({ role: 'system', content: `[之前的对话摘要]\n${summary}` });
-  }
-
-  for (const m of windowed) {
-    const content = messageToContent(m, enableVision);
-    if (!content) continue;
-    if (typeof content === 'string' && !content) continue;
-
-    mapped.push({
-      role: m.senderId === 'me' ? 'user' : 'assistant',
-      content,
-    });
-  }
-
-  const historyOnlyTokens = mapped
-    .filter((m) => m.role !== 'system')
-    .reduce((sum, m) => sum + estimateContentTokens(m.content), 0);
-
-  let totalTokens = mapped.reduce((sum, m) => sum + estimateContentTokens(m.content), 0);
-  const startIdx = summary ? 1 : 0;
-  let trimIdx = startIdx;
-  while (totalTokens > tokenBudget && trimIdx < mapped.length - 1) {
-    totalTokens -= estimateContentTokens(mapped[trimIdx]!.content);
-    trimIdx++;
-  }
-
-  const result = summary
-    ? [mapped[0]!, ...mapped.slice(trimIdx)]
-    : mapped.slice(trimIdx);
-
-  return { messages: result, preTrimTokens: historyOnlyTokens };
-}
-
-/**
- * First-person labeled history: all messages become a system-role text block,
- * with only the last non-self message extracted as a `user` trigger message.
- *
- * Output structure:
- *   system  [之前的对话摘要]  (if summary exists)
- *   system  [对话记录]\n我：xxx\n小星星：yyy\n...
- *   user    小星星：最后一条消息   ← triggers model response
- */
-function buildLabeledHistory(
-  windowed: HistoryMessage[],
-  tokenBudget: number,
-  summary: string | undefined,
-  enableVision: boolean,
-  characterSenderId: string,
-  personaName: string,
-  senderNames?: Record<string, string>,
-): BuildHistoryResult {
-  // Build labeled lines
-  interface LabeledLine { text: string; senderId: string; tokens: number }
-  const lines: LabeledLine[] = [];
-
-  for (const m of windowed) {
-    const content = messageToContent(m, enableVision);
-    if (!content) continue;
-    if (typeof content === 'string' && !content) continue;
-    // Skip multimodal content in system block (images can't go in system messages)
-    if (typeof content !== 'string') continue;
-
-    let label: string;
-    if (m.senderId === characterSenderId) {
-      label = '我';
-    } else if (m.senderId === 'me') {
-      label = personaName;
-    } else {
-      label = senderNames?.[m.senderId] ?? m.senderId;
-    }
-
-    const d = new Date(m.timestamp);
-    const hh = d.getHours().toString().padStart(2, '0');
-    const mm = d.getMinutes().toString().padStart(2, '0');
-    const text = `[${hh}:${mm}] ${label}：${content}`;
-    lines.push({ text, senderId: m.senderId, tokens: estimateTokens(text) });
-  }
-
-  // Pre-trim token count (for compression ratio)
-  const preTrimTokens = lines.reduce((sum, l) => sum + l.tokens, 0);
-
-  // Find the last non-self message to use as the `user` trigger
-  let triggerIdx = -1;
-  for (let i = lines.length - 1; i >= 0; i--) {
-    if (lines[i]!.senderId !== characterSenderId) {
-      triggerIdx = i;
-      break;
-    }
-  }
-
-  // Build result messages
-  const result: ChatMessage[] = [];
-
-  // Summary
-  const summaryTokens = summary ? estimateTokens(summary) + 10 : 0;
-  if (summary) {
-    result.push({ role: 'system', content: `[之前的对话摘要]\n${summary}` });
-  }
-
-  // Trim from oldest until we fit within token budget (excluding summary)
-  let availableBudget = tokenBudget - summaryTokens;
-  let trimIdx = 0;
-  let historyTokens = preTrimTokens;
-  while (historyTokens > availableBudget && trimIdx < lines.length - 1) {
-    historyTokens -= lines[trimIdx]!.tokens;
-    trimIdx++;
-  }
-
-  const trimmedLines = lines.slice(trimIdx);
-
-  // Split: history goes into system in strict chronological order,
-  // the trigger (last non-self message) is duplicated as the user message
-  // to prompt the model's response.
-  if (triggerIdx >= trimIdx && trimmedLines.length > 0) {
-    const adjustedTriggerIdx = triggerIdx - trimIdx;
-    const triggerLine = trimmedLines[adjustedTriggerIdx]!;
-    const hasAfterTrigger = adjustedTriggerIdx < trimmedLines.length - 1;
-
-    // System block: all lines in chronological order.
-    // When there are messages after the trigger (AI's follow-up), include
-    // everything so the model sees correct temporal ordering.
-    // When there's nothing after the trigger, exclude it from system to
-    // avoid duplication — it only appears as the user message.
-    const systemLines = hasAfterTrigger
-      ? trimmedLines
-      : trimmedLines.slice(0, adjustedTriggerIdx);
-
-    if (systemLines.length > 0) {
-      result.push({
-        role: 'system',
-        content: `[对话记录]\n${systemLines.map((l) => l.text).join('\n')}`,
-      });
-    }
-
-    // User trigger
-    result.push({ role: 'user', content: triggerLine.text });
-  } else {
-    // No non-self message found (e.g., only AI monologue / heartbeat logs)
-    // Pack everything as system, add a minimal user trigger
-    if (trimmedLines.length > 0) {
-      result.push({
-        role: 'system',
-        content: `[对话记录]\n${trimmedLines.map((l) => l.text).join('\n')}`,
-      });
-    }
-    result.push({ role: 'user', content: '(继续)' });
-  }
-
-  return { messages: result, preTrimTokens };
-}
-
-// ---------------------------------------------------------------------------
 // Phase 3: Post-history instructions
 // ---------------------------------------------------------------------------
 
@@ -669,7 +414,7 @@ export interface PromptInspection {
  * Same logic as assemblePrompt but exposes individual parts.
  */
 export function inspectPrompt(input: PromptInput): PromptInspection {
-  const { character, persona, aiConfig, worldBookChunk, history, now, summary, deviceContext, availableStickers, formatOverride } = input;
+  const { character, persona, aiConfig, worldBookChunk, now, deviceContext, availableStickers, formatOverride } = input;
 
   let systemBlock = buildSystemBlock(character, persona, aiConfig, worldBookChunk, availableStickers, formatOverride);
   systemBlock = expandMacros(systemBlock, character, persona, now);
@@ -683,23 +428,23 @@ export function inspectPrompt(input: PromptInput): PromptInspection {
   const totalBudget = Math.floor(aiConfig.contextWindow * SAFETY_MARGIN);
   const historyBudget = Math.max(0, totalBudget - aiConfig.maxTokens - systemTokens - postTokens - overhead);
 
-  const { messages: historyMessages } = buildHistory(history, historyBudget, aiConfig.keepRecentMessages, summary, input.summaryUpToTimestamp, aiConfig.enableVision, input.characterSenderId, persona.name, input.senderNames);
+  const trimmed = trimMemoryToFit(input.memoryEntries, historyBudget, aiConfig.keepRecentMessages);
+  const historyMessages = renderMemoryToChatMessages(trimmed, {
+    currentCharId: input.currentCharId,
+    charactersById: input.charactersById,
+    personaName: persona.name,
+  });
   const historyTokens = historyMessages.reduce((s, m) => s + estimateContentTokens(m.content), 0);
 
   const sections: PromptSection[] = [
     { label: 'System 提示词', content: systemBlock, tokens: systemTokens },
   ];
 
-  // Split history messages into display sections
+  // Split into summary (role=system, compressed) vs chat (role=user/assistant)
   const summaryMsg = historyMessages.find(
     (m) => m.role === 'system' && typeof m.content === 'string' && m.content.startsWith('[之前的对话摘要]'),
   );
-  const historyBlock = historyMessages.find(
-    (m) => m.role === 'system' && typeof m.content === 'string' && m.content.startsWith('[对话记录]'),
-  );
-  const chatMsgs = historyMessages.filter(
-    (m) => m !== summaryMsg && m !== historyBlock,
-  );
+  const chatMsgs = historyMessages.filter((m) => m !== summaryMsg);
 
   if (summaryMsg) {
     const summaryText = contentToText(summaryMsg.content);
@@ -710,26 +455,7 @@ export function inspectPrompt(input: PromptInput): PromptInspection {
     });
   }
 
-  // In first-person mode: history is a system block + one user trigger
-  // In legacy mode: history is interleaved user/assistant messages
-  if (historyBlock) {
-    const blockText = contentToText(historyBlock.content);
-    const triggerMsg = chatMsgs.find((m) => m.role === 'user');
-    const triggerText = triggerMsg ? contentToText(triggerMsg.content) : '';
-    // Only append trigger if it's not already in the block (when there are
-    // messages after the trigger, buildLabeledHistory includes it in the
-    // system block — appending again would duplicate it out of order).
-    const combined = triggerMsg && !blockText.includes(triggerText)
-      ? `${blockText}\n${triggerText}`
-      : blockText;
-    const lineCount = combined.split('\n').length - 1; // subtract header
-    sections.push({
-      label: `聊天历史 (${lineCount} 条)`,
-      content: combined,
-      tokens: estimateContentTokens(historyBlock.content) +
-        (triggerMsg ? estimateContentTokens(triggerMsg.content) : 0),
-    });
-  } else if (chatMsgs.length > 0) {
+  if (chatMsgs.length > 0) {
     const chatContent = chatMsgs
       .map((m) => {
         const text = contentToText(m.content);
@@ -784,44 +510,21 @@ export function assemblePrompt(input: PromptInput): PromptOutput {
     totalBudget - aiConfig.maxTokens - systemTokens - postTokens - overhead,
   );
 
-  // Phase 2 — Chat history. M4.1 path when memoryEntries is provided;
-  // legacy path for the transitional period where old call sites still pass history.
-  let historyMessages: ChatMessage[];
-  let preTrimTokens: number;
-  if (input.memoryEntries !== undefined) {
-    if (!input.currentCharId || !input.charactersById) {
-      throw new Error('assemblePrompt: memoryEntries requires currentCharId and charactersById');
-    }
-    // Sum pre-trim tokens for compression ratio (live entries, excluding compressed summaries).
-    preTrimTokens = input.memoryEntries
-      .filter((e) => !e.compressed)
-      .reduce((sum, e) => sum + estimateTokens(e.content) + 6, 0);
+  // Phase 2 — Chat history. Compression ratio uses live (non-compressed) entries.
+  const preTrimTokens = input.memoryEntries
+    .filter((e) => !e.compressed)
+    .reduce((sum, e) => sum + estimateTokens(e.content) + 6, 0);
 
-    const trimmed = trimMemoryToFit(
-      input.memoryEntries,
-      historyBudget,
-      aiConfig.keepRecentMessages,
-    );
-    historyMessages = renderMemoryToChatMessages(trimmed, {
-      currentCharId: input.currentCharId,
-      charactersById: input.charactersById,
-      personaName: persona.name,
-    });
-  } else {
-    const legacyResult = buildHistory(
-      input.history ?? [],
-      historyBudget,
-      aiConfig.keepRecentMessages,
-      input.summary,
-      input.summaryUpToTimestamp,
-      aiConfig.enableVision,
-      input.characterSenderId,
-      persona.name,
-      input.senderNames,
-    );
-    historyMessages = legacyResult.messages;
-    preTrimTokens = legacyResult.preTrimTokens;
-  }
+  const trimmed = trimMemoryToFit(
+    input.memoryEntries,
+    historyBudget,
+    aiConfig.keepRecentMessages,
+  );
+  const historyMessages = renderMemoryToChatMessages(trimmed, {
+    currentCharId: input.currentCharId,
+    charactersById: input.charactersById,
+    personaName: persona.name,
+  });
 
   // Assemble final message array.
   const messages: ChatMessage[] = [

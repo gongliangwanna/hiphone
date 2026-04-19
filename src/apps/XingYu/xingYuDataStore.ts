@@ -33,7 +33,7 @@ import { useAIConfigStore } from '@/platform/stores/aiConfigStore';
 import { usePersonaStore } from '@/platform/stores/personaStore';
 import { useWorldBookStore } from '@/platform/stores/worldBookStore';
 import { getAdapter } from '@/platform/ai/providers';
-import { assemblePrompt, type HistoryMessage } from '@/platform/ai/promptAssembly';
+import { assemblePrompt } from '@/platform/ai/promptAssembly';
 import { chatComplete } from '@/platform/ai/chatComplete';
 import { parseReply } from '@/platform/ai/replyParser';
 import { compressHistory } from '@/platform/ai/summarizer';
@@ -51,68 +51,6 @@ function isChatActive(convId: string): boolean {
   return useXYNav.getState().activeChatId === convId;
 }
 
-/**
- * Collect all messages relevant to a character's prompt context:
- * - Messages from the primary user-character conversation (c-char-{characterId})
- * - Messages from all AI-AI conversations where this character participates
- *
- * Returns HistoryMessage[] sorted by timestamp, ready for assemblePrompt.
- */
-export function collectCharacterHistory(
-  characterId: string,
-  state: { messages: Message[]; conversations: Conversation[] },
-): HistoryMessage[] {
-  const primaryConvId = `c-char-${characterId}`;
-
-  const aiAiConvIds = state.conversations
-    .filter((c) => c.aiChatParticipants?.includes(characterId))
-    .map((c) => c.id);
-
-  const relevantConvIds = new Set([primaryConvId, ...aiAiConvIds]);
-
-  // Resolve sender names so quoteRef can be inlined as readable context for the AI.
-  const characters = useCharacterStore.getState().characters;
-  const persona = usePersonaStore.getState().getActivePersona();
-  const userNickname = useXYData.getState().userSettings.nickname;
-  const resolveQuoteSenderName = (senderId: string): string => {
-    if (senderId === 'me') return persona?.name || userNickname || '用户';
-    const charId = senderId.replace(/^char-/, '');
-    const ch = characters.find((c) => c.id === charId);
-    return ch?.name || senderId;
-  };
-
-  return state.messages
-    .filter((m) => relevantConvIds.has(m.convId))
-    .map((m) => {
-      let text: string | undefined;
-      if (m.type === 'text') {
-        text = m.quoteRef
-          ? `[引用 ${resolveQuoteSenderName(m.quoteRef.senderId)}：${m.quoteRef.preview}] ${m.text}`
-          : m.text;
-      } else if (m.type === 'heartbeat_log') {
-        text = m.text;
-      } else if (m.type === 'forward_card') {
-        const lines = m.forwardCard.messages.map((fm) => {
-          const body =
-            fm.type === 'image'
-              ? '[图片]'
-              : fm.type === 'sticker'
-                ? '[表情]'
-                : (fm.text ?? '');
-          return `- ${fm.senderName}：${body}`;
-        });
-        text = `[转发的聊天记录：${m.forwardCard.title}]\n${lines.join('\n')}\n[/转发结束]`;
-      }
-      return {
-        senderId: m.senderId,
-        type: m.type === 'forward_card' ? 'text' : m.type,
-        text,
-        imageUrl: m.type === 'image' ? m.imageUrl : undefined,
-        stickerDesc: m.type === 'sticker' ? m.stickerDesc : undefined,
-        timestamp: m.timestamp,
-      };
-    });
-}
 
 /* ── Auto-reply timers (module-level, not serializable) ── */
 const replyTimers = new Map<string, ReturnType<typeof setTimeout>>();
