@@ -176,36 +176,45 @@ describe('installer.uninstall', () => {
   });
 
   it('removes store / registry / IDB entries', async () => {
+    const APP_ID = 'todo';
     const zip = await makeZip({
       'manifest.json': JSON.stringify({
-        id: 'todo', name: 'Todo', version: '1.0.0', entry: 'App.tsx',
+        id: APP_ID, name: 'Todo', version: '1.0.0', entry: 'App.tsx',
       }),
       'App.tsx': helloTsx,
     });
     await install(zip);
+
+    // Seed a service entry for the app via the registry so we can verify
+    // uninstall clears it even when services.ts wasn't part of the zip.
+    const { serviceRegistry } = await import('@/platform/services/serviceRegistry');
+    serviceRegistry.register(APP_ID, { name: 'dummy', execute: async () => null });
 
     // Plant a fake app-kv row to verify it's cleared
     const db = await getDB();
     await new Promise<void>((resolve) => {
       const tx = db.transaction(APP_KV_STORE, 'readwrite');
       tx.objectStore(APP_KV_STORE).put(
-        { appId: 'todo', scope: 'app', ownerId: '', userKey: 'k', value: 1 },
-        'todo:k',
+        { appId: APP_ID, scope: 'app', ownerId: '', userKey: 'k', value: 1 },
+        `${APP_ID}:k`,
       );
       tx.oncomplete = () => resolve();
     });
 
-    await uninstall('todo');
+    await uninstall(APP_ID);
 
     expect(useInstalledUserAppsStore.getState().apps).toEqual([]);
-    expect(appRegistry.get('todo')).toBeUndefined();
+    expect(appRegistry.get(APP_ID)).toBeUndefined();
 
     const kvAfter = await new Promise<unknown>((resolve) => {
       const tx = db.transaction(APP_KV_STORE, 'readonly');
-      const req = tx.objectStore(APP_KV_STORE).get('todo:k');
+      const req = tx.objectStore(APP_KV_STORE).get(`${APP_ID}:k`);
       req.onsuccess = () => resolve(req.result);
     });
     expect(kvAfter).toBeUndefined();
+
+    // Services for this app should also be cleared.
+    expect(await serviceRegistry.list(APP_ID)).toEqual([]);
   });
 
   it('refuses to uninstall a builtin app', async () => {
