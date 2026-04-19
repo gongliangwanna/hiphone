@@ -200,4 +200,48 @@ describe('M3 E2E — shop + wallet Deep Link + toast', () => {
     const remaining = useInstalledUserAppsStore.getState().apps.map((a) => a.id);
     expect(remaining).toEqual(['test-shop']);
   });
+
+  it('shop reads wallet balance via service without mounting wallet', async () => {
+    await install(await loadFixtureZip('shop-app'));
+    await install(await loadFixtureZip('wallet-app'));
+
+    // Only shop renders. Wallet UI is never mounted.
+    await act(async () => {
+      render(React.createElement(AppScene, { appId: 'test-shop' }));
+    });
+    // Flush the mount-effect's async invoke:
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+
+    expect(screen.getByTestId('shop-balance')).toHaveTextContent(/1000/);
+  });
+
+  it('shop shows "余额不足" when seeded balance is below item price', async () => {
+    await install(await loadFixtureZip('shop-app'));
+    await install(await loadFixtureZip('wallet-app'));
+
+    // Seed wallet's balance to 50 directly in IDB so the service returns 50.
+    // @hiphone/storage writes the owner-prefixed key `test-wallet:owner:me:balance`.
+    const { appStorageSet } = await import('@/platform/userApp/appStorage');
+    await appStorageSet('test-wallet', 'test-wallet:owner:me:balance', {
+      appId: 'test-wallet',
+      scope: 'owner',
+      ownerId: 'me',
+      userKey: 'balance',
+      value: 50,
+    });
+
+    await act(async () => {
+      render(React.createElement(AppScene, { appId: 'test-shop' }));
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+
+    expect(screen.getByTestId('shop-balance')).toHaveTextContent(/50/);
+    const btn = screen.getByTestId('shop-buy') as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    expect(btn.textContent).toContain('余额不足');
+  });
 });

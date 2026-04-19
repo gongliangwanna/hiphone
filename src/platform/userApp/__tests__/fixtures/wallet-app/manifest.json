@@ -4,5 +4,6 @@
   "version": "1.0.0",
   "entry": "App.tsx",
   "icon": "icon.svg",
-  "perspectiveAware": false
+  "perspectiveAware": false,
+  "services": "services.ts"
 }

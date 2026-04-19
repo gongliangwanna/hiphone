@@ -1,8 +1,9 @@
-import React, { useEffect, useRef, type ComponentType } from 'react';
+import React, { useEffect, useRef, useState, type ComponentType } from 'react';
 import { Sword, Shield, Beaker, Gem } from 'lucide-react';
 import { open } from '@hiphone/nav';
 import { show as toastShow } from '@hiphone/toast';
 import { useOpenParams } from '@hiphone/hooks';
+import { invoke } from '@hiphone/services';
 
 interface Item {
   id: string;
@@ -24,6 +25,18 @@ const ITEMS: Item[] = [
 export default function ShopApp() {
   const params = useOpenParams();
   const consumedRef = useRef<unknown>(null);
+  const [balance, setBalance] = useState<number | null>(null);
+
+  useEffect(() => {
+    invoke('test-wallet', 'balance')
+      .then((b) => {
+        if (typeof b === 'number') setBalance(b);
+      })
+      .catch(() => {
+        // test-wallet not installed — leave balance null (UI shows "未连接钱包")
+        setBalance(null);
+      });
+  }, [params]); // refetch when we return from wallet with a payment result
 
   useEffect(() => {
     if (!params || consumedRef.current === params) return;
@@ -57,10 +70,24 @@ export default function ShopApp() {
       </header>
 
       <div className="flex-1 overflow-auto p-4">
+        <div
+          className="mb-3 flex items-center justify-between rounded-lg bg-white px-3 py-2 text-xs"
+          style={{ border: '1px solid rgba(0,0,0,0.06)' }}
+        >
+          <span style={{ color: 'var(--color-secondaryLabel)' }}>钱包余额</span>
+          <span
+            data-testid="shop-balance"
+            style={{ color: 'var(--color-label)', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+          >
+            {balance === null ? '— 未连接' : `￥ ${balance}`}
+          </span>
+        </div>
+
         <div className="grid grid-cols-2 gap-3">
           {ITEMS.map((item, i) => {
             const isPrimary = i === 0;
             const Icon = item.icon;
+            const insufficient = balance !== null && balance < item.price;
             return (
               <div
                 key={item.id}
@@ -93,9 +120,14 @@ export default function ShopApp() {
                   type="button"
                   data-testid={isPrimary ? 'shop-buy' : undefined}
                   onClick={() => buy(item)}
-                  className="mt-3 w-full bg-blue-500 text-white rounded-lg py-2 text-sm font-medium active:bg-blue-600 hover:bg-blue-600 transition-colors"
+                  disabled={insufficient}
+                  className={
+                    insufficient
+                      ? 'mt-3 w-full bg-gray-200 text-gray-400 rounded-lg py-2 text-sm font-medium cursor-not-allowed'
+                      : 'mt-3 w-full bg-blue-500 text-white rounded-lg py-2 text-sm font-medium active:bg-blue-600 hover:bg-blue-600 transition-colors'
+                  }
                 >
-                  立即购买
+                  {insufficient ? '余额不足' : '立即购买'}
                 </button>
               </div>
             );
