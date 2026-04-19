@@ -639,3 +639,29 @@ export function chatWithCharacter(
     abort,
   };
 }
+
+// ════════════════════════════════════════════════════════════════
+// M4.2 — Tool / Renderer / AppSystemPrompt / SystemEvent surface
+// ════════════════════════════════════════════════════════════════
+//
+// Re-exports from `src/platform/ai/*` so apps call them as normal
+// @hiphone/ai imports. Platform code should import directly from the
+// source modules; only user apps go through this SDK surface.
+
+export {
+  registerTools,
+  type ToolDefinition,
+} from '@/platform/ai/toolRegistry';
+
+export {
+  registerReplyRenderer,
+  type ReplyRenderer,
+  type ReplyRenderContext,
+} from '@/platform/ai/replyRendererRegistry';
+
+export {
+  registerAppSystemPrompt,
+  type AppSystemPromptFn,
+} from '@/platform/ai/appSystemPromptRegistry';
+
+export { injectSystemEvent } from '@/platform/ai/contextEvents';

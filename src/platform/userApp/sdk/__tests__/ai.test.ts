@@ -7,9 +7,24 @@ import {
   AIUnavailableError,
   AIAbortedError,
 } from '../ai';
+import * as aiSdk from '../ai';
 import { useAIConfigStore } from '@/platform/stores/aiConfigStore';
 import { useCharacterStore } from '@/platform/stores/characterStore';
 import * as chatCompleteMod from '@/platform/ai/chatComplete';
+import {
+  _resetToolRegistryForTests,
+  getTools,
+} from '@/platform/ai/toolRegistry';
+import {
+  _resetReplyRendererRegistryForTests,
+  getReplyRenderer,
+  DEFAULT_XINGYU_RENDERER,
+} from '@/platform/ai/replyRendererRegistry';
+import {
+  _resetAppSystemPromptRegistryForTests,
+  getAppSystemPrompt,
+} from '@/platform/ai/appSystemPromptRegistry';
+import { useCharacterMemory } from '@/platform/ai/characterMemoryStore';
 
 beforeEach(() => {
   useAIConfigStore.setState({
@@ -182,5 +197,47 @@ describe('@hiphone/ai — extractPlainText', () => {
     expect(extractPlainText('{"type":"text","content":"hi"}')).toBe(
       '{"type":"text","content":"hi"}',
     );
+  });
+});
+
+describe('@hiphone/ai — M4.2 registry SDK exports', () => {
+  beforeEach(() => {
+    _resetToolRegistryForTests();
+    _resetReplyRendererRegistryForTests();
+    _resetAppSystemPromptRegistryForTests();
+    useCharacterMemory.getState().clearAll();
+  });
+
+  it('exports registerTools', () => {
+    expect(typeof aiSdk.registerTools).toBe('function');
+    aiSdk.registerTools('ai-auction', [
+      { name: 'bid', description: 'd', parameters: { x: 'number' } },
+    ]);
+    expect(getTools('ai-auction')).toEqual([
+      { name: 'bid', description: 'd', parameters: { x: 'number' } },
+    ]);
+  });
+
+  it('exports registerReplyRenderer', () => {
+    expect(typeof aiSdk.registerReplyRenderer).toBe('function');
+    const r = { render: () => 'x' };
+    aiSdk.registerReplyRenderer('ai-auction', r);
+    expect(getReplyRenderer('ai-auction')).toBe(r);
+    expect(getReplyRenderer('unused')).toBe(DEFAULT_XINGYU_RENDERER);
+  });
+
+  it('exports registerAppSystemPrompt', () => {
+    expect(typeof aiSdk.registerAppSystemPrompt).toBe('function');
+    aiSdk.registerAppSystemPrompt('ai-auction', () => 'task-snapshot');
+    expect(getAppSystemPrompt('ai-auction')!()).toBe('task-snapshot');
+  });
+
+  it('exports injectSystemEvent — writes system entry to the character', () => {
+    expect(typeof aiSdk.injectSystemEvent).toBe('function');
+    aiSdk.injectSystemEvent('char-001', '[拍卖] #3 流拍');
+    const entries = useCharacterMemory.getState().getAll('char-001');
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.role).toBe('system');
+    expect(entries[0]!.content).toBe('[拍卖] #3 流拍');
   });
 });
