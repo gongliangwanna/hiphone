@@ -391,6 +391,13 @@ function scheduleAICharacterReply(convId: string, get: () => XingYuDataState) {
           continue;
         }
 
+        // Action items (S3 parseReply addition) — XingYu hasn't migrated to
+        // Tool Registry yet (S7), so today's XingYu prompt never emits them;
+        // if we see one anyway, drop it silently rather than render.
+        if (item.type === 'action') {
+          continue;
+        }
+
         let msg: Message;
         let lastMsgPreview: string;
 
