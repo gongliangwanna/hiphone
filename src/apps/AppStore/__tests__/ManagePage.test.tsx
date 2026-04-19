@@ -20,8 +20,8 @@ describe('ManagePage', () => {
   it('renders one row per installed user app', () => {
     useInstalledUserAppsStore.setState({
       apps: [
-        { id: 'todo', name: '待办', iconDataUrl: null, page: 1, perspectiveAware: false },
-        { id: 'shop', name: '商场', iconDataUrl: null, page: 1, perspectiveAware: false },
+        { id: 'todo', name: '待办', iconDataUrl: null, page: 1, perspectiveAware: false, version: '1.0.0', installedAt: 1_700_000_000_000, sizeBytes: 0 },
+        { id: 'shop', name: '商场', iconDataUrl: null, page: 1, perspectiveAware: false, version: '1.0.0', installedAt: 1_700_000_000_000, sizeBytes: 0 },
       ],
     });
     render(<ManagePage />);
@@ -33,7 +33,7 @@ describe('ManagePage', () => {
 
   it('opens UninstallConfirm when minus button is clicked', () => {
     useInstalledUserAppsStore.setState({
-      apps: [{ id: 'todo', name: '待办', iconDataUrl: null, page: 1, perspectiveAware: false }],
+      apps: [{ id: 'todo', name: '待办', iconDataUrl: null, page: 1, perspectiveAware: false, version: '1.0.0', installedAt: 1_700_000_000_000, sizeBytes: 0 }],
     });
     render(<ManagePage />);
     fireEvent.click(screen.getByTestId('uninstall-button-todo'));
@@ -44,7 +44,7 @@ describe('ManagePage', () => {
   it('cancel closes the dialog and does not call installer.uninstall', () => {
     const uninstallSpy = vi.spyOn(installerMod, 'uninstall').mockResolvedValue();
     useInstalledUserAppsStore.setState({
-      apps: [{ id: 'todo', name: '待办', iconDataUrl: null, page: 1, perspectiveAware: false }],
+      apps: [{ id: 'todo', name: '待办', iconDataUrl: null, page: 1, perspectiveAware: false, version: '1.0.0', installedAt: 1_700_000_000_000, sizeBytes: 0 }],
     });
     render(<ManagePage />);
     fireEvent.click(screen.getByTestId('uninstall-button-todo'));
@@ -61,8 +61,8 @@ describe('ManagePage', () => {
 
     useInstalledUserAppsStore.setState({
       apps: [
-        { id: 'todo', name: '待办', iconDataUrl: null, page: 1, perspectiveAware: false },
-        { id: 'shop', name: '商场', iconDataUrl: null, page: 1, perspectiveAware: false },
+        { id: 'todo', name: '待办', iconDataUrl: null, page: 1, perspectiveAware: false, version: '1.0.0', installedAt: 1_700_000_000_000, sizeBytes: 0 },
+        { id: 'shop', name: '商场', iconDataUrl: null, page: 1, perspectiveAware: false, version: '1.0.0', installedAt: 1_700_000_000_000, sizeBytes: 0 },
       ],
     });
     render(<ManagePage />);
@@ -85,7 +85,7 @@ describe('ManagePage', () => {
   it('shows error toast-like surface when installer.uninstall rejects', async () => {
     vi.spyOn(installerMod, 'uninstall').mockRejectedValue(new Error('IDB failure'));
     useInstalledUserAppsStore.setState({
-      apps: [{ id: 'todo', name: '待办', iconDataUrl: null, page: 1, perspectiveAware: false }],
+      apps: [{ id: 'todo', name: '待办', iconDataUrl: null, page: 1, perspectiveAware: false, version: '1.0.0', installedAt: 1_700_000_000_000, sizeBytes: 0 }],
     });
     render(<ManagePage />);
     fireEvent.click(screen.getByTestId('uninstall-button-todo'));
