@@ -140,6 +140,35 @@ export async function install(
     }
     const isUpgrade = !!existing && existing.type === 'user';
 
+    // Upgrade confirmation callback (P1).
+    // Only invoked on user-app upgrades. The caller can show a confirmation
+    // sheet; returning false cancels the install without side effects.
+    if (isUpgrade && options?.onUpgradeDetected) {
+      const existingRecord = useInstalledUserAppsStore
+        .getState()
+        .apps.find((a) => a.id === manifest.id);
+      if (existingRecord) {
+        const proceed = await options.onUpgradeDetected({
+          existing: {
+            id: existingRecord.id,
+            name: existingRecord.name,
+            version: existingRecord.version,
+          },
+          incoming: {
+            id: manifest.id,
+            name: manifest.name,
+            version: manifest.version,
+          },
+        });
+        if (!proceed) {
+          throw new InstallError(
+            'user-cancelled',
+            `user cancelled upgrade of "${manifest.id}"`,
+          );
+        }
+      }
+    }
+
     // 4. Read entry file + compile all .tsx/.ts
     const filesToCompile = findCompilableFiles(zip);
     if (!filesToCompile.includes(manifest.entry)) {
