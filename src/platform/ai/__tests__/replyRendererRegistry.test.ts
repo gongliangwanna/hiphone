@@ -46,14 +46,11 @@ describe('replyRendererRegistry', () => {
     expect(getReplyRenderer('app-b')).toBe(b);
   });
 
-  it('DEFAULT_XINGYU_RENDERER is a stub that returns a non-empty string (real impl in S3)', () => {
-    // S1 ships a stub so the module wires cleanly; S3 replaces with the
-    // no-loss XingYu renderer.
-    const out = DEFAULT_XINGYU_RENDERER.render('[{"type":"text","content":"hi"}]', {
-      speakerName: '小星',
-      tools: [],
-    });
-    expect(typeof out).toBe('string');
-    expect(out.length).toBeGreaterThan(0);
+  it('DEFAULT_XINGYU_RENDERER renders JSON reply through defaultXingYuRenderer (lossless)', () => {
+    const out = DEFAULT_XINGYU_RENDERER.render(
+      '[{"type":"text","content":"hi"},{"type":"sticker","stickerId":"s1","content":"笑"}]',
+      { speakerName: '小星', tools: [] },
+    );
+    expect(out).toBe('小星: hi\n小星: [表情 s1: 笑]');
   });
 });

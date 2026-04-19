@@ -16,6 +16,7 @@
  */
 
 import type { ToolDefinition } from './toolRegistry';
+import { defaultXingYuRenderer } from './defaultXingYuRenderer';
 
 export interface ReplyRenderContext {
   /** Display name of the character whose reply this is. */
@@ -29,15 +30,11 @@ export interface ReplyRenderer {
 }
 
 /**
- * S1 stub — passes the raw reply through with a speaker prefix. S3 will
- * replace this export with the lossless XingYu implementation in
- * defaultXingYuRenderer.ts; consumers always go through the registry.
+ * The canonical default renderer, used when no app-specific renderer is
+ * registered. Implemented in `defaultXingYuRenderer.ts` — re-exported
+ * here so the registry is the single entry point for consumers.
  */
-export const DEFAULT_XINGYU_RENDERER: ReplyRenderer = {
-  render(raw, ctx) {
-    return `${ctx.speakerName}: ${raw}`;
-  },
-};
+export const DEFAULT_XINGYU_RENDERER: ReplyRenderer = defaultXingYuRenderer;
 
 const registry = new Map<string, ReplyRenderer>();
 
