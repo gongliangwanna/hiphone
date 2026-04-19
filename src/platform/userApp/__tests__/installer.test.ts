@@ -123,6 +123,55 @@ describe('installer.install — single file', () => {
     await expect(install(zip)).rejects.toThrow(/conflict|builtin/i);
   });
 
+  it('records sizeBytes in IDB app-meta as the sum of compiled sources', async () => {
+    const zip = await makeZip({
+      'manifest.json': JSON.stringify({
+        id: 'size-test',
+        name: 'Size Test',
+        version: '1.0.0',
+        entry: 'index.tsx',
+        perspectiveAware: false,
+      }),
+      'index.tsx': helloTsx,
+    });
+    await install(zip);
+
+    const db = await getDB();
+    const meta = await new Promise<{ sizeBytes: number } | undefined>(
+      (resolve, reject) => {
+        const tx = db.transaction(APP_META_STORE, 'readonly');
+        const req = tx.objectStore(APP_META_STORE).get('size-test');
+        req.onsuccess = () =>
+          resolve(req.result as { sizeBytes: number } | undefined);
+        req.onerror = () => reject(req.error);
+      },
+    );
+    expect(meta).toBeDefined();
+    expect(meta!.sizeBytes).toBeGreaterThan(0);
+  });
+
+  it('exposes sizeBytes and version on the store record after install', async () => {
+    const zip = await makeZip({
+      'manifest.json': JSON.stringify({
+        id: 'exposure-test',
+        name: 'Exposure',
+        version: '2.5.1',
+        entry: 'index.tsx',
+        perspectiveAware: false,
+      }),
+      'index.tsx': helloTsx,
+    });
+    await install(zip);
+
+    const record = useInstalledUserAppsStore
+      .getState()
+      .apps.find((a) => a.id === 'exposure-test');
+    expect(record).toBeDefined();
+    expect(record!.version).toBe('2.5.1');
+    expect(record!.sizeBytes).toBeGreaterThan(0);
+    expect(record!.installedAt).toBeGreaterThan(0);
+  });
+
   it('reinstall of same user app id preserves app-kv but overwrites code (Q5)', async () => {
     const zip1 = await makeZip({
       'manifest.json': JSON.stringify({

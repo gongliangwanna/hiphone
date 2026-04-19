@@ -64,6 +64,8 @@ interface AppMeta {
   manifest: UserAppManifest;
   installedAt: number;
   iconDataUrl: string | null;
+  /** Sum of compiled bundle byte lengths. Added P1; absent on legacy records → 0. */
+  sizeBytes: number;
 }
 
 interface AppSrc {
@@ -156,6 +158,12 @@ export async function install(
     }
     emit({ stage: 'compile', progress: 1, fileIndex: total, total });
 
+    // Sum compiled bytes (UTF-8). Used by App Store UI to show "X MB".
+    const sizeBytes = Object.values(compiledMap).reduce(
+      (sum, code) => sum + new TextEncoder().encode(code).byteLength,
+      0,
+    );
+
     // 5. Icon → data URL (sub-step, no emit)
     let iconDataUrl: string | null = null;
     if (manifest.icon) {
@@ -173,7 +181,7 @@ export async function install(
     const db = await getDB();
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction([APP_META_STORE, APP_SRC_STORE], 'readwrite');
-      const meta: AppMeta = { manifest, installedAt, iconDataUrl };
+      const meta: AppMeta = { manifest, installedAt, iconDataUrl, sizeBytes };
       const src: AppSrc = { compiledMap, installedAt };
       tx.objectStore(APP_META_STORE).put(meta, manifest.id);
       tx.objectStore(APP_SRC_STORE).put(src, manifest.id);
@@ -189,6 +197,9 @@ export async function install(
       iconDataUrl,
       page: USER_APP_PAGE,
       perspectiveAware: manifest.perspectiveAware,
+      version: manifest.version,
+      installedAt,
+      sizeBytes,
     };
     useInstalledUserAppsStore.getState().add(record);
 
