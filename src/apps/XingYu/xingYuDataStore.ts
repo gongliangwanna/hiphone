@@ -3,6 +3,10 @@ import { persist } from 'zustand/middleware';
 import { idbStorage } from '@/platform/storage/idbStorage';
 import { loadAllMessages, loadAllMoments } from '@/platform/storage/idbRecordStorage';
 import { startXYDataSync } from '@/platform/storage/zustandIdbSync';
+import {
+  loadCharacterMemoryFromIdb,
+  startCharacterMemoryIdbSync,
+} from '@/platform/ai/characterMemoryStore';
 import { uid } from '@/platform/utils/uid';
 import type {
   Conversation,
@@ -1254,6 +1258,11 @@ export const useXYData = create<XingYuDataState>()(
           useXYData.setState({ messages, moments });
           // Start write-through sync (subscribe to future changes)
           startXYDataSync(useXYData);
+
+          // AI character memory: rehydrate from IDB + start mirroring.
+          // Empty on first boot after M4.1 upgrade — intentional (no data migration).
+          await loadCharacterMemoryFromIdb();
+          startCharacterMemoryIdbSync();
         };
       },
     },

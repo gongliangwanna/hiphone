@@ -126,3 +126,75 @@ export const useCharacterMemory = create<CharacterMemoryState>((set, get) => ({
     set({ entries: {} });
   },
 }));
+
+// ════════════════════════════════════════════════════════════════════════════
+// IDB persistence
+// ════════════════════════════════════════════════════════════════════════════
+//
+// Storage: object store MEMORY_STORE, keyed by MemoryEntry.id. Each record is
+// the full entry (including characterId). On rehydrate we group by characterId
+// and sort by createdAt. Writes are driven by a Zustand subscription that
+// diffs prev vs next state and issues put/delete per change.
+
+import {
+  putMemoryEntries,
+  deleteMemoryEntries,
+  loadAllMemoryEntries,
+  clearAllMemoryEntries,
+} from '@/platform/storage/idbRecordStorage';
+
+let unsubscribe: (() => void) | null = null;
+
+export async function loadCharacterMemoryFromIdb(): Promise<void> {
+  const records = await loadAllMemoryEntries();
+  const grouped: Record<string, MemoryEntry[]> = {};
+  for (const r of records) {
+    (grouped[r.characterId] ??= []).push(r);
+  }
+  for (const list of Object.values(grouped)) {
+    list.sort((a, b) => a.createdAt - b.createdAt);
+  }
+  useCharacterMemory.setState({ entries: grouped });
+}
+
+/**
+ * Begin mirroring every append / replaceRange / clear to IDB. Idempotent.
+ * Diffs prev vs next entries per character; puts new, deletes removed.
+ */
+export function startCharacterMemoryIdbSync(): void {
+  if (unsubscribe) return;
+  let prev: Record<string, MemoryEntry[]> = useCharacterMemory.getState().entries;
+  unsubscribe = useCharacterMemory.subscribe((state) => {
+    const next = state.entries;
+    const allCharIds = new Set([...Object.keys(prev), ...Object.keys(next)]);
+    for (const charId of allCharIds) {
+      const prevList = prev[charId] ?? [];
+      const nextList = next[charId] ?? [];
+      const prevIds = new Set(prevList.map((e) => e.id));
+      const nextIds = new Set(nextList.map((e) => e.id));
+
+      const added: MemoryEntry[] = [];
+      for (const e of nextList) if (!prevIds.has(e.id)) added.push(e);
+      if (added.length) void putMemoryEntries(added);
+
+      const removed: string[] = [];
+      for (const e of prevList) if (!nextIds.has(e.id)) removed.push(e.id);
+      if (removed.length) void deleteMemoryEntries(removed);
+    }
+    prev = next;
+  });
+}
+
+export function stopCharacterMemoryIdbSync(): void {
+  if (unsubscribe) {
+    unsubscribe();
+    unsubscribe = null;
+  }
+}
+
+/** Test-only: wipe IDB + in-memory state. */
+export async function _resetCharacterMemoryForTests(): Promise<void> {
+  stopCharacterMemoryIdbSync();
+  useCharacterMemory.setState({ entries: {} });
+  await clearAllMemoryEntries();
+}

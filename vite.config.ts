@@ -44,6 +44,9 @@ export default defineConfig({
         navigateFallback: 'index.html',
         globPatterns: ['**/*.{js,css,html,svg,png,jpg,woff,woff2}'],
         globIgnores: ['resource/wallpapers/**'],
+        // Main bundle is currently ~2.6 MB (Sucrase + Tailwind runtime + all apps).
+        // Raise the precache limit so the service worker can cache it whole.
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         runtimeCaching: [
           {
             urlPattern: /\/resource\//,

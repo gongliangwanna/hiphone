@@ -8,8 +8,9 @@
  * Shares the same IDBDatabase connection as idbStorage via getDB().
  */
 
-import { getDB, hasIDB, MESSAGES_STORE, MOMENTS_STORE } from './idbStorage';
+import { getDB, hasIDB, MESSAGES_STORE, MOMENTS_STORE, MEMORY_STORE } from './idbStorage';
 import type { Message, Moment } from '@/apps/XingYu/data';
+import type { MemoryEntry } from '@/platform/ai/characterMemoryStore';
 
 // ---------------------------------------------------------------------------
 // Messages
@@ -137,5 +138,72 @@ export async function loadAllMoments(): Promise<Moment[]> {
   } catch (e) {
     console.warn('[idbRecord] loadAllMoments failed:', e);
     return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Character memory entries
+// ---------------------------------------------------------------------------
+
+export async function putMemoryEntries(entries: MemoryEntry[]): Promise<void> {
+  if (!hasIDB || entries.length === 0) return;
+  try {
+    const db = await getDB();
+    const tx = db.transaction(MEMORY_STORE, 'readwrite');
+    const store = tx.objectStore(MEMORY_STORE);
+    for (const e of entries) store.put(e);
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) {
+    console.error('[idbRecord] putMemoryEntries failed:', e);
+  }
+}
+
+export async function deleteMemoryEntries(ids: string[]): Promise<void> {
+  if (!hasIDB || ids.length === 0) return;
+  try {
+    const db = await getDB();
+    const tx = db.transaction(MEMORY_STORE, 'readwrite');
+    const store = tx.objectStore(MEMORY_STORE);
+    for (const id of ids) store.delete(id);
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) {
+    console.error('[idbRecord] deleteMemoryEntries failed:', e);
+  }
+}
+
+export async function loadAllMemoryEntries(): Promise<MemoryEntry[]> {
+  if (!hasIDB) return [];
+  try {
+    const db = await getDB();
+    return await new Promise<MemoryEntry[]>((resolve, reject) => {
+      const tx = db.transaction(MEMORY_STORE, 'readonly');
+      const req = tx.objectStore(MEMORY_STORE).getAll();
+      req.onsuccess = () => resolve(req.result as MemoryEntry[]);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (e) {
+    console.warn('[idbRecord] loadAllMemoryEntries failed:', e);
+    return [];
+  }
+}
+
+export async function clearAllMemoryEntries(): Promise<void> {
+  if (!hasIDB) return;
+  try {
+    const db = await getDB();
+    const tx = db.transaction(MEMORY_STORE, 'readwrite');
+    tx.objectStore(MEMORY_STORE).clear();
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) {
+    console.error('[idbRecord] clearAllMemoryEntries failed:', e);
   }
 }

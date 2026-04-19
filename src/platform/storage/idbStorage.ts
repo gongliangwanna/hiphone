@@ -14,7 +14,7 @@
 // ---------------------------------------------------------------------------
 
 const DB_NAME = 'hiPhone-storage';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const STORE_NAME = 'kv';
 
 // Per-record object stores (added in v2)
@@ -26,6 +26,10 @@ export const APP_META_STORE = 'app-meta';
 export const APP_SRC_STORE = 'app-src';
 export const APP_KV_STORE = 'app-kv';
 export const APP_KV_BY_APP_INDEX = 'by-app-id';
+
+// AI character memory (added in v4)
+export const MEMORY_STORE = 'characterMemory';
+export const MEMORY_BY_CHAR_INDEX = 'by-characterId';
 
 // ---------------------------------------------------------------------------
 // Cached connection — one IDBDatabase instance shared across all stores
@@ -61,6 +65,11 @@ export function getDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(APP_KV_STORE)) {
         const kvStore = db.createObjectStore(APP_KV_STORE); // key = full key string
         kvStore.createIndex(APP_KV_BY_APP_INDEX, 'appId', { unique: false });
+      }
+      // v4: AI character memory (MemoryEntry keyed by id, indexed by characterId)
+      if (!db.objectStoreNames.contains(MEMORY_STORE)) {
+        const memStore = db.createObjectStore(MEMORY_STORE, { keyPath: 'id' });
+        memStore.createIndex(MEMORY_BY_CHAR_INDEX, 'characterId', { unique: false });
       }
     };
     req.onsuccess = () => {
