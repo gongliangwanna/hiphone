@@ -910,6 +910,28 @@ Task 6 是纯验证。若 6.1/6.2 发现问题，回到前面相应 task 修补�
 
 ---
 
+## Review 发现的 Deferred 项（P1 内消化）
+
+Task 1 code review（commit `65c540c`）发现但按计划推迟处理的项，**Task 6 收尾时必须完成**：
+
+1. **`src/apps/AppStore/__tests__/ManagePage.test.tsx` 7 处 `InstalledUserApp` 构造缺新字段**
+   - 行 23, 24, 36, 47, 64, 65, 88
+   - 原 plan 未列出该文件；Task 6 Step 6.1 的 tsc 全量扫描必须把这 7 处补齐
+   - 补法同 Springboard 测试：`version: '1.0.0'`, `installedAt: 1_700_000_000_000`, `sizeBytes: 0`
+
+2. **`InstalledUserApp` 的 `version` JSDoc 与实际行为不符**
+   - 当前注释：`/** From manifest.version; fallback '1.0.0' for legacy records missing this field. */`
+   - 实际：字段是 required、`loadInstalledApps()` 直读 `meta.manifest.version`、无 fallback 路径（manifest parser 已要求 version 必填）
+   - 修法：把 "fallback '1.0.0' for legacy records missing this field" 去掉，或改为 `/** From manifest.version (required by manifest schema). */`
+   - `sizeBytes` 的 "0 for legacy records" 是对的（Task 3 Step 3.3 的 `typeof meta.sizeBytes === 'number' ? meta.sizeBytes : 0` 兜底），无需改
+
+3. **测试代码小 DRY**（可选，非必须）
+   - `installedUserAppsStore.test.ts` 新测试可用 `{ ...sample, id: 'meta-rich', version: '1.2.3', sizeBytes: 2_048 }` 复用 sample
+   - 魔法数字 `1_700_000_000_000` 重复 4 次，可抽成 `INSTALLED_AT_FIXTURE` 常量
+   - 仅当 Task 6 有余力时处理；不 block P1 完成
+
+---
+
 ## 下一步（非本 plan 范围）
 
 P1 完成后，写 P2：
