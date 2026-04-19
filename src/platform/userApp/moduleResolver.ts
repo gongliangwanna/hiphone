@@ -53,6 +53,53 @@ function normalize(path: string): string {
 }
 
 /**
+ * Execute a user app entry module top-to-bottom inside the sandbox +
+ * module-resolution runtime and return the module's exports object.
+ *
+ * Used for both UI entries (where the caller then expects a default
+ * React component) and non-UI entries like services modules (where
+ * the top-level side effects — e.g. registerService — are what matter
+ * and there is no default export).
+ */
+export function evaluateUserAppModule(
+  compiledMap: Record<string, string>,
+  entryPath: string,
+  sdkResolve: ModuleResolver,
+  appId: string,
+): Record<string, unknown> {
+  if (!Object.prototype.hasOwnProperty.call(compiledMap, entryPath)) {
+    throw new Error(`evaluateUserAppModule: entry "${entryPath}" not in compiledMap`);
+  }
+
+  const moduleCache = new Map<string, { exports: any }>();
+
+  function requireFrom(fromPath: string): (specifier: string) => unknown {
+    return (specifier: string) => {
+      if (!specifier.startsWith('.')) {
+        return sdkResolve(specifier);
+      }
+      const resolved = resolveRelativePath(fromPath, specifier, compiledMap);
+      const cached = moduleCache.get(resolved);
+      if (cached) return cached.exports;
+
+      const module = { exports: {} as any };
+      moduleCache.set(resolved, module);
+      withUserAppContext(appId, () =>
+        executeInSandbox(compiledMap[resolved]!, requireFrom(resolved), module),
+      );
+      return module.exports;
+    };
+  }
+
+  const entryModule = { exports: {} as any };
+  moduleCache.set(entryPath, entryModule);
+  withUserAppContext(appId, () =>
+    executeInSandbox(compiledMap[entryPath]!, requireFrom(entryPath), entryModule),
+  );
+  return entryModule.exports;
+}
+
+/**
  * Build and execute a user app runtime from a compiled module map.
  *
  * Semantics (CommonJS-style):
@@ -74,38 +121,8 @@ export function createUserAppRuntime(
   sdkResolve: ModuleResolver,
   appId: string,
 ): ComponentType {
-  if (!Object.prototype.hasOwnProperty.call(compiledMap, entryPath)) {
-    throw new Error(`createUserAppRuntime: entry "${entryPath}" not in compiledMap`);
-  }
-
-  const moduleCache = new Map<string, { exports: any }>();
-
-  function requireFrom(fromPath: string): (specifier: string) => unknown {
-    return (specifier: string) => {
-      if (!specifier.startsWith('.')) {
-        // Bare name → SDK
-        return sdkResolve(specifier);
-      }
-      const resolved = resolveRelativePath(fromPath, specifier, compiledMap);
-      const cached = moduleCache.get(resolved);
-      if (cached) return cached.exports;
-
-      const module = { exports: {} as any };
-      moduleCache.set(resolved, module); // placeholder first — enables circular deps
-      withUserAppContext(appId, () =>
-        executeInSandbox(compiledMap[resolved]!, requireFrom(resolved), module),
-      );
-      return module.exports;
-    };
-  }
-
-  const entryModule = { exports: {} as any };
-  moduleCache.set(entryPath, entryModule);
-  withUserAppContext(appId, () =>
-    executeInSandbox(compiledMap[entryPath]!, requireFrom(entryPath), entryModule),
-  );
-
-  const Component = entryModule.exports.default;
+  const exports = evaluateUserAppModule(compiledMap, entryPath, sdkResolve, appId);
+  const Component = exports.default;
   if (typeof Component !== 'function') {
     throw new Error(
       `Entry "${entryPath}" did not export a default React component`,

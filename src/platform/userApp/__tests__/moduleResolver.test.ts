@@ -132,3 +132,46 @@ describe('createUserAppRuntime — multi-file', () => {
     ).toThrow(/not in compiledMap/i);
   });
 });
+
+import { evaluateUserAppModule } from '../moduleResolver';
+
+describe('evaluateUserAppModule', () => {
+  it('runs a non-UI entry and returns the exports', async () => {
+    const { compileTsx } = await import('../compiler');
+    const compiledMap: Record<string, string> = {
+      'services.ts': await compileTsx(
+        `export const ping = () => 'pong'; export default 42;`,
+        'services.ts',
+      ),
+    };
+    const resolve = (_s: string) => ({});
+    const exports = evaluateUserAppModule(
+      compiledMap,
+      'services.ts',
+      resolve,
+      'test-app',
+    ) as { ping: () => string; default: number };
+
+    expect(exports.ping()).toBe('pong');
+    expect(exports.default).toBe(42);
+  });
+
+  it('tolerates an entry with no default export (services module pattern)', async () => {
+    const { compileTsx } = await import('../compiler');
+    const compiledMap: Record<string, string> = {
+      'services.ts': await compileTsx(
+        `export const names = ['a', 'b'];`,
+        'services.ts',
+      ),
+    };
+    const resolve = (_s: string) => ({});
+    const exports = evaluateUserAppModule(
+      compiledMap,
+      'services.ts',
+      resolve,
+      'test-app',
+    );
+    // Should NOT throw; default may be undefined.
+    expect((exports as { names: string[] }).names).toEqual(['a', 'b']);
+  });
+});
