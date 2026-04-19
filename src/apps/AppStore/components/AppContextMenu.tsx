@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
+import { motion } from 'motion/react';
 import { ArrowUpRight, Info, Trash2 } from 'lucide-react';
 import { Material } from '@/system/Material';
+import { spring } from '@/platform/design-tokens/motion';
 import type { InstalledUserApp } from '@/platform/stores/installedUserAppsStore';
 
 interface Props {
@@ -18,15 +20,26 @@ export function AppContextMenu({ app, onOpen, onDetail, onUninstall, onClose }: 
   );
   return (
     <div className="absolute inset-0 z-30 flex items-center justify-center">
-      <div
+      <motion.div
         data-testid="context-menu-backdrop"
         role="presentation"
         onClick={onClose}
         className="absolute inset-0 bg-black/30"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.15 }}
       />
+      <motion.div
+        className="relative"
+        initial={{ opacity: 0, scale: 0.92 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.92 }}
+        transition={{ type: 'spring', ...spring.snappy }}
+      >
       <Material
         variant="thick"
-        className="relative w-[260px] rounded-[14px] overflow-hidden"
+        className="w-[260px] rounded-[14px] overflow-hidden"
       >
         <div className="flex items-center gap-3 px-4 py-3">
           {app.iconDataUrl
@@ -61,6 +74,7 @@ export function AppContextMenu({ app, onOpen, onDetail, onUninstall, onClose }: 
           onClick={() => { onUninstall(); onClose(); }}
         />
       </Material>
+      </motion.div>
     </div>
   );
 }

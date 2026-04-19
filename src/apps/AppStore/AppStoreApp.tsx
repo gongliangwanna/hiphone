@@ -1,4 +1,5 @@
 import { useState, useCallback, type DragEvent } from 'react';
+import { AnimatePresence } from 'motion/react';
 import { Plus } from 'lucide-react';
 import { AppScreen, NavBar } from '@/system';
 import { useInstalledUserAppsStore } from '@/platform/stores/installedUserAppsStore';
@@ -105,32 +106,37 @@ export function AppStoreApp() {
         )}
       </div>
 
-      {sheetOpen && (
-        <UploadSheet
-          initialFile={pendingFile}
-          onClose={closeSheet}
-          onOpenApp={(id) => { openApp(id, null); closeSheet(); }}
-        />
-      )}
-      {menuApp && (
-        <AppContextMenu
-          app={menuApp}
-          onOpen={() => openApp(menuApp.id, null)}
-          onDetail={() => { setContextMenuAppId(null); setDetailAppId(menuApp.id); }}
-          onUninstall={() => void handleDelete(menuApp.id)}
-          onClose={() => setContextMenuAppId(null)}
-        />
-      )}
-      {detailApp && (
-        <AppDetailSheet
-          app={detailApp}
-          onClose={() => setDetailAppId(null)}
-          onUninstall={() => {
-            void handleDelete(detailApp.id);
-            setDetailAppId(null);
-          }}
-        />
-      )}
+      <AnimatePresence>
+        {sheetOpen && (
+          <UploadSheet
+            key="upload-sheet"
+            initialFile={pendingFile}
+            onClose={closeSheet}
+            onOpenApp={(id) => { openApp(id, null); closeSheet(); }}
+          />
+        )}
+        {menuApp && (
+          <AppContextMenu
+            key="context-menu"
+            app={menuApp}
+            onOpen={() => openApp(menuApp.id, null)}
+            onDetail={() => { setContextMenuAppId(null); setDetailAppId(menuApp.id); }}
+            onUninstall={() => void handleDelete(menuApp.id)}
+            onClose={() => setContextMenuAppId(null)}
+          />
+        )}
+        {detailApp && (
+          <AppDetailSheet
+            key="detail-sheet"
+            app={detailApp}
+            onClose={() => setDetailAppId(null)}
+            onUninstall={() => {
+              void handleDelete(detailApp.id);
+              setDetailAppId(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </AppScreen>
   );
 }

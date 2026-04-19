@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
+import { motion } from 'motion/react';
 import { X } from 'lucide-react';
 import { formatByteSize } from '@/platform/utils/formatters';
+import { spring } from '@/platform/design-tokens/motion';
 import type { InstalledUserApp } from '@/platform/stores/installedUserAppsStore';
 
 interface Props {
@@ -13,10 +15,14 @@ export function AppDetailSheet({ app, onClose, onUninstall }: Props) {
   return (
     <div data-testid="appstore-detail-sheet"
       className="absolute inset-0 z-20 flex flex-col">
-      <div role="presentation" onClick={onClose}
-        className="absolute inset-0 bg-black/40" />
-      <div className="relative mt-auto bg-[var(--color-systemBackground)]
-        rounded-t-[14px] flex flex-col min-h-[60%] max-h-[90%]">
+      <motion.div role="presentation" onClick={onClose}
+        className="absolute inset-0 bg-black/40"
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }} />
+      <motion.div className="relative mt-auto bg-[var(--color-systemBackground)]
+        rounded-t-[14px] flex flex-col min-h-[60%] max-h-[90%]"
+        initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+        transition={{ type: 'spring', ...spring.smooth }}>
         <div className="relative flex items-center justify-between
           px-4 py-3 border-b border-[var(--color-separator)]">
           <div className="w-[36px] h-[5px] rounded-full
@@ -63,7 +69,7 @@ export function AppDetailSheet({ app, onClose, onUninstall }: Props) {
             卸载 App
           </button>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

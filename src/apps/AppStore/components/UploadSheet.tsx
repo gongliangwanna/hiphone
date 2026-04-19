@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { motion } from 'motion/react';
 import { X } from 'lucide-react';
 import {
   install,
@@ -6,6 +7,7 @@ import {
   type InstallProgressEvent,
 } from '@/platform/userApp/installer';
 import { useInstalledUserAppsStore } from '@/platform/stores/installedUserAppsStore';
+import { spring } from '@/platform/design-tokens/motion';
 import { DropZoneView } from './views/DropZoneView';
 import { InstallProgressView } from './views/InstallProgressView';
 import { UpgradeConfirmView } from './views/UpgradeConfirmView';
@@ -94,14 +96,22 @@ export function UploadSheet({ initialFile, onClose, onOpenApp }: Props) {
 
   return (
     <div data-testid="appstore-upload-sheet" className="absolute inset-0 z-20 flex flex-col">
-      <div
+      <motion.div
         role="presentation"
         onClick={onClose}
         className="absolute inset-0 bg-black/40"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
       />
-      <div
+      <motion.div
         className="relative mt-auto bg-[var(--color-systemBackground)]
           rounded-t-[14px] flex flex-col min-h-[60%] max-h-[90%]"
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        exit={{ y: '100%' }}
+        transition={{ type: 'spring', ...spring.smooth }}
       >
         <div
           className="relative flex items-center justify-between
@@ -155,7 +165,7 @@ export function UploadSheet({ initialFile, onClose, onOpenApp }: Props) {
             />
           )}
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }
