@@ -1,11 +1,6 @@
-interface VersionInfo {
-  name: string;
-  version: string;
-}
-
 interface Props {
-  existing: VersionInfo;
-  incoming: VersionInfo;
+  existing: { name: string; version: string; iconDataUrl: string | null };
+  incoming: { name: string; version: string };
   onCancel: () => void;
   onConfirm: () => void;
 }
@@ -14,14 +9,23 @@ export function UpgradeConfirmView({ existing, incoming, onCancel, onConfirm }: 
   return (
     <div className="flex flex-col gap-3">
       <div className="bg-white rounded-[14px] flex flex-col items-center justify-center text-center px-4 py-5 min-h-[180px]">
-        <div
-          className="w-[56px] h-[56px] rounded-[14px] flex items-center justify-center
-            text-[26px] font-bold text-white mb-2
-            bg-gradient-to-br from-[#ff6482] to-[#ff375f]"
-          style={{ boxShadow: '0 6px 14px rgba(255,55,95,0.3)' }}
-        >
-          {existing.name.slice(0, 1)}
-        </div>
+        {existing.iconDataUrl ? (
+          <img
+            src={existing.iconDataUrl}
+            alt=""
+            className="w-[56px] h-[56px] rounded-[14px] mb-2 object-cover"
+            style={{ boxShadow: '0 6px 14px rgba(0,0,0,0.15)' }}
+          />
+        ) : (
+          <div
+            className="w-[56px] h-[56px] rounded-[14px] flex items-center justify-center
+              text-[26px] font-bold text-white mb-2
+              bg-gradient-to-br from-[#5ac8fa] to-[#007aff]"
+            style={{ boxShadow: '0 6px 14px rgba(0,122,255,0.3)' }}
+          >
+            {existing.name.slice(0, 1)}
+          </div>
+        )}
         <div className="text-[15px] font-semibold text-[var(--color-label)]">
           {existing.name}
         </div>

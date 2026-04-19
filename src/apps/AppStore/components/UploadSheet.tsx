@@ -19,7 +19,7 @@ type Phase =
   | { kind: 'installing'; file: File; event: InstallProgressEvent }
   | {
       kind: 'needsUpgradeConfirm';
-      existing: { name: string; version: string };
+      existing: { name: string; version: string; iconDataUrl: string | null };
       incoming: { name: string; version: string };
       resolve: (ok: boolean) => void;
     }
@@ -45,9 +45,15 @@ export function UploadSheet({ initialFile, onClose, onOpenApp }: Props) {
         },
         onUpgradeDetected: ({ existing, incoming }) =>
           new Promise<boolean>((resolve) => {
+            const stored = useInstalledUserAppsStore.getState()
+              .apps.find((a) => a.id === existing.id);
             setPhase({
               kind: 'needsUpgradeConfirm',
-              existing: { name: existing.name, version: existing.version },
+              existing: {
+                name: existing.name,
+                version: existing.version,
+                iconDataUrl: stored?.iconDataUrl ?? null,
+              },
               incoming: { name: incoming.name, version: incoming.version },
               resolve,
             });

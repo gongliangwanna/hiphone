@@ -3,7 +3,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { UpgradeConfirmView } from '../UpgradeConfirmView';
 
-const existing = { name: 'My App', version: '1.0.0' };
+const existing = { name: 'My App', version: '1.0.0', iconDataUrl: null };
 const incoming = { name: 'My App', version: '1.2.0' };
 
 describe('UpgradeConfirmView', () => {
