@@ -59,6 +59,17 @@ describe('resolveModule', () => {
     expect(typeof mod.dismiss).toBe('function');
   });
 
+  it('resolves "@hiphone/services" to an object with registerService, invoke, list', () => {
+    const mod = resolveModule('@hiphone/services') as {
+      registerService: unknown;
+      invoke: unknown;
+      list: unknown;
+    };
+    expect(typeof mod.registerService).toBe('function');
+    expect(typeof mod.invoke).toBe('function');
+    expect(typeof mod.list).toBe('function');
+  });
+
   it('does NOT leak prototype-chain keys (toString, constructor, etc.)', () => {
     // The `in` operator would walk the prototype chain; Object.hasOwn does not.
     // Guard against future regressions that might switch back to `in`.
