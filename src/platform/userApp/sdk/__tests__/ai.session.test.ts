@@ -10,13 +10,24 @@ import { useAIConfigStore } from '@/platform/stores/aiConfigStore';
 import { usePersonaStore } from '@/platform/stores/personaStore';
 import { withUserAppContext } from '../context';
 import * as chatCompleteMod from '@/platform/ai/chatComplete';
+import * as promptAssemblyMod from '@/platform/ai/promptAssembly';
 import {
   _resetCharacterAppStateForTests,
   getLastActiveAppId,
 } from '@/platform/ai/characterAppState';
+import {
+  registerTools,
+  _resetToolRegistryForTests,
+} from '@/platform/ai/toolRegistry';
+import {
+  registerAppSystemPrompt,
+  _resetAppSystemPromptRegistryForTests,
+} from '@/platform/ai/appSystemPromptRegistry';
 
 beforeEach(() => {
   _resetCharacterAppStateForTests();
+  _resetToolRegistryForTests();
+  _resetAppSystemPromptRegistryForTests();
   useCharacterMemory.getState().clearAll();
   useCharacterStore.setState({
     characters: [
@@ -271,5 +282,69 @@ describe('chatWithCharacter — app-switch system marker', () => {
     chatWithCharacter('char-001', { persistent: true });
     expect(useCharacterMemory.getState().getAll('char-001')).toHaveLength(0);
     expect(getLastActiveAppId('char-001')).toBeNull();
+  });
+});
+
+describe('chatWithCharacter — session captures registry snapshots at creation', () => {
+  it('captures getTools(appId) + appSystemPromptRegistry.get(appId)() + appId once at creation time, passes through to assemblePrompt on every send', async () => {
+    registerTools('ai-auction', [
+      { name: 'bid_call', description: '叫价', parameters: { min: 'number' } },
+    ]);
+    registerAppSystemPrompt('ai-auction', () => '你是拍卖会主持人');
+
+    const spy = vi.spyOn(promptAssemblyMod, 'assemblePrompt');
+    const chatSpy = vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue('[]');
+
+    await withUserAppContext('ai-auction', async () => {
+      const s = chatWithCharacter('char-001', { persistent: true });
+      await s.send('请主持');
+    });
+
+    expect(spy).toHaveBeenCalled();
+    const input = spy.mock.calls[0]![0];
+    expect(input.currentAppId).toBe('ai-auction');
+    expect(input.availableTools).toEqual([
+      { name: 'bid_call', description: '叫价', parameters: { min: 'number' } },
+    ]);
+    expect(input.appSystemPromptSnapshot).toBe('你是拍卖会主持人');
+
+    spy.mockRestore();
+    chatSpy.mockRestore();
+  });
+
+  it('snapshot is frozen at creation — mutations to the registry AFTER session creation do not leak in', async () => {
+    registerAppSystemPrompt('ai-auction', () => 'initial');
+    const spy = vi.spyOn(promptAssemblyMod, 'assemblePrompt');
+    const chatSpy = vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue('[]');
+
+    await withUserAppContext('ai-auction', async () => {
+      const s = chatWithCharacter('char-001', { persistent: true });
+      // Simulate the app mutating its state after session created
+      registerAppSystemPrompt('ai-auction', () => 'mutated');
+      await s.send('hi');
+    });
+
+    const input = spy.mock.calls[0]![0];
+    expect(input.appSystemPromptSnapshot).toBe('initial'); // frozen
+
+    spy.mockRestore();
+    chatSpy.mockRestore();
+  });
+
+  it('session without app context leaves the three fields as undefined/empty', async () => {
+    const spy = vi.spyOn(promptAssemblyMod, 'assemblePrompt');
+    const chatSpy = vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue('[]');
+
+    // No withUserAppContext — getCurrentAppId throws, capturedAppId is null
+    const s = chatWithCharacter('char-001', { persistent: true });
+    await s.send('hi');
+
+    const input = spy.mock.calls[0]![0];
+    expect(input.currentAppId).toBeUndefined();
+    expect(input.availableTools).toEqual([]);
+    expect(input.appSystemPromptSnapshot).toBeUndefined();
+
+    spy.mockRestore();
+    chatSpy.mockRestore();
   });
 });

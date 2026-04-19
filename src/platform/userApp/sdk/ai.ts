@@ -16,7 +16,7 @@ import { useWorldBookStore } from '@/platform/stores/worldBookStore';
 import { useStickerStore } from '@/apps/XingYu/stickerStore';
 import { getAdapter } from '@/platform/ai/providers';
 import { chatComplete } from '@/platform/ai/chatComplete';
-import { assemblePrompt } from '@/platform/ai/promptAssembly';
+import * as promptAssemblyMod from '@/platform/ai/promptAssembly';
 import { buildDeviceContext } from '@/platform/ai/deviceContext';
 import {
   useCharacterMemory,
@@ -27,6 +27,8 @@ import {
   getLastActiveAppId,
   setLastActiveAppId,
 } from '@/platform/ai/characterAppState';
+import { getTools, type ToolDefinition } from '@/platform/ai/toolRegistry';
+import { getAppSystemPrompt } from '@/platform/ai/appSystemPromptRegistry';
 import { getCurrentAppId } from './context';
 
 // ════════════════════════════════════════════════════════════════
@@ -272,6 +274,18 @@ export function chatWithCharacter(
     }
   }
 
+  // M4.2 §5/§8 — freeze registry snapshots at session creation.
+  // Every callLLM reuses these frozen values so the System block stays
+  // byte-stable → the provider's KV cache keeps hitting. Do NOT re-query
+  // the registries inside callLLM.
+  const frozenTools: ToolDefinition[] =
+    capturedAppId ? getTools(capturedAppId) : [];
+  const frozenAppSystemPrompt: string | undefined =
+    capturedAppId
+      ? (getAppSystemPrompt(capturedAppId)?.() ?? undefined)
+      : undefined;
+  const frozenCurrentAppId: string | undefined = capturedAppId ?? undefined;
+
   // persistent=false: snapshot the character's memory at creation time
   // so subsequent concurrent writes from elsewhere don't leak in.
   const snapshot: readonly MemoryEntry[] | null = persistent
@@ -349,7 +363,7 @@ export function chatWithCharacter(
 
     const memoryEntries = [...baseEntries, ...overlay];
 
-    const { messages } = assemblePrompt({
+    const { messages } = promptAssemblyMod.assemblePrompt({
       character: {
         name: character.name,
         description: character.description,
@@ -379,6 +393,10 @@ export function chatWithCharacter(
       now: new Date(),
       deviceContext: buildDeviceContext(),
       availableStickers: allStickers.length > 0 ? allStickers : undefined,
+      // M4.2 — frozen registry snapshots (captured once at session creation)
+      currentAppId: frozenCurrentAppId,
+      availableTools: frozenTools,
+      appSystemPromptSnapshot: frozenAppSystemPrompt,
     });
 
     return chatComplete(
