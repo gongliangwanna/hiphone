@@ -109,4 +109,45 @@ describe('XingYu sendMessage flow — memoryStore integration', () => {
     const errMsg = xyMsgs.find((m) => m.type === 'text' && m.text.startsWith('[AI 回复失败]'));
     expect(errMsg).toBeDefined();
   });
+
+  it('sendImageMessage → memoryStore has "[图片 <url>]" user entry', async () => {
+    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue(
+      '[{"type":"text","content":"好可爱"}]',
+    );
+
+    useXYData.getState().sendImageMessage(
+      'c-char-char-001',
+      'https://example.com/cat.jpg',
+    );
+
+    await new Promise((r) => setTimeout(r, 2500));
+
+    const mem = useCharacterMemory.getState().getAll('char-001');
+    expect(mem).toHaveLength(2);
+    expect(mem[0]!).toMatchObject({
+      role: 'user',
+      speakerId: 'me',
+      content: '[图片 https://example.com/cat.jpg]',
+    });
+    expect(mem[1]!.role).toBe('assistant');
+  }, 10_000);
+
+  it('sendStickerMessage → memoryStore has "[表情：desc]" user entry', async () => {
+    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue(
+      '[{"type":"text","content":"哈哈"}]',
+    );
+
+    useXYData.getState().sendStickerMessage(
+      'c-char-char-001',
+      'data:image/png;base64,xxx',
+      '笑脸',
+    );
+
+    await new Promise((r) => setTimeout(r, 2500));
+
+    const mem = useCharacterMemory.getState().getAll('char-001');
+    expect(mem).toHaveLength(2);
+    expect(mem[0]!.content).toBe('[表情：笑脸]');
+    expect(mem[1]!.role).toBe('assistant');
+  }, 10_000);
 });
