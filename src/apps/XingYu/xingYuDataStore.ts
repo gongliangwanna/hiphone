@@ -174,16 +174,13 @@ interface XingYuDataState {
 // discriminated union variant inline for type safety.
 
 /**
- * Entry point from every send* action. `userText` is the user-turn content
- * (already-formatted text that matches what memoryStore received via
- * _appendMessage/buildMemoryEntry) — needed because the S7 session path
- * calls `session.send(userText, { mirror: false })` and the session pushes
- * that into its internal buffer; memoryStore already holds the canonical
- * user turn so mirror:false keeps it from double-writing.
+ * Entry point from every send* action. The user turn has already been
+ * written to memoryStore by the caller via `_appendMessage`; the session
+ * path below reuses it verbatim through `session.replyToLast`, so no
+ * `userText` needs to be threaded in here.
  */
 function scheduleIdolReply(
   convId: string,
-  userText: string,
   get: () => XingYuDataState,
 ) {
   const conv = get().conversations.find((c) => c.id === convId);
@@ -191,7 +188,7 @@ function scheduleIdolReply(
 
   // Character-backed conversation → real AI streaming
   if (conv.characterId) {
-    scheduleAICharacterReply(convId, userText, get);
+    scheduleAICharacterReply(convId, get);
     return;
   }
 
@@ -296,14 +293,14 @@ function buildStickerBubble(args: {
  *
  * 流程:
  * 1. 显示 typing indicator（streaming placeholder）
- * 2. `session.send(userText, { mirror: false })` 获取 ChatReply
+ * 2. `session.replyToLast({ mirror: false })` 获取 ChatReply —— 用户轮
+ *    已经由 `_appendMessage` 写进 memoryStore，session 直接复用。
  * 3. 移除 placeholder，手动向 memoryStore append 一条 rendered assistant
  * 4. 逐条投递消息（每条间隔 300-800ms），支持 action / legacy sticker /
  *    legacy signature / text 四种条目
  */
 function scheduleAICharacterReply(
   convId: string,
-  userText: string,
   get: () => XingYuDataState,
 ) {
   // Abort any in-flight request for this conversation
@@ -383,11 +380,15 @@ function scheduleAICharacterReply(
   aiSessions.set(convId, { session: sessionInstance, controller });
 
   sessionInstance
-    // mirror:false — the user turn is already in memoryStore via
-    // _appendMessage (see sendMessage et al.), and we append the assistant
-    // entry ourselves below (rendered form, spec D1) so our stale-bubble
-    // abort logic stays authoritative over the memory write.
-    .send(userText, { mirror: false })
+    // replyToLast instead of send: the user turn is already in memoryStore
+    // via `_appendMessage` (see sendMessage et al.), so we don't need the
+    // session to push another user entry into its buffer — doing so would
+    // make the LLM see the user turn twice (buffer entry + memoryStore
+    // entry differ in `createdAt`, so overlay-dedup can't collapse them).
+    // mirror:false — we append the assistant entry ourselves below
+    // (rendered form, spec D1) so stale-bubble abort logic stays
+    // authoritative over the memory write.
+    .replyToLast({ mirror: false })
     .then(async (reply: ChatReply) => {
       // Remove typing indicator placeholder
       const s0 = useXYData.getState();
@@ -622,12 +623,7 @@ export const useXYData = create<XingYuDataState>()(
           ...(quoteRef ? { quoteRef } : {}),
         };
         _appendMessage(msg, 'xingyu');
-        // Mirror the memoryStore content rule in buildMemoryEntry for the
-        // session.send userText argument: include quoteRef prefix if any.
-        const userText = quoteRef
-          ? `[引用：${quoteRef.preview}] ${text}`
-          : text;
-        scheduleIdolReply(convId, userText, get);
+        scheduleIdolReply(convId, get);
       },
 
       sendNoteMessage: (convId, noteRef) => {
@@ -635,7 +631,7 @@ export const useXYData = create<XingYuDataState>()(
         const text = `[备忘录分享] ${previewTitle}\n${noteRef.body}`;
         const msg: Message = { id: uid(), convId, senderId: 'me', type: 'text', text, noteRef, timestamp: Date.now() };
         _appendMessage(msg, 'xingyu');
-        scheduleIdolReply(convId, text, get);
+        scheduleIdolReply(convId, get);
       },
 
       sendSongMessage: (convId, songRef, lyricsText) => {
@@ -644,19 +640,19 @@ export const useXYData = create<XingYuDataState>()(
         const text = parts.join('');
         const msg: Message = { id: uid(), convId, senderId: 'me', type: 'text', text, songRef, timestamp: Date.now() };
         _appendMessage(msg, 'xingyu');
-        scheduleIdolReply(convId, text, get);
+        scheduleIdolReply(convId, get);
       },
 
       sendImageMessage: (convId, imageUrl) => {
         const msg: Message = { id: uid(), convId, senderId: 'me', type: 'image', imageUrl, timestamp: Date.now() };
         _appendMessage(msg, 'xingyu');
-        scheduleIdolReply(convId, `[图片 ${imageUrl}]`, get);
+        scheduleIdolReply(convId, get);
       },
 
       sendStickerMessage: (convId, stickerUrl, stickerDesc) => {
         const msg: Message = { id: uid(), convId, senderId: 'me', type: 'sticker', stickerUrl, stickerDesc, timestamp: Date.now() };
         _appendMessage(msg, 'xingyu');
-        scheduleIdolReply(convId, stickerDesc ? `[表情：${stickerDesc}]` : '[表情]', get);
+        scheduleIdolReply(convId, get);
       },
 
       markRead: (convId) =>
@@ -1000,9 +996,9 @@ export const useXYData = create<XingYuDataState>()(
         const now = Date.now();
         const built = buildForwardedMessage(msg, targetConvId, now);
         if (!built) return;
-        const { newMsg, preview } = built;
+        const { newMsg } = built;
         _appendMessage(newMsg, 'xingyu');
-        scheduleIdolReply(targetConvId, preview, get);
+        scheduleIdolReply(targetConvId, get);
       },
 
       forwardMessages: (msgs, targetConvId) => {
@@ -1024,7 +1020,7 @@ export const useXYData = create<XingYuDataState>()(
               : c,
           ),
         }));
-        scheduleIdolReply(targetConvId, lastPreview, get);
+        scheduleIdolReply(targetConvId, get);
       },
 
       forwardAsCard: (msgs, targetConvId, title, getSenderName) => {
@@ -1069,7 +1065,7 @@ export const useXYData = create<XingYuDataState>()(
             c.id === targetConvId ? { ...c, lastMsg: '[聊天记录]' } : c,
           ),
         }));
-        scheduleIdolReply(targetConvId, `[转发的聊天记录：${title}]`, get);
+        scheduleIdolReply(targetConvId, get);
       },
 
       ensureAIChatConversation: (charIdA, charIdB) => {
