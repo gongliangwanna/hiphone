@@ -7,9 +7,10 @@ interface Props {
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
   onLongPress: (id: string) => void;
+  onDetail: (id: string) => void;
 }
 
-export function InstalledList({ apps, onOpen, onDelete, onLongPress }: Props) {
+export function InstalledList({ apps, onOpen, onDelete, onLongPress, onDetail }: Props) {
   const sorted = useMemo(
     () => [...apps].sort((a, b) => b.installedAt - a.installedAt),
     [apps],
@@ -28,6 +29,7 @@ export function InstalledList({ apps, onOpen, onDelete, onLongPress }: Props) {
               onOpen={onOpen}
               onDelete={onDelete}
               onLongPress={onLongPress}
+              onDetail={onDetail}
             />
           </div>
         ))}

@@ -4,7 +4,10 @@ import userEvent from '@testing-library/user-event';
 import { PerformanceHUD } from '../PerformanceHUD';
 import { usePerfDebugStore } from '@/platform/stores/perfDebugStore';
 
-const makeSnapshot = (fps = 58.4) => ({
+const makeSnapshot = (
+  fps = 58.4,
+  history: { fps: number; worstFrameMs: number }[] = [],
+) => ({
   frames: {
     sampleCount: 60,
     fps,
@@ -13,6 +16,7 @@ const makeSnapshot = (fps = 58.4) => ({
     slowFrames24: 4,
     slowFrames40: 1,
   },
+  history,
 });
 
 describe('PerformanceHUD', () => {
@@ -97,5 +101,35 @@ describe('PerformanceHUD', () => {
   it('shows -- when fps is 0', () => {
     render(<PerformanceHUD snapshot={makeSnapshot(0)} />);
     expect(screen.getByText('--')).toBeInTheDocument();
+  });
+
+  it('renders fps sparkline with a polyline when history has samples', async () => {
+    const user = userEvent.setup();
+    const history = [
+      { fps: 60, worstFrameMs: 16.7 },
+      { fps: 45, worstFrameMs: 28 },
+      { fps: 58, worstFrameMs: 18 },
+    ];
+    render(<PerformanceHUD snapshot={makeSnapshot(58.4, history)} />);
+
+    await user.click(screen.getByTestId('perf-ball'));
+
+    const svg = screen.getByTestId('perf-sparkline');
+    expect(svg).toBeInTheDocument();
+    // Sparkline renders one <path> for the stroke (plus an area fill path);
+    // absence of <path> would mean the chart silently collapsed to nothing.
+    const paths = svg.querySelectorAll('path');
+    expect(paths.length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('3 pts')).toBeInTheDocument();
+  });
+
+  it('renders sparkline grid even when history is empty', async () => {
+    const user = userEvent.setup();
+    render(<PerformanceHUD snapshot={makeSnapshot()} />);
+
+    await user.click(screen.getByTestId('perf-ball'));
+
+    expect(screen.getByTestId('perf-sparkline')).toBeInTheDocument();
+    expect(screen.getByText('0 pts')).toBeInTheDocument();
   });
 });

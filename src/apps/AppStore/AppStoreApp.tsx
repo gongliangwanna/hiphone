@@ -100,6 +100,7 @@ export function AppStoreApp() {
             onOpen={handleOpen}
             onDelete={handleDelete}
             onLongPress={handleLongPress}
+            onDetail={setDetailAppId}
           />
         )}
 

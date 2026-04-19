@@ -49,6 +49,9 @@ export interface UserAppManifest {
   // M3+ fields — allowed but ignored in M2
   author?: string;
   description?: string;
+  /** Free-text release notes for the current version. Rendered as-is in
+   *  the detail sheet; newlines are preserved. */
+  changelog?: string;
   permissions?: string[];
   aiTools?: string;
 }
@@ -108,6 +111,7 @@ export function validateManifest(raw: unknown): UserAppManifest {
     services,
     author: typeof obj.author === 'string' ? obj.author : undefined,
     description: typeof obj.description === 'string' ? obj.description : undefined,
+    changelog: typeof obj.changelog === 'string' ? obj.changelog : undefined,
     permissions: Array.isArray(obj.permissions)
       ? obj.permissions.filter((p): p is string => typeof p === 'string')
       : undefined,

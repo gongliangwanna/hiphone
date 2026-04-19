@@ -28,7 +28,7 @@ export function AppDetailSheet({ app, onClose, onUninstall }: Props) {
             App 详情
           </div>
           <div className="text-[12px] text-[var(--color-secondaryLabel)] mt-[3px] leading-tight min-h-[14px]">
-            {'\u00A0'}
+            {app.author ?? '\u00A0'}
           </div>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-4">
@@ -41,11 +41,33 @@ export function AppDetailSheet({ app, onClose, onUninstall }: Props) {
               <span className="text-[20px] font-semibold text-[var(--color-label)] truncate">
                 {app.name}
               </span>
+              {app.author && (
+                <span className="text-[13px] text-[var(--color-secondaryLabel)] truncate">
+                  {app.author}
+                </span>
+              )}
               <span className="text-[13px] text-[var(--color-secondaryLabel)]">
                 版本 {app.version}
               </span>
             </div>
           </div>
+
+          {app.description && (
+            <Section title="简介">
+              <p className="px-4 py-3 text-[14px] text-[var(--color-label)] leading-relaxed whitespace-pre-wrap">
+                {app.description}
+              </p>
+            </Section>
+          )}
+
+          {app.changelog && (
+            <Section title={`更新日志 · ${app.version}`}>
+              <p className="px-4 py-3 text-[14px] text-[var(--color-label)] leading-relaxed whitespace-pre-wrap">
+                {app.changelog}
+              </p>
+            </Section>
+          )}
+
           <Section title="基本信息">
             <Row k="Bundle ID" v={app.id} />
             <Row k="大小" v={formatByteSize(app.sizeBytes)} />

@@ -68,11 +68,13 @@ export function usePageSwipe({
   }, []);
 
   const animateToPage = useCallback(
-    (page: number, velocityX: number, interactive: boolean) => {
+    (page: number, velocityX: number) => {
       stopAnimation();
+      // iOS 分页是临界阻尼，零过冲。`spring.smooth` (ζ≈0.84) 会在提交换页时
+      // 产生 ~0.8% overshoot，相当于 390px 页宽上 3px 的轻微回弹。
       animationRef.current = animate(trackX, getPageTarget(page, pageWidth), {
         type: 'spring',
-        ...(interactive ? spring.interactive : spring.smooth),
+        ...spring.interactive,
         velocity: velocityX * 1000,
       });
     },
@@ -98,7 +100,7 @@ export function usePageSwipe({
       const page = currentPageRef.current;
 
       if (kind !== 'up') {
-        animateToPage(page, vx, true);
+        animateToPage(page, vx);
         samplesRef.current = [];
         return;
       }
@@ -129,7 +131,7 @@ export function usePageSwipe({
         setCurrentPage(nextPage);
       }
 
-      animateToPage(committed ? nextPage : page, vx, !committed);
+      animateToPage(committed ? nextPage : page, vx);
       samplesRef.current = [];
     },
     [animateToPage, pageCount],
@@ -213,7 +215,7 @@ export function usePageSwipe({
       if (clamped === currentPageRef.current) return;
       currentPageRef.current = clamped;
       setCurrentPage(clamped);
-      animateToPage(clamped, 0, false);
+      animateToPage(clamped, 0);
     },
     [pageCount, animateToPage],
   );
@@ -230,7 +232,7 @@ export function usePageSwipe({
     pointerIdRef.current = null;
     samplesRef.current = [];
     // Snap back to current page
-    animateToPage(currentPageRef.current, 0, true);
+    animateToPage(currentPageRef.current, 0);
   }, [animateToPage]);
 
   return {

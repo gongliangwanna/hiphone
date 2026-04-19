@@ -8,20 +8,28 @@ interface Props {
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
   onLongPress: (id: string) => void;
+  onDetail: (id: string) => void;
 }
 
-export function InstalledAppRow({ app, onOpen, onDelete, onLongPress }: Props) {
+export function InstalledAppRow({ app, onOpen, onDelete, onLongPress, onDetail }: Props) {
   const longPressProps = useLongPress(() => onLongPress(app.id), { delay: 500 });
 
   return (
     <SwipeRow onDelete={() => onDelete(app.id)}>
       <div
         data-testid={`installed-app-row-${app.id}`}
-        className="flex items-center gap-[14px] px-4 py-3 min-h-[76px]"
+        role="button"
+        tabIndex={0}
+        aria-label={`${app.name} 详情`}
+        className="flex items-center gap-[14px] px-4 py-3 min-h-[76px] cursor-pointer"
         onPointerDown={longPressProps.onPointerDown}
         onPointerUp={longPressProps.onPointerUp}
         onPointerCancel={longPressProps.onPointerCancel}
-        onClick={longPressProps.onClick}
+        onClick={(e) => {
+          longPressProps.onClick(e);
+          if (e.defaultPrevented) return;
+          onDetail(app.id);
+        }}
       >
         <div
           data-testid={`installed-app-icon-${app.id}`}

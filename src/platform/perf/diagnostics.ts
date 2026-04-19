@@ -17,6 +17,13 @@ export interface FrameStats {
   slowFrames40: number;
 }
 
+/** One data point on the PerfHUD sparkline — a single sample window's FPS. */
+export interface FpsSample {
+  fps: number;
+  /** Worst frame (ms) in the window; used to flag stutters. */
+  worstFrameMs: number;
+}
+
 export const defaultPerfDebugPrefs: PerfDebugPrefs = {
   enabled: false,
   disableWallpaper: false,

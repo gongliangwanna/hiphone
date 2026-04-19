@@ -13,6 +13,12 @@ export interface InstalledUserApp {
   installedAt: number;
   /** Sum of compiled bundle byte lengths (UTF-8); 0 for legacy records. */
   sizeBytes: number;
+  /** Free-text developer / author name from manifest.author. */
+  author?: string;
+  /** Short app description from manifest.description. */
+  description?: string;
+  /** Release notes from manifest.changelog (preserves newlines). */
+  changelog?: string;
 }
 
 interface InstalledUserAppsState {

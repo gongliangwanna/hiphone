@@ -17,7 +17,7 @@ const sample: InstalledUserApp = {
 describe('InstalledAppRow', () => {
   it('renders name, version, formatted size, relative time', () => {
     render(
-      <InstalledAppRow app={sample} onOpen={() => {}} onDelete={() => {}} onLongPress={() => {}} />,
+      <InstalledAppRow app={sample} onOpen={() => {}} onDelete={() => {}} onLongPress={() => {}} onDetail={() => {}} />,
     );
     expect(screen.getByText('Demo')).toBeInTheDocument();
     expect(screen.getByText(/1\.2\.3/)).toBeInTheDocument();
@@ -27,7 +27,7 @@ describe('InstalledAppRow', () => {
 
   it('shows default icon placeholder when no iconDataUrl', () => {
     render(
-      <InstalledAppRow app={sample} onOpen={() => {}} onDelete={() => {}} onLongPress={() => {}} />,
+      <InstalledAppRow app={sample} onOpen={() => {}} onDelete={() => {}} onLongPress={() => {}} onDetail={() => {}} />,
     );
     expect(screen.getByTestId(`installed-app-icon-${sample.id}`)).toBeInTheDocument();
   });
@@ -35,7 +35,7 @@ describe('InstalledAppRow', () => {
   it('calls onOpen when "打开" button clicked', () => {
     const onOpen = vi.fn();
     render(
-      <InstalledAppRow app={sample} onOpen={onOpen} onDelete={() => {}} onLongPress={() => {}} />,
+      <InstalledAppRow app={sample} onOpen={onOpen} onDelete={() => {}} onLongPress={() => {}} onDetail={() => {}} />,
     );
     fireEvent.click(screen.getByTestId(`open-button-${sample.id}`));
     expect(onOpen).toHaveBeenCalledWith(sample.id);
@@ -44,7 +44,7 @@ describe('InstalledAppRow', () => {
   it('calls onDelete when swipe action tapped', () => {
     const onDelete = vi.fn();
     render(
-      <InstalledAppRow app={sample} onOpen={() => {}} onDelete={onDelete} onLongPress={() => {}} />,
+      <InstalledAppRow app={sample} onOpen={() => {}} onDelete={onDelete} onLongPress={() => {}} onDetail={() => {}} />,
     );
     const track = screen.getByTestId('swipe-row-track');
     fireEvent.pointerDown(track, { clientX: 200, pointerId: 1, pointerType: 'touch' });
@@ -61,6 +61,7 @@ describe('InstalledAppRow', () => {
         onOpen={() => {}}
         onDelete={() => {}}
         onLongPress={() => {}}
+        onDetail={() => {}}
       />,
     );
     expect(screen.getByTestId(`installed-app-meta-${sample.id}`).textContent).toContain('—');

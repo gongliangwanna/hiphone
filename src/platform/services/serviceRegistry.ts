@@ -29,11 +29,15 @@ export class ServiceNotFoundError extends Error {
 }
 
 export class ServiceBootstrapError extends Error {
-  constructor(public appId: string, public override cause: unknown) {
+  public readonly appId: string;
+  public readonly cause: unknown;
+  constructor(appId: string, cause: unknown) {
     super(
       `services bootstrap failed for "${appId}": ${cause instanceof Error ? cause.message : String(cause)}`,
     );
     this.name = 'ServiceBootstrapError';
+    this.appId = appId;
+    this.cause = cause;
   }
 }
 

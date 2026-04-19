@@ -241,6 +241,9 @@ export async function install(
       version: manifest.version,
       installedAt,
       sizeBytes,
+      author: manifest.author,
+      description: manifest.description,
+      changelog: manifest.changelog,
     };
     useInstalledUserAppsStore.getState().add(record);
 
@@ -330,6 +333,9 @@ export async function loadInstalledApps(): Promise<void> {
     // Legacy records (pre-P1) don't have sizeBytes — fall back to 0 so UI
     // shows "—". Newly installed apps always have it set (Task 2).
     sizeBytes: typeof meta.sizeBytes === 'number' ? meta.sizeBytes : 0,
+    author: meta.manifest.author,
+    description: meta.manifest.description,
+    changelog: meta.manifest.changelog,
   }));
   useInstalledUserAppsStore.getState().replaceAll(records);
 
