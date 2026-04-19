@@ -42,6 +42,14 @@ describe('resolveModule', () => {
     expect(mod.AIUnavailableError).toBeDefined();
   });
 
+  it("resolveModule('@hiphone/ai') exposes M4.2 registry surface", () => {
+    const mod = resolveModule('@hiphone/ai') as Record<string, unknown>;
+    expect(typeof mod.registerTools).toBe('function');
+    expect(typeof mod.registerReplyRenderer).toBe('function');
+    expect(typeof mod.registerAppSystemPrompt).toBe('function');
+    expect(typeof mod.injectSystemEvent).toBe('function');
+  });
+
   it('resolves "@hiphone/nav" to an object with open and goHome', () => {
     const mod = resolveModule('@hiphone/nav') as { open: unknown; goHome: unknown };
     expect(typeof mod.open).toBe('function');
