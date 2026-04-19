@@ -15,7 +15,7 @@ export function AppDetailSheet({ app, onClose, onUninstall }: Props) {
       className="absolute inset-0 z-20 flex flex-col">
       <div role="presentation" onClick={onClose}
         className="absolute inset-0 bg-black/40" />
-      <div className="relative mt-auto bg-[var(--color-background)]
+      <div className="relative mt-auto bg-[var(--color-systemBackground)]
         rounded-t-[14px] flex flex-col min-h-[60%] max-h-[90%]">
         <div className="relative flex items-center justify-between
           px-4 py-3 border-b border-[var(--color-separator)]">

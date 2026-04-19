@@ -58,7 +58,7 @@ export function SwipeRow({ children, onDelete, deleteLabel = '卸载' }: Props) 
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        className="relative bg-[var(--color-background)] touch-pan-y"
+        className="relative bg-[var(--color-systemBackground)] touch-pan-y"
         style={{
           transform: `translateX(${offset}px)`,
           transition: isDragging.current ? 'none' : 'transform 180ms ease-out',

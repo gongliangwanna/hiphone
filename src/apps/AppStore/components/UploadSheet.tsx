@@ -100,7 +100,7 @@ export function UploadSheet({ initialFile, onClose, onOpenApp }: Props) {
         className="absolute inset-0 bg-black/40"
       />
       <div
-        className="relative mt-auto bg-[var(--color-background)]
+        className="relative mt-auto bg-[var(--color-systemBackground)]
           rounded-t-[14px] flex flex-col min-h-[60%] max-h-[90%]"
       >
         <div
