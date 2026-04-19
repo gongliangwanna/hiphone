@@ -22,32 +22,33 @@ export function InstallErrorView({ error, onRetry }: Props) {
   const kind = error.kind === 'user-cancelled' ? 'io' : error.kind;
   const label = KIND_COPY[kind];
   return (
-    <div className="flex flex-col items-center gap-5 px-5 py-8">
-      <div className="w-[88px] h-[88px] rounded-full flex items-center justify-center
-        bg-[var(--color-systemRed)]">
-        <XIcon size={48} strokeWidth={3} className="text-white" />
-      </div>
-      <div className="text-[20px] font-semibold text-[var(--color-label)] text-center">
-        {label}
-      </div>
-      {showDetail && (
-        <div className="w-full max-h-[120px] overflow-y-auto p-3 rounded-[10px]
-          bg-[var(--color-fill-quaternary)]
-          text-[12px] text-[var(--color-secondaryLabel)] font-mono">
-          {error.message}
+    <div className="flex flex-col gap-3">
+      <div className="bg-white rounded-[14px] flex flex-col items-center justify-center text-center px-4 py-5 min-h-[180px]">
+        <div
+          className="w-[52px] h-[52px] rounded-full flex items-center justify-center bg-[var(--color-systemRed)] mb-2.5"
+          style={{ boxShadow: '0 5px 14px rgba(255,59,48,0.3)' }}
+        >
+          <XIcon size={28} strokeWidth={3} className="text-white" />
         </div>
-      )}
-      <div className="flex gap-3 w-full">
+        <div className="text-[14px] font-semibold text-[var(--color-label)]">{label}</div>
+        {showDetail && (
+          <div className="w-full max-h-[80px] overflow-y-auto mt-2 p-2 rounded-[8px]
+            bg-[var(--color-fill-quaternary)]
+            text-[11px] text-[var(--color-secondaryLabel)] font-mono text-left">
+            {error.message}
+          </div>
+        )}
+      </div>
+      <div className="flex gap-2 h-10">
         <button type="button" onClick={() => setShowDetail((v) => !v)}
-          className="flex-1 h-11 rounded-[14px]
-            bg-[var(--color-fill-tertiary)]
-            text-[17px] font-medium text-[var(--color-label)]">
+          className="flex-1 rounded-[11px] text-[14px] font-semibold text-[var(--color-systemBlue)]"
+          style={{ backgroundColor: 'rgba(118,118,128,0.16)' }}>
           查看详情
         </button>
         <button type="button" onClick={onRetry}
-          className="flex-1 h-11 rounded-[14px]
+          className="flex-1 rounded-[11px]
             bg-[var(--color-systemBlue)]
-            text-[17px] font-semibold text-white">
+            text-[14px] font-semibold text-white">
           重试
         </button>
       </div>

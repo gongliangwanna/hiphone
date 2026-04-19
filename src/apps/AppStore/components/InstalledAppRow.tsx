@@ -1,4 +1,3 @@
-import { ArrowUpRight } from 'lucide-react';
 import type { InstalledUserApp } from '@/platform/stores/installedUserAppsStore';
 import { useLongPress } from '@/platform/gesture/useLongPress';
 import { formatByteSize, formatRelativeTime } from '@/platform/utils/formatters';
@@ -18,7 +17,7 @@ export function InstalledAppRow({ app, onOpen, onDelete, onLongPress }: Props) {
     <SwipeRow onDelete={() => onDelete(app.id)}>
       <div
         data-testid={`installed-app-row-${app.id}`}
-        className="flex items-center gap-3 px-4 py-3 min-h-[60px]"
+        className="flex items-center gap-[14px] px-4 py-3 min-h-[76px]"
         onPointerDown={longPressProps.onPointerDown}
         onPointerUp={longPressProps.onPointerUp}
         onPointerCancel={longPressProps.onPointerCancel}
@@ -26,7 +25,8 @@ export function InstalledAppRow({ app, onOpen, onDelete, onLongPress }: Props) {
       >
         <div
           data-testid={`installed-app-icon-${app.id}`}
-          className="w-11 h-11 rounded-[10px] overflow-hidden flex-shrink-0 bg-gradient-to-br from-[#e0e0e0] to-[#a0a0a0]"
+          className="w-[58px] h-[58px] rounded-[13px] overflow-hidden flex-shrink-0 bg-gradient-to-br from-[#5ac8fa] to-[#007aff]"
+          style={{ boxShadow: '0 2px 5px rgba(0,0,0,0.08)' }}
         >
           {app.iconDataUrl && (
             <img src={app.iconDataUrl} alt="" className="w-full h-full object-cover" />
@@ -34,12 +34,12 @@ export function InstalledAppRow({ app, onOpen, onDelete, onLongPress }: Props) {
         </div>
 
         <div className="flex-1 min-w-0">
-          <div className="text-[15px] font-medium text-[var(--color-label)] truncate">
+          <div className="text-[17px] font-medium text-[var(--color-label)] truncate">
             {app.name}
           </div>
           <div
             data-testid={`installed-app-meta-${app.id}`}
-            className="text-[12px] text-[var(--color-secondaryLabel)] truncate"
+            className="text-[13px] text-[var(--color-secondaryLabel)] truncate mt-0.5"
           >
             {app.version} · {formatByteSize(app.sizeBytes)} · {formatRelativeTime(app.installedAt)}
           </div>
@@ -53,10 +53,10 @@ export function InstalledAppRow({ app, onOpen, onDelete, onLongPress }: Props) {
             e.stopPropagation();
             onOpen(app.id);
           }}
-          className="flex items-center gap-1 px-3 min-h-[32px] rounded-full bg-[var(--color-fill-secondary)] text-[13px] font-medium text-[var(--color-systemBlue)] flex-shrink-0"
+          className="px-[22px] py-[7px] rounded-[16px] text-[15px] font-semibold text-[var(--color-systemBlue)] flex-shrink-0"
+          style={{ backgroundColor: 'rgba(0,122,255,0.12)' }}
         >
-          <span>打开</span>
-          <ArrowUpRight size={14} strokeWidth={2} />
+          打开
         </button>
       </div>
     </SwipeRow>

@@ -1,6 +1,5 @@
-// src/apps/AppStore/components/views/DropZoneView.tsx
 import { useRef, useState, type DragEvent } from 'react';
-import { UploadCloud } from 'lucide-react';
+import { ArrowUp } from 'lucide-react';
 
 interface Props {
   onFile: (file: File) => void;
@@ -18,28 +17,26 @@ export function DropZoneView({ onFile }: Props) {
   };
 
   return (
-    <div className="px-4 py-6">
-      <div
-        data-testid="upload-drop-zone"
-        onClick={() => inputRef.current?.click()}
-        onDragOver={(e) => { e.preventDefault(); setActive(true); }}
-        onDragLeave={() => setActive(false)}
-        onDrop={handleDrop}
-        className={`min-h-[180px] rounded-[14px] border-2 border-dashed
-          flex flex-col items-center justify-center gap-3 px-6 py-10 cursor-pointer
-          transition-colors
-          ${active
-            ? 'border-[var(--color-systemBlue)] bg-[var(--color-fill-tertiary)]'
-            : 'border-[var(--color-separator)] bg-[var(--color-systemBackground)]'}`}
-      >
-        <UploadCloud size={40} strokeWidth={1.5}
-          className="text-[var(--color-systemBlue)]" />
-        <div className="text-[15px] font-medium text-[var(--color-label)]">
-          选择或拖放 zip 文件
-        </div>
-        <div className="text-[13px] text-[var(--color-secondaryLabel)]">
-          zip 里需包含 manifest.json + 入口 TSX
-        </div>
+    <div
+      data-testid="upload-drop-zone"
+      onClick={() => inputRef.current?.click()}
+      onDragOver={(e) => { e.preventDefault(); setActive(true); }}
+      onDragLeave={() => setActive(false)}
+      onDrop={handleDrop}
+      className={`min-h-[180px] rounded-[14px] border-2 border-dashed bg-white
+        flex flex-col items-center justify-center text-center px-4 py-5 cursor-pointer
+        transition-colors
+        ${active
+          ? 'border-[var(--color-systemBlue)]'
+          : 'border-[rgba(0,122,255,0.4)]'}`}
+    >
+      <ArrowUp size={34} strokeWidth={1.75}
+        className="text-[var(--color-systemBlue)]" />
+      <div className="text-[14px] font-semibold text-[var(--color-label)] mt-2">
+        拖入或点击选择
+      </div>
+      <div className="text-[11px] text-[var(--color-secondaryLabel)] mt-1">
+        需包含 manifest.json + 入口 TSX
       </div>
       <input
         ref={inputRef}
