@@ -22,6 +22,11 @@ import {
   useCharacterMemory,
   type MemoryEntry,
 } from '@/platform/ai/characterMemoryStore';
+import { injectSystemEvent } from '@/platform/ai/contextEvents';
+import {
+  getLastActiveAppId,
+  setLastActiveAppId,
+} from '@/platform/ai/characterAppState';
 import { getCurrentAppId } from './context';
 
 // ════════════════════════════════════════════════════════════════
@@ -248,6 +253,24 @@ export function chatWithCharacter(
   }
   const sessionAppId = capturedAppId || 'unknown';
   const source: MemoryEntry['source'] = `app:${sessionAppId}`;
+
+  // M4.2 §4 — auto app-switch system marker.
+  // Only triggers when we have a real app id (not the 'unknown' fallback) AND
+  // the character's lastActiveAppId is either null (first contact) or
+  // different from the current. Using capturedAppId (not sessionAppId) so
+  // the fallback 'unknown' never fires markers — that would spam test
+  // fixtures that run outside withUserAppContext.
+  if (capturedAppId !== null) {
+    const previousAppId = getLastActiveAppId(characterId);
+    if (previousAppId !== capturedAppId) {
+      const message =
+        previousAppId === null
+          ? `[上下文切换] 用户打开了 ${capturedAppId}`
+          : `[上下文切换] 用户从 ${previousAppId} 切到了 ${capturedAppId}`;
+      injectSystemEvent(characterId, message);
+      setLastActiveAppId(characterId, capturedAppId);
+    }
+  }
 
   // persistent=false: snapshot the character's memory at creation time
   // so subsequent concurrent writes from elsewhere don't leak in.

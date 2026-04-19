@@ -10,8 +10,13 @@ import { useAIConfigStore } from '@/platform/stores/aiConfigStore';
 import { usePersonaStore } from '@/platform/stores/personaStore';
 import { withUserAppContext } from '../context';
 import * as chatCompleteMod from '@/platform/ai/chatComplete';
+import {
+  _resetCharacterAppStateForTests,
+  getLastActiveAppId,
+} from '@/platform/ai/characterAppState';
 
 beforeEach(() => {
+  _resetCharacterAppStateForTests();
   useCharacterMemory.getState().clearAll();
   useCharacterStore.setState({
     characters: [
@@ -83,11 +88,15 @@ describe('chatWithCharacter — append rules', () => {
       s.append({ role: 'user', content: 'hello' });
     });
     expect(s.history).toHaveLength(1);
+    // mem[0] is the auto-injected [上下文切换] marker for app-demo (first
+    // session ever), mem[1] is the appended user message.
     const mem = useCharacterMemory.getState().getAll('char-001');
-    expect(mem).toHaveLength(1);
-    expect(mem[0]!.source).toBe('app:app-demo');
-    expect(mem[0]!.content).toBe('hello');
-    expect(mem[0]!.speakerId).toBe('me');
+    expect(mem).toHaveLength(2);
+    expect(mem[0]!.role).toBe('system');
+    expect(mem[0]!.content).toMatch(/上下文切换/);
+    expect(mem[1]!.source).toBe('app:app-demo');
+    expect(mem[1]!.content).toBe('hello');
+    expect(mem[1]!.speakerId).toBe('me');
   });
 
   it('persistent=true + mirror:false: updates session.history only', () => {
@@ -96,7 +105,11 @@ describe('chatWithCharacter — append rules', () => {
     );
     s.append({ role: 'user', content: 'hi' }, { mirror: false });
     expect(s.history).toHaveLength(1);
-    expect(useCharacterMemory.getState().getAll('char-001')).toHaveLength(0);
+    // Creation of the session injects one [上下文切换] marker; the
+    // mirror=false append itself does not touch memoryStore.
+    const mem = useCharacterMemory.getState().getAll('char-001');
+    expect(mem).toHaveLength(1);
+    expect(mem[0]!.role).toBe('system');
   });
 
   it('append can specify a custom speakerId (for observer/XingYu scenarios)', () => {
@@ -125,13 +138,16 @@ describe('session.send (non-streaming)', () => {
     const reply = await withUserAppContext('app-demo', () => s.send('hello'));
 
     expect(reply).toBe('reply B');
+    // mem[0] is the session-creation [上下文切换] marker, then user + reply.
     const mem = useCharacterMemory.getState().getAll('char-001');
-    expect(mem).toHaveLength(2);
-    expect(mem[0]!).toMatchObject({ role: 'user', speakerId: 'me', content: 'hello', source: 'app:app-demo' });
-    expect(mem[1]!).toMatchObject({ role: 'assistant', speakerId: 'char-001', content: 'reply B', source: 'app:app-demo' });
+    expect(mem).toHaveLength(3);
+    expect(mem[0]!.role).toBe('system');
+    expect(mem[0]!.content).toMatch(/上下文切换/);
+    expect(mem[1]!).toMatchObject({ role: 'user', speakerId: 'me', content: 'hello', source: 'app:app-demo' });
+    expect(mem[2]!).toMatchObject({ role: 'assistant', speakerId: 'char-001', content: 'reply B', source: 'app:app-demo' });
   });
 
-  it('persistent=true + mirror:false: buffer updated, memoryStore untouched', async () => {
+  it('persistent=true + mirror:false: buffer updated, memoryStore gets only the creation marker', async () => {
     vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue('reply C');
     const s = withUserAppContext('app-demo', () =>
       chatWithCharacter('char-001', { persistent: true }),
@@ -139,7 +155,11 @@ describe('session.send (non-streaming)', () => {
     const reply = await withUserAppContext('app-demo', () => s.send('hello', { mirror: false }));
 
     expect(reply).toBe('reply C');
-    expect(useCharacterMemory.getState().getAll('char-001')).toHaveLength(0);
+    // Creation still injects one [上下文切换] marker; mirror:false keeps the
+    // actual user/assistant turns out of memoryStore.
+    const mem = useCharacterMemory.getState().getAll('char-001');
+    expect(mem).toHaveLength(1);
+    expect(mem[0]!.role).toBe('system');
     expect(s.history).toHaveLength(2);
   });
 });
@@ -191,5 +211,65 @@ describe('session.streamSend', () => {
 
     const err = await consumer;
     expect(err).toBeInstanceOf(AIAbortedError);
+  });
+});
+
+describe('chatWithCharacter — app-switch system marker', () => {
+  it('first-ever session (lastActiveAppId is null) injects "[上下文切换] 用户打开了 <appName>"', () => {
+    withUserAppContext('ai-auction', () => {
+      chatWithCharacter('char-001', { persistent: true });
+    });
+    const entries = useCharacterMemory.getState().getAll('char-001');
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.role).toBe('system');
+    expect(entries[0]!.source).toBe('system');
+    expect(entries[0]!.content).toMatch(/上下文切换/);
+    expect(entries[0]!.content).toMatch(/ai-auction/);
+    expect(getLastActiveAppId('char-001')).toBe('ai-auction');
+  });
+
+  it('second session in the SAME app does not inject another marker', () => {
+    withUserAppContext('ai-auction', () => {
+      chatWithCharacter('char-001', { persistent: true });
+    });
+    withUserAppContext('ai-auction', () => {
+      chatWithCharacter('char-001', { persistent: true });
+    });
+    const entries = useCharacterMemory.getState().getAll('char-001');
+    expect(entries).toHaveLength(1); // only the first marker
+  });
+
+  it('switching apps injects a second marker naming both sides', () => {
+    withUserAppContext('ai-auction', () => {
+      chatWithCharacter('char-001', { persistent: true });
+    });
+    withUserAppContext('xingyu', () => {
+      chatWithCharacter('char-001', { persistent: true });
+    });
+    const entries = useCharacterMemory.getState().getAll('char-001');
+    expect(entries).toHaveLength(2);
+    expect(entries[1]!.content).toMatch(/从 ai-auction/);
+    expect(entries[1]!.content).toMatch(/切到了 xingyu/);
+    expect(getLastActiveAppId('char-001')).toBe('xingyu');
+  });
+
+  it('persistent=false sessions still update lastActiveAppId + inject the marker (they still occupy the scene)', () => {
+    withUserAppContext('ai-auction', () => {
+      chatWithCharacter('char-001', { persistent: false });
+    });
+    // Marker lands in memoryStore even though the session itself is a clone —
+    // scene state is character-scoped, not session-scoped.
+    expect(useCharacterMemory.getState().getAll('char-001')).toHaveLength(1);
+    expect(getLastActiveAppId('char-001')).toBe('ai-auction');
+  });
+
+  it('no sandbox context + no recorded app: no marker (fallback "unknown" does not trigger)', () => {
+    // The test runs OUTSIDE withUserAppContext — getCurrentAppId throws.
+    // The catch branch yields capturedAppId = null → sessionAppId = 'unknown'.
+    // lastActiveAppId is also null; we must NOT inject a marker in this edge
+    // case, otherwise every test fixture would get a spurious "[上下文切换] unknown" entry.
+    chatWithCharacter('char-001', { persistent: true });
+    expect(useCharacterMemory.getState().getAll('char-001')).toHaveLength(0);
+    expect(getLastActiveAppId('char-001')).toBeNull();
   });
 });
