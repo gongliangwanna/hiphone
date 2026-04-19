@@ -6,18 +6,26 @@ import { useAppRuntimeStore } from '@/platform/stores/appRuntimeStore';
 import { uninstall } from '@/platform/userApp/installer';
 import { EmptyState } from './components/EmptyState';
 import { InstalledList } from './components/InstalledList';
-import { UploadSheetPlaceholder } from './components/UploadSheetPlaceholder';
+import { UploadSheet } from './components/UploadSheet';
+import { AppContextMenu } from './components/AppContextMenu';
+import { AppDetailSheet } from './components/AppDetailSheet';
 
 export function AppStoreApp() {
   const apps = useInstalledUserAppsStore((s) => s.apps);
   const openApp = useAppRuntimeStore((s) => s.openApp);
 
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [contextMenuAppId, setContextMenuAppId] = useState<string | null>(null);
+  const [detailAppId, setDetailAppId] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
   const openSheet = useCallback(() => setSheetOpen(true), []);
-  const closeSheet = useCallback(() => setSheetOpen(false), []);
+  const closeSheet = useCallback(() => {
+    setSheetOpen(false);
+    setPendingFile(null);
+  }, []);
 
   const handleOpen = useCallback(
     (id: string) => {
@@ -35,8 +43,8 @@ export function AppStoreApp() {
     }
   }, []);
 
-  const handleLongPress = useCallback((_id: string) => {
-    // P3 wires this to AppContextMenu.
+  const handleLongPress = useCallback((id: string) => {
+    setContextMenuAppId(id);
   }, []);
 
   const onDragOver = (e: DragEvent<HTMLDivElement>) => {
@@ -47,8 +55,15 @@ export function AppStoreApp() {
   const onDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setDragOver(false);
-    if (e.dataTransfer.files.length > 0) setSheetOpen(true);
+    const f = e.dataTransfer.files[0];
+    if (f) {
+      setPendingFile(f);
+      setSheetOpen(true);
+    }
   };
+
+  const menuApp = apps.find((a) => a.id === contextMenuAppId);
+  const detailApp = apps.find((a) => a.id === detailAppId);
 
   return (
     <AppScreen>
@@ -90,7 +105,32 @@ export function AppStoreApp() {
         )}
       </div>
 
-      {sheetOpen && <UploadSheetPlaceholder onClose={closeSheet} />}
+      {sheetOpen && (
+        <UploadSheet
+          initialFile={pendingFile}
+          onClose={closeSheet}
+          onOpenApp={(id) => { openApp(id, null); closeSheet(); }}
+        />
+      )}
+      {menuApp && (
+        <AppContextMenu
+          app={menuApp}
+          onOpen={() => openApp(menuApp.id, null)}
+          onDetail={() => { setContextMenuAppId(null); setDetailAppId(menuApp.id); }}
+          onUninstall={() => void handleDelete(menuApp.id)}
+          onClose={() => setContextMenuAppId(null)}
+        />
+      )}
+      {detailApp && (
+        <AppDetailSheet
+          app={detailApp}
+          onClose={() => setDetailAppId(null)}
+          onUninstall={() => {
+            void handleDelete(detailApp.id);
+            setDetailAppId(null);
+          }}
+        />
+      )}
     </AppScreen>
   );
 }
