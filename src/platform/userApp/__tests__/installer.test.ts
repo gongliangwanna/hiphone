@@ -304,6 +304,80 @@ describe('installer.loadInstalledApps', () => {
     expect(useInstalledUserAppsStore.getState().apps.map((a) => a.id)).toEqual(['hello']);
     expect(appRegistry.get('hello')).toBeDefined();
   });
+
+  it('loadInstalledApps populates new fields from stored AppMeta', async () => {
+    const db = await getDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction([APP_META_STORE, APP_SRC_STORE], 'readwrite');
+      tx.objectStore(APP_META_STORE).put(
+        {
+          manifest: {
+            id: 'legacy-new',
+            name: 'Legacy New',
+            version: '3.0.0',
+            entry: 'index.tsx',
+            perspectiveAware: false,
+          },
+          installedAt: 1_700_000_000_123,
+          iconDataUrl: null,
+          sizeBytes: 4_096,
+        },
+        'legacy-new',
+      );
+      tx.objectStore(APP_SRC_STORE).put(
+        { compiledMap: { 'index.tsx': 'module.exports={};' }, installedAt: 1_700_000_000_123 },
+        'legacy-new',
+      );
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+
+    await loadInstalledApps();
+    const record = useInstalledUserAppsStore
+      .getState()
+      .apps.find((a) => a.id === 'legacy-new');
+    expect(record).toBeDefined();
+    expect(record!.version).toBe('3.0.0');
+    expect(record!.installedAt).toBe(1_700_000_000_123);
+    expect(record!.sizeBytes).toBe(4_096);
+  });
+
+  it('loadInstalledApps falls back for legacy records missing sizeBytes', async () => {
+    const db = await getDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction([APP_META_STORE, APP_SRC_STORE], 'readwrite');
+      tx.objectStore(APP_META_STORE).put(
+        {
+          manifest: {
+            id: 'legacy-old',
+            name: 'Legacy Old',
+            version: '0.9.0',
+            entry: 'index.tsx',
+            perspectiveAware: false,
+          },
+          installedAt: 1_600_000_000_000,
+          iconDataUrl: null,
+          // no sizeBytes key on purpose
+        },
+        'legacy-old',
+      );
+      tx.objectStore(APP_SRC_STORE).put(
+        { compiledMap: { 'index.tsx': 'module.exports={};' }, installedAt: 1_600_000_000_000 },
+        'legacy-old',
+      );
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+
+    await loadInstalledApps();
+    const record = useInstalledUserAppsStore
+      .getState()
+      .apps.find((a) => a.id === 'legacy-old');
+    expect(record).toBeDefined();
+    expect(record!.sizeBytes).toBe(0);
+    expect(record!.version).toBe('0.9.0');
+    expect(record!.installedAt).toBe(1_600_000_000_000);
+  });
 });
 
 describe('installer — multi-file', () => {

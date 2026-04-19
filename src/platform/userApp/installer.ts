@@ -284,6 +284,11 @@ export async function loadInstalledApps(): Promise<void> {
     iconDataUrl: meta.iconDataUrl,
     page: USER_APP_PAGE,
     perspectiveAware: meta.manifest.perspectiveAware,
+    version: meta.manifest.version,
+    installedAt: meta.installedAt,
+    // Legacy records (pre-P1) don't have sizeBytes — fall back to 0 so UI
+    // shows "—". Newly installed apps always have it set (Task 2).
+    sizeBytes: typeof meta.sizeBytes === 'number' ? meta.sizeBytes : 0,
   }));
   useInstalledUserAppsStore.getState().replaceAll(records);
 
