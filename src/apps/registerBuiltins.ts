@@ -1,4 +1,6 @@
 import { appRegistry } from '@/platform/appRegistry';
+import { registerBuiltinServices } from '@/platform/services/builtinServices';
+import { usePhoneOwnerStore } from '@/platform/stores/phoneOwnerStore';
 import { SettingsApp } from './Settings/SettingsApp';
 import { WeatherApp } from './Weather/WeatherApp';
 import { NotesApp } from './Notes/NotesApp';
@@ -23,6 +25,13 @@ import { AppStoreApp } from './AppStore/AppStoreApp';
 export function registerBuiltins(): void {
   // Perspective-aware: natively handle "view another's phone" by switching data source
   appRegistry.register({ id: 'settings', type: 'builtin', component: SettingsApp, perspectiveAware: true, globalData: false });
+  registerBuiltinServices('settings', [
+    {
+      name: 'currentOwnerId',
+      description: '当前视角的角色 id (玩家视角时返回 null)',
+      execute: async () => usePhoneOwnerStore.getState().phoneOwnerId,
+    },
+  ]);
   appRegistry.register({ id: 'xingyu', type: 'builtin', component: XingYuApp, perspectiveAware: true, globalData: false });
   appRegistry.register({ id: 'notes', type: 'builtin', component: NotesApp, perspectiveAware: true, globalData: false });
 
