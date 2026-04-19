@@ -64,13 +64,28 @@ export interface PromptInput {
   persona: PromptPersona;
   aiConfig: PromptAIConfig;
   worldBookChunk: string;
-  history: HistoryMessage[];
-  now: Date;
-  /** Rolling summary from previous compression (injected before chat history) */
+
+  // ── M4.1 path (preferred) ────────────────────────────────────────
+  /** Character's AI memory entries (raw content, speakerId). Takes precedence over `history` when set. */
+  memoryEntries?: readonly MemoryEntry[];
+  /** Current character's ID — assistant turns are attributed to this character. */
+  currentCharId?: string;
+  /** Character map for speaker-name resolution in render. */
+  charactersById?: Map<string, { id: string; name: string }>;
+
+  // ── Pre-M4.1 legacy path (deprecated, kept for compat) ───────────
+  /** @deprecated Use `memoryEntries` instead. */
+  history?: HistoryMessage[];
+  /** @deprecated Summary is now an inline MemoryEntry with compressed=true. */
   summary?: string;
-  /** Timestamp of the latest message covered by the summary. Messages after
-   *  this timestamp are "uncompressed" and must not be dropped by the window. */
+  /** @deprecated Same as above. */
   summaryUpToTimestamp?: number;
+  /** @deprecated First-person labeled mode is superseded by role alternation + name prefix. */
+  characterSenderId?: string;
+  /** @deprecated See characterSenderId. */
+  senderNames?: Record<string, string>;
+
+  now: Date;
   /** Device context block (active app, weather, etc.) — injected into post-history */
   deviceContext?: string;
   /** Available stickers the AI can send */
@@ -80,10 +95,6 @@ export interface PromptInput {
    * in the system block. Used by heartbeat agent to inject ReAct format instead.
    */
   formatOverride?: string;
-  /** The character's senderId in chat history (e.g. "char-xxx"), for first-person labeling */
-  characterSenderId?: string;
-  /** Map senderId → display name for other participants (e.g. other AI characters) */
-  senderNames?: Record<string, string>;
 }
 
 // Multimodal content parts (OpenAI Vision format)
@@ -752,7 +763,7 @@ export function inspectPrompt(input: PromptInput): PromptInspection {
 const SAFETY_MARGIN = 0.9; // 10% safety buffer for token estimation inaccuracy
 
 export function assemblePrompt(input: PromptInput): PromptOutput {
-  const { character, persona, aiConfig, worldBookChunk, history, now, summary, deviceContext, availableStickers, formatOverride } = input;
+  const { character, persona, aiConfig, worldBookChunk, now, deviceContext, availableStickers, formatOverride } = input;
 
   // Phase 1 — System block.
   let systemBlock = buildSystemBlock(character, persona, aiConfig, worldBookChunk, availableStickers, formatOverride);
@@ -773,18 +784,44 @@ export function assemblePrompt(input: PromptInput): PromptOutput {
     totalBudget - aiConfig.maxTokens - systemTokens - postTokens - overhead,
   );
 
-  // Phase 2 — Chat history (with optional summary injection).
-  const { messages: historyMessages, preTrimTokens } = buildHistory(
-    history,
-    historyBudget,
-    aiConfig.keepRecentMessages,
-    summary,
-    input.summaryUpToTimestamp,
-    aiConfig.enableVision,
-    input.characterSenderId,
-    persona.name,
-    input.senderNames,
-  );
+  // Phase 2 — Chat history. M4.1 path when memoryEntries is provided;
+  // legacy path for the transitional period where old call sites still pass history.
+  let historyMessages: ChatMessage[];
+  let preTrimTokens: number;
+  if (input.memoryEntries !== undefined) {
+    if (!input.currentCharId || !input.charactersById) {
+      throw new Error('assemblePrompt: memoryEntries requires currentCharId and charactersById');
+    }
+    // Sum pre-trim tokens for compression ratio (live entries, excluding compressed summaries).
+    preTrimTokens = input.memoryEntries
+      .filter((e) => !e.compressed)
+      .reduce((sum, e) => sum + estimateTokens(e.content) + 6, 0);
+
+    const trimmed = trimMemoryToFit(
+      input.memoryEntries,
+      historyBudget,
+      aiConfig.keepRecentMessages,
+    );
+    historyMessages = renderMemoryToChatMessages(trimmed, {
+      currentCharId: input.currentCharId,
+      charactersById: input.charactersById,
+      personaName: persona.name,
+    });
+  } else {
+    const legacyResult = buildHistory(
+      input.history ?? [],
+      historyBudget,
+      aiConfig.keepRecentMessages,
+      input.summary,
+      input.summaryUpToTimestamp,
+      aiConfig.enableVision,
+      input.characterSenderId,
+      persona.name,
+      input.senderNames,
+    );
+    historyMessages = legacyResult.messages;
+    preTrimTokens = legacyResult.preTrimTokens;
+  }
 
   // Assemble final message array.
   const messages: ChatMessage[] = [

@@ -6,6 +6,7 @@ import { startXYDataSync } from '@/platform/storage/zustandIdbSync';
 import {
   loadCharacterMemoryFromIdb,
   startCharacterMemoryIdbSync,
+  useCharacterMemory,
 } from '@/platform/ai/characterMemoryStore';
 import { _appendMessage } from '@/platform/ai/memoryWriter';
 import { uid } from '@/platform/utils/uid';
@@ -408,25 +409,14 @@ function scheduleAICharacterReply(convId: string, get: () => XingYuDataState) {
   const persona = usePersonaStore.getState().getActivePersona();
   const worldBookChunk = useWorldBookStore.getState().buildSystemPromptChunk();
 
-  const historyMsgs = collectCharacterHistory(conv.characterId!, get());
-
   // Collect available stickers for the AI
   const allStickers = useStickerStore.getState().packs.flatMap((pack) =>
     pack.stickers.map((s) => ({ id: s.id, description: s.description })),
   );
 
-  const characterSenderId = `char-${conv.characterId}`;
-
-  // Build sender name map for other characters that may appear in history
-  const senderNames: Record<string, string> = {};
   const allCharacters = useCharacterStore.getState().characters;
-  for (const m of historyMsgs) {
-    if (m.senderId !== 'me' && m.senderId !== characterSenderId && !senderNames[m.senderId]) {
-      const charId = m.senderId.replace(/^char-/, '');
-      const found = allCharacters.find((c) => c.id === charId);
-      if (found) senderNames[m.senderId] = found.name;
-    }
-  }
+  const charactersById = new Map(allCharacters.map((c) => [c.id, { id: c.id, name: c.name }]));
+  const memoryEntries = useCharacterMemory.getState().getAll(conv.characterId!);
 
   const { messages: chatMessages, historyTokenRatio } = assemblePrompt({
     character: {
@@ -452,14 +442,12 @@ function scheduleAICharacterReply(convId: string, get: () => XingYuDataState) {
       enableVision: aiConfig.enableVision,
     },
     worldBookChunk,
-    history: historyMsgs,
+    memoryEntries,
+    currentCharId: conv.characterId!,
+    charactersById,
     now: new Date(),
-    summary: conv.summary,
-    summaryUpToTimestamp: conv.summaryUpToTimestamp,
     deviceContext: buildDeviceContext(),
     availableStickers: allStickers.length > 0 ? allStickers : undefined,
-    characterSenderId,
-    senderNames,
   });
 
   // ── Show typing indicator ──

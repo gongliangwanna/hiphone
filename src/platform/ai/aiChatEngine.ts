@@ -15,6 +15,7 @@ import { useAIConfigStore } from '@/platform/stores/aiConfigStore';
 import { usePersonaStore } from '@/platform/stores/personaStore';
 import { useWorldBookStore } from '@/platform/stores/worldBookStore';
 import { useXYData, collectCharacterHistory } from '@/apps/XingYu/xingYuDataStore';
+import { useCharacterMemory } from './characterMemoryStore';
 import { getAdapter } from '@/platform/ai/providers';
 import { chatComplete } from './chatComplete';
 import { assemblePrompt } from './promptAssembly';
@@ -103,26 +104,10 @@ export async function runAIChat(opts: AIChatOptions): Promise<AIChatResult> {
     const other = characters.find((c) => c.id === otherCharId);
     if (!responder || !other) break;
 
-    // Full history from ALL conversations this character participates in
-    const state = useXYData.getState();
-    const historyMsgs = collectCharacterHistory(responderId!, state);
-
-    // Use the primary conversation's summary (long-term memory)
-    const primaryConv = state.conversations.find(
-      (c) => c.id === `c-char-${responderId}`,
-    );
-
-    const responderSenderId = `char-${responderId}`;
-
-    // Build sender name map for all other participants
-    const senderNames: Record<string, string> = {};
-    for (const m of historyMsgs) {
-      if (m.senderId !== 'me' && m.senderId !== responderSenderId && !senderNames[m.senderId]) {
-        const charId = m.senderId.replace(/^char-/, '');
-        const found = characters.find((c) => c.id === charId);
-        if (found) senderNames[m.senderId] = found.name;
-      }
-    }
+    // Full history from the responder's AI memory (includes this and other
+    // conversations they participate in, since _appendMessage cross-writes).
+    const memoryEntries = useCharacterMemory.getState().getAll(responderId!);
+    const charactersById = new Map(characters.map((c) => [c.id, { id: c.id, name: c.name }]));
 
     const worldBookChunk = useWorldBookStore.getState().buildSystemPromptChunk();
 
@@ -150,13 +135,11 @@ export async function runAIChat(opts: AIChatOptions): Promise<AIChatResult> {
         enableVision: aiConfig.enableVision,
       },
       worldBookChunk,
-      history: historyMsgs,
+      memoryEntries,
+      currentCharId: responderId!,
+      charactersById,
       now: new Date(),
-      summary: primaryConv?.summary,
-      summaryUpToTimestamp: primaryConv?.summaryUpToTimestamp,
       deviceContext: buildDeviceContext(),
-      characterSenderId: responderSenderId,
-      senderNames,
     });
 
     // Inject current chat scene context

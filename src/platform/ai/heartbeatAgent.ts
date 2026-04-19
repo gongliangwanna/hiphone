@@ -29,6 +29,7 @@ import { useAIConfigStore } from '@/platform/stores/aiConfigStore';
 import { usePersonaStore } from '@/platform/stores/personaStore';
 import { useWorldBookStore } from '@/platform/stores/worldBookStore';
 import { useXYData, collectCharacterHistory, triggerCompression } from '@/apps/XingYu/xingYuDataStore';
+import { useCharacterMemory } from './characterMemoryStore';
 import { useStickerStore } from '@/apps/XingYu/stickerStore';
 import { getAdapter } from '@/platform/ai/providers';
 import { chatComplete } from './chatComplete';
@@ -197,8 +198,6 @@ async function runHeartbeat(
   const convId = `c-char-${characterId}`;
   const conv = useXYData.getState().conversations.find((c) => c.id === convId);
 
-  const historyMsgs = collectCharacterHistory(characterId, useXYData.getState());
-
   // Stickers not needed for agent mode, but included for context awareness
   const allStickers = useStickerStore.getState().packs.flatMap((pack) =>
     pack.stickers.map((s) => ({ id: s.id, description: s.description })),
@@ -207,8 +206,9 @@ async function runHeartbeat(
   // Reset per-heartbeat limits (clears old aliases) before registering new ones
   resetHeartbeatLimits(characterId);
 
-  const characterSenderId = `char-${characterId}`;
   const allCharacters = useCharacterStore.getState().characters;
+  const charactersById = new Map(allCharacters.map((c) => [c.id, { id: c.id, name: c.name }]));
+  const memoryEntries = useCharacterMemory.getState().getAll(characterId);
 
   // Build character list + pre-register aliases for chat_with_character
   const otherChars = allCharacters
@@ -225,16 +225,6 @@ async function runHeartbeat(
     userName,
     otherChars.length > 0 ? otherChars : undefined,
   );
-
-  // Build sender name map for other characters that may appear in history
-  const senderNames: Record<string, string> = {};
-  for (const m of historyMsgs) {
-    if (m.senderId !== 'me' && m.senderId !== characterSenderId && !senderNames[m.senderId]) {
-      const charId = m.senderId.replace(/^char-/, '');
-      const found = allCharacters.find((c) => c.id === charId);
-      if (found) senderNames[m.senderId] = found.name;
-    }
-  }
 
   const { messages: chatMessages, historyTokenRatio } = assemblePrompt({
     character: {
@@ -260,15 +250,13 @@ async function runHeartbeat(
       enableVision: aiConfig.enableVision,
     },
     worldBookChunk,
-    history: historyMsgs,
+    memoryEntries,
+    currentCharId: characterId,
+    charactersById,
     now: new Date(),
-    summary: conv?.summary,
-    summaryUpToTimestamp: conv?.summaryUpToTimestamp,
     deviceContext: buildDeviceContext(),
     availableStickers: allStickers.length > 0 ? allStickers : undefined,
     formatOverride,
-    characterSenderId,
-    senderNames,
   });
 
   // The assembled messages become the initial context for the ReAct loop.
