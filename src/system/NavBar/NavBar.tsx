@@ -32,7 +32,7 @@ export function NavBar({
   if (variant === 'largeTitle') {
     return (
       <div
-        className="flex items-end"
+        className="flex items-end justify-between relative"
         style={{
           minHeight: LARGE_TITLE_HEIGHT,
           paddingInline: 'var(--spacing-4)',
@@ -52,6 +52,25 @@ export function NavBar({
         >
           {title}
         </h1>
+        {rightButtons && rightButtons.length > 0 && (
+          <div className="flex items-center gap-0.5">
+            {rightButtons.map((btn, i) => (
+              <button
+                key={btn.testId ?? i}
+                onClick={btn.onClick}
+                className="flex items-center justify-center"
+                style={{
+                  minWidth: 44,
+                  minHeight: 44,
+                  color: 'var(--color-systemBlue)',
+                }}
+                data-testid={btn.testId}
+              >
+                {btn.icon}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     );
   }
