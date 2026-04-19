@@ -17,18 +17,21 @@ export function InstalledList({ apps, onOpen, onDelete, onLongPress }: Props) {
 
   return (
     <div data-testid="appstore-installed-list" className="flex-1 overflow-y-auto">
-      <div className="px-4 pt-3 pb-2 text-[13px] text-[var(--color-secondaryLabel)] uppercase tracking-wide">
-        已装 {apps.length} 个 App
+      <div className="px-5 pt-3 pb-2 text-[13px] text-[var(--color-secondaryLabel)] uppercase tracking-wide">
+        已装 {apps.length} 款
       </div>
-      {sorted.map((app) => (
-        <InstalledAppRow
-          key={app.id}
-          app={app}
-          onOpen={onOpen}
-          onDelete={onDelete}
-          onLongPress={onLongPress}
-        />
-      ))}
+      <div className="mx-4 mb-4 bg-[var(--color-systemBackground)] rounded-[14px] overflow-hidden">
+        {sorted.map((app, index) => (
+          <div key={app.id} className={index > 0 ? 'border-t border-[var(--color-separator)]' : ''}>
+            <InstalledAppRow
+              app={app}
+              onOpen={onOpen}
+              onDelete={onDelete}
+              onLongPress={onLongPress}
+            />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

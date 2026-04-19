@@ -73,7 +73,14 @@ export function AppStoreApp() {
         variant="largeTitle"
         rightButtons={[
           {
-            icon: <Plus size={22} strokeWidth={2.25} />,
+            icon: (
+              <span
+                className="w-8 h-8 rounded-full flex items-center justify-center"
+                style={{ backgroundColor: 'rgba(0,122,255,0.12)' }}
+              >
+                <Plus size={20} strokeWidth={2.25} />
+              </span>
+            ),
             onClick: openSheet,
             testId: 'appstore-plus-button',
           },

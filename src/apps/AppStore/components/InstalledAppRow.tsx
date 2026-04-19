@@ -18,7 +18,7 @@ export function InstalledAppRow({ app, onOpen, onDelete, onLongPress }: Props) {
     <SwipeRow onDelete={() => onDelete(app.id)}>
       <div
         data-testid={`installed-app-row-${app.id}`}
-        className="flex items-center gap-3 px-4 py-3 border-b border-[var(--color-separator)] min-h-[60px]"
+        className="flex items-center gap-3 px-4 py-3 min-h-[60px]"
         onPointerDown={longPressProps.onPointerDown}
         onPointerUp={longPressProps.onPointerUp}
         onPointerCancel={longPressProps.onPointerCancel}

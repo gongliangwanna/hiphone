@@ -20,7 +20,7 @@ describe('InstalledList', () => {
   it('renders section header with app count', () => {
     const apps = [app('a', 2000), app('b', 1000)];
     render(<InstalledList apps={apps} onOpen={() => {}} onDelete={() => {}} onLongPress={() => {}} />);
-    expect(screen.getByText(/已装 2 个/)).toBeInTheDocument();
+    expect(screen.getByText(/已装 2 款/)).toBeInTheDocument();
   });
 
   it('sorts rows by installedAt descending', () => {

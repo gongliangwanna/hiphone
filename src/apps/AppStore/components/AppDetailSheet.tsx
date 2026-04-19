@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { X } from 'lucide-react';
 import { formatByteSize } from '@/platform/utils/formatters';
 import { spring } from '@/platform/design-tokens/motion';
 import type { InstalledUserApp } from '@/platform/stores/installedUserAppsStore';
@@ -16,34 +15,28 @@ export function AppDetailSheet({ app, onClose, onUninstall }: Props) {
     <div data-testid="appstore-detail-sheet"
       className="absolute inset-0 z-20 flex flex-col">
       <motion.div role="presentation" onClick={onClose}
-        className="absolute inset-0 bg-black/40"
+        className="absolute inset-0 bg-black/35"
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
         transition={{ duration: 0.2 }} />
-      <motion.div className="relative mt-auto bg-[var(--color-systemBackground)]
-        rounded-t-[14px] flex flex-col min-h-[60%] max-h-[90%]"
+      <motion.div className="relative mt-auto bg-[#f2f2f7]
+        rounded-t-[14px] flex flex-col px-4 pt-1.5 pb-4 min-h-[60%] max-h-[90%]"
         initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
         transition={{ type: 'spring', ...spring.smooth }}>
-        <div className="relative flex items-center justify-between
-          px-4 py-3 border-b border-[var(--color-separator)]">
-          <div className="w-[36px] h-[5px] rounded-full
-            bg-[var(--color-fill-tertiary)]
-            absolute left-1/2 -translate-x-1/2 top-2" />
-          <span className="text-[17px] font-semibold text-[var(--color-label)] mt-2">
+        <div className="w-[34px] h-[5px] rounded-full bg-[rgba(60,60,67,0.3)] mx-auto mt-1 mb-2.5 flex-shrink-0" />
+        <div className="text-center mb-3 min-h-[42px] flex-shrink-0">
+          <div className="text-[16px] font-semibold text-[var(--color-label)] leading-tight">
             App 详情
-          </span>
-          <button type="button" aria-label="关闭" onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center
-              bg-[var(--color-fill-secondary)]">
-            <X size={16} strokeWidth={2.5} className="text-[var(--color-secondaryLabel)]" />
-          </button>
+          </div>
+          <div className="text-[12px] text-[var(--color-secondaryLabel)] mt-[3px] leading-tight min-h-[14px]">
+            {'\u00A0'}
+          </div>
         </div>
-        <div className="flex-1 overflow-y-auto px-4 py-5 flex flex-col gap-5">
-          <div className="flex items-center gap-4">
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-4">
+          <div className="bg-white rounded-[14px] p-4 flex items-center gap-4">
             {app.iconDataUrl
               ? <img src={app.iconDataUrl} alt="" className="w-20 h-20 rounded-[20px]" />
               : <div className="w-20 h-20 rounded-[20px]
-                  bg-gradient-to-br from-[var(--color-systemBlue)]
-                  to-[var(--color-systemIndigo)]" />}
+                  bg-gradient-to-br from-[#5ac8fa] to-[#007aff]" />}
             <div className="flex flex-col min-w-0">
               <span className="text-[20px] font-semibold text-[var(--color-label)] truncate">
                 {app.name}
@@ -63,9 +56,9 @@ export function AppDetailSheet({ app, onClose, onUninstall }: Props) {
             <Row k="Perspective-aware" v={app.perspectiveAware ? '是' : '否'} />
           </Section>
           <button type="button" onClick={() => { onUninstall(); onClose(); }}
-            className="w-full h-11 rounded-[14px]
-              bg-[var(--color-fill-tertiary)]
-              text-[17px] font-medium text-[var(--color-systemRed)]">
+            className="w-full h-11 rounded-[11px]
+              bg-[rgba(118,118,128,0.16)]
+              text-[17px] font-semibold text-[var(--color-systemRed)]">
             卸载 App
           </button>
         </div>
@@ -79,7 +72,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
     <div className="flex flex-col gap-1">
       <div className="px-4 text-[12px] uppercase tracking-wide
         text-[var(--color-secondaryLabel)]">{title}</div>
-      <div className="rounded-[12px] bg-[var(--color-fill-quaternary)] divide-y
+      <div className="rounded-[14px] bg-white divide-y
         divide-[var(--color-separator)]">
         {children}
       </div>
