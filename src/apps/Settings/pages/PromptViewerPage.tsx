@@ -4,11 +4,11 @@ import { useCharacterStore } from '@/platform/stores/characterStore';
 import { useAIConfigStore } from '@/platform/stores/aiConfigStore';
 import { usePersonaStore } from '@/platform/stores/personaStore';
 import { useWorldBookStore } from '@/platform/stores/worldBookStore';
-import { useXYData, triggerCompression } from '@/apps/XingYu/xingYuDataStore';
+import { useXYData } from '@/apps/XingYu/xingYuDataStore';
 import { useStickerStore } from '@/apps/XingYu/stickerStore';
 import { useCharacterMemory } from '@/platform/ai/characterMemoryStore';
+import { runCompressionIfNeeded } from '@/platform/ai/characterMemoryCompression';
 import { buildDeviceContext } from '@/platform/ai/deviceContext';
-import { getAdapter } from '@/platform/ai/providers';
 import { inspectPrompt, type PromptSection } from '@/platform/ai/promptAssembly';
 
 // ---------------------------------------------------------------------------
@@ -208,34 +208,34 @@ export function PromptViewerPage() {
   }, [char, characters, conversations, messages, aiConfig, persona, worldBookChunk]);
 
   const convId = char ? `c-char-${char.id}` : '';
-  const conv = useXYData((s) => s.conversations.find((c) => c.id === convId));
   const msgCount = useXYData((s) => s.messages.filter((m) => m.convId === convId).length);
+  const memoryEntriesForChar = useCharacterMemory((s) => (char ? s.entries[char.id] ?? [] : []));
+  const latestSummary = useMemo(
+    () => [...memoryEntriesForChar].reverse().find((e) => e.compressed) ?? null,
+    [memoryEntriesForChar],
+  );
 
-  const handleCompress = useCallback(() => {
+  const handleCompress = useCallback(async () => {
     if (!char || compressing) return;
     const ai = useAIConfigStore.getState();
     if (!ai.apiKey) return;
-    const adapter = getAdapter(ai.provider);
-    if (!adapter) return;
-    const endpoint = ai.apiEndpoint || adapter.defaultEndpoint;
-    const prevTs = conv?.summaryUpToTimestamp;
+
+    const prevCompressedCount = useCharacterMemory
+      .getState()
+      .getAll(char.id)
+      .filter((e) => e.compressed).length;
 
     setCompressing(true);
-    triggerCompression(convId, endpoint, {
-      apiKey: ai.apiKey,
-      model: ai.model,
-      provider: ai.provider,
-    });
-    // Poll for summary change (triggerCompression is fire-and-forget)
-    const check = setInterval(() => {
-      const c = useXYData.getState().conversations.find((x) => x.id === convId);
-      if (c?.summaryUpToTimestamp !== prevTs) {
-        setCompressing(false);
-        clearInterval(check);
-      }
-    }, 500);
-    setTimeout(() => { setCompressing(false); clearInterval(check); }, 30_000);
-  }, [char, convId, conv?.summaryUpToTimestamp, compressing]);
+    try {
+      await runCompressionIfNeeded(char.id);
+    } finally {
+      setCompressing(false);
+    }
+
+    // Note: if runCompressionIfNeeded decided not to compress (under threshold),
+    // the compressed-count stays the same — UI just re-renders same summary.
+    void prevCompressedCount; // kept for potential future delta-detection use
+  }, [char, compressing]);
 
   if (!char || !inspection) {
     return (
@@ -357,16 +357,16 @@ export function PromptViewerPage() {
         </div>
         <div className="flex justify-between px-4" style={{ height: 36, alignItems: 'center', borderBottom: '0.5px solid var(--color-separator)' }}>
           <span style={{ fontSize: 13, color: 'var(--color-secondaryLabel)' }}>摘要状态</span>
-          <span style={{ fontSize: 13, color: conv?.summary ? 'var(--color-systemBlue)' : 'var(--color-tertiaryLabel)', fontVariantNumeric: 'tabular-nums' }}>
-            {conv?.summary ? `${conv.summary.length}字` : '无摘要'}
+          <span style={{ fontSize: 13, color: latestSummary ? 'var(--color-systemBlue)' : 'var(--color-tertiaryLabel)', fontVariantNumeric: 'tabular-nums' }}>
+            {latestSummary ? `${latestSummary.content.length}字` : '无摘要'}
           </span>
         </div>
-        {conv?.summaryUpToTimestamp && (
+        {latestSummary && (
           <div className="flex justify-between px-4" style={{ height: 36, alignItems: 'center', borderBottom: '0.5px solid var(--color-separator)' }}>
             <span style={{ fontSize: 13, color: 'var(--color-secondaryLabel)' }}>覆盖至</span>
             <span style={{ fontSize: 13, color: 'var(--color-label)' }}>
               {(() => {
-                const d = new Date(conv.summaryUpToTimestamp);
+                const d = new Date(latestSummary.createdAt);
                 return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
               })()}
             </span>
@@ -393,7 +393,7 @@ export function PromptViewerPage() {
           ) : (
             <>
               <Archive size={16} strokeWidth={2} />
-              {conv?.summary ? '重新压缩' : '立即压缩'}
+              {latestSummary ? '重新压缩' : '立即压缩'}
             </>
           )}
         </div>

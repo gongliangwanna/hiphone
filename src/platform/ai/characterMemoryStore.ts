@@ -76,6 +76,14 @@ function makeEntry(characterId: string, input: AppendInput): MemoryEntry {
   };
 }
 
+// Post-append hook — populated by characterMemoryCompression.installAutoCompression()
+// to trigger summarization without introducing an import cycle.
+type PostAppendHook = (characterId: string) => void;
+let postAppendHook: PostAppendHook | null = null;
+export function setPostAppendHook(hook: PostAppendHook | null): void {
+  postAppendHook = hook;
+}
+
 export const useCharacterMemory = create<CharacterMemoryState>((set, get) => ({
   entries: {},
 
@@ -87,6 +95,9 @@ export const useCharacterMemory = create<CharacterMemoryState>((set, get) => ({
         [characterId]: [...(state.entries[characterId] ?? []), entry],
       },
     }));
+    if (postAppendHook) {
+      queueMicrotask(() => postAppendHook!(characterId));
+    }
     return entry;
   },
 
@@ -98,6 +109,9 @@ export const useCharacterMemory = create<CharacterMemoryState>((set, get) => ({
         [characterId]: [...(state.entries[characterId] ?? []), ...newEntries],
       },
     }));
+    if (postAppendHook && newEntries.length > 0) {
+      queueMicrotask(() => postAppendHook!(characterId));
+    }
     return newEntries;
   },
 

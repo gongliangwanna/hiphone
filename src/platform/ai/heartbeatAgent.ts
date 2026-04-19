@@ -28,7 +28,7 @@ import { useCharacterStore } from '@/platform/stores/characterStore';
 import { useAIConfigStore } from '@/platform/stores/aiConfigStore';
 import { usePersonaStore } from '@/platform/stores/personaStore';
 import { useWorldBookStore } from '@/platform/stores/worldBookStore';
-import { useXYData, triggerCompression } from '@/apps/XingYu/xingYuDataStore';
+import { useXYData } from '@/apps/XingYu/xingYuDataStore';
 import { useCharacterMemory } from './characterMemoryStore';
 import { useStickerStore } from '@/apps/XingYu/stickerStore';
 import { getAdapter } from '@/platform/ai/providers';
@@ -225,7 +225,7 @@ async function runHeartbeat(
     otherChars.length > 0 ? otherChars : undefined,
   );
 
-  const { messages: chatMessages, historyTokenRatio } = assemblePrompt({
+  const { messages: chatMessages } = assemblePrompt({
     character: {
       name: character.name,
       description: character.description,
@@ -407,11 +407,8 @@ async function runHeartbeat(
     }
   }
 
-  // ── Check if context compression is needed ──
-  const summarizeThreshold = aiConfig.summarizeThreshold ?? 0;
-  if (summarizeThreshold > 0 && historyTokenRatio > summarizeThreshold) {
-    triggerCompression(convId, endpoint, { apiKey: aiConfig.apiKey, model: aiConfig.model, provider: aiConfig.provider });
-  }
+  // Compression is handled automatically by the memoryStore post-append
+  // hook (see installAutoCompression). No call needed here.
 
   useHeartbeatStore.getState().clearRunning(characterId);
 }

@@ -123,10 +123,6 @@ export interface Conversation {
   lastMsg: string;
   lastTime: number;
   unread: number;
-  /** LLM 生成的历史摘要，用于 context 压缩 */
-  summary?: string;
-  /** 摘要覆盖到的最后一条消息的时间戳 */
-  summaryUpToTimestamp?: number;
   /** 聊天背景图 URL (base64 data URI 或预设 URL) */
   backgroundUrl?: string;
   /** 用户设置的联系人备注名 */

@@ -8,6 +8,7 @@ import {
   startCharacterMemoryIdbSync,
   useCharacterMemory,
 } from '@/platform/ai/characterMemoryStore';
+import { installAutoCompression } from '@/platform/ai/characterMemoryCompression';
 import { _appendMessage } from '@/platform/ai/memoryWriter';
 import { uid } from '@/platform/utils/uid';
 import type {
@@ -36,7 +37,6 @@ import { getAdapter } from '@/platform/ai/providers';
 import { assemblePrompt } from '@/platform/ai/promptAssembly';
 import { chatComplete } from '@/platform/ai/chatComplete';
 import { parseReply } from '@/platform/ai/replyParser';
-import { compressHistory } from '@/platform/ai/summarizer';
 import { buildDeviceContext } from '@/platform/ai/deviceContext';
 import { filterReply } from '@/platform/ai/replyFilters';
 import { useXYNav } from './xingYuNavStore';
@@ -214,83 +214,6 @@ function scheduleIdolReply(convId: string, get: () => XingYuDataState) {
   replyTimers.set(convId, timer);
 }
 
-/**
- * 后台触发 context 压缩。
- * 将当前会话中旧消息（summary 已覆盖的时间戳之前的不重复压缩）交给 LLM 生成摘要，
- * 结果写入 conversation.summary + summaryUpToTimestamp。
- */
-export function triggerCompression(
-  convId: string,
-  endpoint: string,
-  aiConfig: { apiKey: string; model: string; provider: string },
-) {
-  const s = useXYData.getState();
-  const conv = s.conversations.find((c) => c.id === convId);
-  if (!conv) return;
-
-  // Gather messages for this conversation, sorted chronologically
-  const convMsgs = s.messages
-    .filter((m) => m.convId === convId)
-    .sort((a, b) => a.timestamp - b.timestamp);
-
-  // Only compress messages we haven't already summarized
-  const cutoff = conv.summaryUpToTimestamp ?? 0;
-  // Keep the most recent N messages out of compression (they stay as full history)
-  const keepRecent = useAIConfigStore.getState().keepRecentMessages;
-  const recentBoundary = convMsgs.length > keepRecent
-    ? convMsgs[convMsgs.length - keepRecent]!.timestamp
-    : 0;
-
-  const toCompress = convMsgs.filter(
-    (m) => m.timestamp > cutoff && m.timestamp < recentBoundary,
-  );
-  if (toCompress.length === 0) return;
-
-  const messagesToCompress = toCompress.map((m) => ({
-    role: (m.senderId === 'me' ? 'user' : 'assistant') as 'user' | 'assistant',
-    content: m.type === 'text' || m.type === 'heartbeat_log'
-      ? m.text
-      : m.type === 'image'
-        ? '[图片]'
-        : m.type === 'sticker'
-          ? `[表情：${m.stickerDesc ?? '表情包'}]`
-          : '',
-  }));
-
-  const lastTimestamp = toCompress[toCompress.length - 1]!.timestamp;
-
-  // Resolve character & user names for first-person summary
-  const characterId = convId.replace('c-char-', '');
-  const character = useCharacterStore.getState().characters.find((c) => c.id === characterId);
-  const persona = usePersonaStore.getState().getActivePersona();
-  const fullAiConfig = useAIConfigStore.getState();
-
-  compressHistory({
-    previousSummary: conv.summary,
-    messagesToCompress,
-    endpoint,
-    apiKey: aiConfig.apiKey,
-    model: aiConfig.model,
-    providerId: aiConfig.provider,
-    characterName: character?.name ?? '角色',
-    userName: persona?.name ?? '用户',
-    contextWindow: fullAiConfig.contextWindow,
-    maxTokens: fullAiConfig.maxTokens,
-  })
-    .then((summary) => {
-      const current = useXYData.getState();
-      useXYData.setState({
-        conversations: current.conversations.map((c) =>
-          c.id === convId
-            ? { ...c, summary, summaryUpToTimestamp: lastTimestamp }
-            : c,
-        ),
-      });
-    })
-    .catch((e) => {
-      console.warn('[summarizer] compression failed:', e);
-    });
-}
 
 /**
  * 非流式 AI 回复 + 多消息投递。
@@ -356,7 +279,7 @@ function scheduleAICharacterReply(convId: string, get: () => XingYuDataState) {
   const charactersById = new Map(allCharacters.map((c) => [c.id, { id: c.id, name: c.name }]));
   const memoryEntries = useCharacterMemory.getState().getAll(conv.characterId!);
 
-  const { messages: chatMessages, historyTokenRatio } = assemblePrompt({
+  const { messages: chatMessages } = assemblePrompt({
     character: {
       name: character.name,
       description: character.description,
@@ -517,12 +440,8 @@ function scheduleAICharacterReply(convId: string, get: () => XingYuDataState) {
           ),
         });
       }
-
-      // ── Context compression check ──
-      const threshold = useAIConfigStore.getState().summarizeThreshold;
-      if (threshold > 0 && historyTokenRatio > threshold) {
-        triggerCompression(convId, endpoint, aiConfig);
-      }
+      // Compression is handled automatically by the memoryStore post-append
+      // hook (see installAutoCompression). No call needed here.
     })
     .catch((e) => {
       if (e?.name === 'AbortError') return;
@@ -951,8 +870,6 @@ export const useXYData = create<XingYuDataState>()(
             c.id === convId
               ? {
                   ...c,
-                  summary: undefined,
-                  summaryUpToTimestamp: undefined,
                   lastMsg: firstMsgText || character?.name || '',
                   lastTime: now,
                   unread: 0,
@@ -1154,6 +1071,7 @@ export const useXYData = create<XingYuDataState>()(
           // Empty on first boot after M4.1 upgrade — intentional (no data migration).
           await loadCharacterMemoryFromIdb();
           startCharacterMemoryIdbSync();
+          installAutoCompression();
         };
       },
     },
