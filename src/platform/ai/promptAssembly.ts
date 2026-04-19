@@ -13,6 +13,7 @@
  */
 
 import { estimateTokens } from './tokenEstimator';
+import type { MemoryEntry } from './characterMemoryStore';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -136,6 +137,86 @@ export interface PromptOutput {
   historyTokenRatio: number;
   /** The history budget in tokens (for reference). */
   historyBudget: number;
+}
+
+// ---------------------------------------------------------------------------
+// Memory rendering (M4.1) — role alternation + speaker name prefix
+// ---------------------------------------------------------------------------
+
+export interface MemoryRenderContext {
+  /** The character whose prompt is being built (assistant turns are theirs). */
+  currentCharId: string;
+  /** All known characters for speaker-name lookup. */
+  charactersById: Map<string, { id: string; name: string }>;
+  /** Display name for the persona (user turns prefix with this). */
+  personaName: string;
+}
+
+/**
+ * Convert a character's memoryStore entries directly into chat messages,
+ * preserving raw assistant content (JSON passthrough) and prefixing every
+ * user-role entry with the speaker's display name so the LLM can
+ * disambiguate multi-party contexts without a custom labeled narration.
+ */
+export function renderMemoryToChatMessages(
+  entries: readonly MemoryEntry[],
+  ctx: MemoryRenderContext,
+): ChatMessage[] {
+  const out: ChatMessage[] = [];
+  for (const e of entries) {
+    if (e.role === 'system') {
+      out.push({ role: 'system', content: e.content });
+      continue;
+    }
+    if (e.role === 'assistant') {
+      out.push({ role: 'assistant', content: e.content });
+      continue;
+    }
+    // role === 'user' — prefix with speaker display name
+    const name = resolveSpeakerName(e.speakerId, ctx);
+    out.push({ role: 'user', content: `${name}：${e.content}` });
+  }
+  return out;
+}
+
+function resolveSpeakerName(speakerId: string, ctx: MemoryRenderContext): string {
+  if (speakerId === 'me') return ctx.personaName;
+  // Try the full speakerId as key first, then stripped (defensive against
+  // bare vs prefixed ID conventions elsewhere in the codebase).
+  const byFull = ctx.charactersById.get(speakerId);
+  if (byFull) return byFull.name;
+  const stripped = speakerId.startsWith('char-') ? speakerId.slice('char-'.length) : speakerId;
+  const byStripped = ctx.charactersById.get(stripped);
+  if (byStripped) return byStripped.name;
+  return speakerId;
+}
+
+/**
+ * Trim memoryStore entries so the resulting rendered ChatMessages fit within
+ * the token budget. Preserves the most recent `keepRecent` entries verbatim
+ * and drops from the oldest end, mirroring the original buildHistory logic.
+ */
+export function trimMemoryToFit(
+  entries: readonly MemoryEntry[],
+  tokenBudget: number,
+  keepRecent: number,
+): readonly MemoryEntry[] {
+  if (entries.length === 0) return entries;
+
+  const ROLE_OVERHEAD = 6; // approx tokens for each message's role wrapper
+
+  let total = 0;
+  for (const e of entries) total += estimateTokens(e.content) + ROLE_OVERHEAD;
+  if (total <= tokenBudget) return entries;
+
+  const recentStart = Math.max(0, entries.length - keepRecent);
+
+  let trimStart = 0;
+  while (total > tokenBudget && trimStart < recentStart) {
+    total -= estimateTokens(entries[trimStart]!.content) + ROLE_OVERHEAD;
+    trimStart++;
+  }
+  return entries.slice(trimStart);
 }
 
 // ---------------------------------------------------------------------------
