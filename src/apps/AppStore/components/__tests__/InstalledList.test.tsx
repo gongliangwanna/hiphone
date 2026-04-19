@@ -19,13 +19,13 @@ function app(id: string, installedAt: number): InstalledUserApp {
 describe('InstalledList', () => {
   it('renders section header with app count', () => {
     const apps = [app('a', 2000), app('b', 1000)];
-    render(<InstalledList apps={apps} onOpen={() => {}} onDelete={() => {}} onLongPress={() => {}} onDetail={() => {}} />);
+    render(<InstalledList apps={apps} onOpen={() => {}} onLongPress={() => {}} onDetail={() => {}} />);
     expect(screen.getByText(/已装 2 款/)).toBeInTheDocument();
   });
 
   it('sorts rows by installedAt descending', () => {
     const apps = [app('older', 1000), app('newer', 2000)];
-    render(<InstalledList apps={apps} onOpen={() => {}} onDelete={() => {}} onLongPress={() => {}} onDetail={() => {}} />);
+    render(<InstalledList apps={apps} onOpen={() => {}} onLongPress={() => {}} onDetail={() => {}} />);
     const rows = screen.getAllByTestId(/^installed-app-row-/);
     expect(rows[0]).toHaveAttribute('data-testid', 'installed-app-row-newer');
     expect(rows[1]).toHaveAttribute('data-testid', 'installed-app-row-older');

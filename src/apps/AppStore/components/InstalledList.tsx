@@ -5,12 +5,11 @@ import { InstalledAppRow } from './InstalledAppRow';
 interface Props {
   apps: InstalledUserApp[];
   onOpen: (id: string) => void;
-  onDelete: (id: string) => void;
   onLongPress: (id: string) => void;
   onDetail: (id: string) => void;
 }
 
-export function InstalledList({ apps, onOpen, onDelete, onLongPress, onDetail }: Props) {
+export function InstalledList({ apps, onOpen, onLongPress, onDetail }: Props) {
   const sorted = useMemo(
     () => [...apps].sort((a, b) => b.installedAt - a.installedAt),
     [apps],
@@ -27,7 +26,6 @@ export function InstalledList({ apps, onOpen, onDelete, onLongPress, onDetail }:
             <InstalledAppRow
               app={app}
               onOpen={onOpen}
-              onDelete={onDelete}
               onLongPress={onLongPress}
               onDetail={onDetail}
             />

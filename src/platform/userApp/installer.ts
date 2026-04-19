@@ -61,8 +61,22 @@ export interface InstallOptions {
    * automatically (current behavior).
    */
   onUpgradeDetected?: (info: {
-    existing: { id: string; name: string; version: string };
-    incoming: { id: string; name: string; version: string };
+    existing: {
+      id: string;
+      name: string;
+      version: string;
+      author?: string;
+      description?: string;
+      changelog?: string;
+    };
+    incoming: {
+      id: string;
+      name: string;
+      version: string;
+      author?: string;
+      description?: string;
+      changelog?: string;
+    };
   }) => boolean | Promise<boolean>;
 }
 
@@ -153,11 +167,17 @@ export async function install(
             id: existingRecord.id,
             name: existingRecord.name,
             version: existingRecord.version,
+            author: existingRecord.author,
+            description: existingRecord.description,
+            changelog: existingRecord.changelog,
           },
           incoming: {
             id: manifest.id,
             name: manifest.name,
             version: manifest.version,
+            author: manifest.author,
+            description: manifest.description,
+            changelog: manifest.changelog,
           },
         });
         if (!proceed) {

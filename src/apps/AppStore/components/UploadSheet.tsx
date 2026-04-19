@@ -20,10 +20,26 @@ type Phase =
   | {
       kind: 'needsUpgradeConfirm';
       existing: { name: string; version: string; iconDataUrl: string | null };
-      incoming: { name: string; version: string };
+      incoming: {
+        name: string;
+        version: string;
+        author?: string;
+        description?: string;
+        changelog?: string;
+      };
       resolve: (ok: boolean) => void;
     }
-  | { kind: 'success'; appName: string; version: string; isUpgrade: boolean; appId: string }
+  | {
+      kind: 'success';
+      appName: string;
+      version: string;
+      isUpgrade: boolean;
+      appId: string;
+      author?: string;
+      description?: string;
+      changelog?: string;
+      iconDataUrl: string | null;
+    }
   | { kind: 'error'; error: InstallError };
 
 interface Props {
@@ -54,7 +70,13 @@ export function UploadSheet({ initialFile, onClose, onOpenApp }: Props) {
                 version: existing.version,
                 iconDataUrl: stored?.iconDataUrl ?? null,
               },
-              incoming: { name: incoming.name, version: incoming.version },
+              incoming: {
+                name: incoming.name,
+                version: incoming.version,
+                author: incoming.author,
+                description: incoming.description,
+                changelog: incoming.changelog,
+              },
               resolve,
             });
           }),
@@ -66,6 +88,10 @@ export function UploadSheet({ initialFile, onClose, onOpenApp }: Props) {
         version: stored?.version ?? '1.0.0',
         isUpgrade: result.isUpgrade,
         appId: result.id,
+        author: stored?.author,
+        description: stored?.description,
+        changelog: stored?.changelog,
+        iconDataUrl: stored?.iconDataUrl ?? null,
       });
     } catch (err) {
       if (err instanceof InstallError) {
@@ -134,6 +160,10 @@ export function UploadSheet({ initialFile, onClose, onOpenApp }: Props) {
               appName={phase.appName}
               version={phase.version}
               isUpgrade={phase.isUpgrade}
+              author={phase.author}
+              description={phase.description}
+              changelog={phase.changelog}
+              iconDataUrl={phase.iconDataUrl}
               onContinue={() => setPhase({ kind: 'idle' })}
               onOpen={() => {
                 onOpenApp(phase.appId);
