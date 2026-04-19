@@ -31,16 +31,21 @@ import {
 } from './data';
 import { useCharacterStore } from '@/platform/stores/characterStore';
 import { useAIConfigStore } from '@/platform/stores/aiConfigStore';
-import { usePersonaStore } from '@/platform/stores/personaStore';
-import { useWorldBookStore } from '@/platform/stores/worldBookStore';
-import { getAdapter } from '@/platform/ai/providers';
-import { assemblePrompt } from '@/platform/ai/promptAssembly';
-import { chatComplete } from '@/platform/ai/chatComplete';
-import { parseReply } from '@/platform/ai/replyParser';
-import { buildDeviceContext } from '@/platform/ai/deviceContext';
 import { filterReply } from '@/platform/ai/replyFilters';
+import {
+  chatWithCharacter,
+  type ChatReply,
+  type ChatSession,
+} from '@/platform/userApp/sdk/ai';
+import { withUserAppContext } from '@/platform/userApp/sdk/context';
 import { useXYNav } from './xingYuNavStore';
 import { useStickerStore } from './stickerStore';
+import { registerXingYuAi, XINGYU_APP_ID } from './xingYuRegister';
+
+// Idempotent: fires on first module load so the three AI registries
+// know about XingYu before any `scheduleAICharacterReply` runs. Safe to
+// call repeatedly.
+registerXingYuAi();
 
 /**
  * 某 conv 当前是否正被用户"看着":
@@ -54,8 +59,12 @@ function isChatActive(convId: string): boolean {
 
 /* ── Auto-reply timers (module-level, not serializable) ── */
 const replyTimers = new Map<string, ReturnType<typeof setTimeout>>();
-/* ── In-flight AI stream controllers, keyed by convId ── */
-const aiControllers = new Map<string, AbortController>();
+/* ── In-flight AI sessions (+ their abort controllers), keyed by convId ── */
+interface XingYuAiSession {
+  session: ChatSession;
+  controller: AbortController;
+}
+const aiSessions = new Map<string, XingYuAiSession>();
 
 // uid() imported from @/platform/utils/uid
 
@@ -164,13 +173,25 @@ interface XingYuDataState {
 // createUserMsg removed — each send* method now constructs the specific
 // discriminated union variant inline for type safety.
 
-function scheduleIdolReply(convId: string, get: () => XingYuDataState) {
+/**
+ * Entry point from every send* action. `userText` is the user-turn content
+ * (already-formatted text that matches what memoryStore received via
+ * _appendMessage/buildMemoryEntry) — needed because the S7 session path
+ * calls `session.send(userText, { mirror: false })` and the session pushes
+ * that into its internal buffer; memoryStore already holds the canonical
+ * user turn so mirror:false keeps it from double-writing.
+ */
+function scheduleIdolReply(
+  convId: string,
+  userText: string,
+  get: () => XingYuDataState,
+) {
   const conv = get().conversations.find((c) => c.id === convId);
   if (!conv) return;
 
   // Character-backed conversation → real AI streaming
   if (conv.characterId) {
-    scheduleAICharacterReply(convId, get);
+    scheduleAICharacterReply(convId, userText, get);
     return;
   }
 
@@ -216,18 +237,81 @@ function scheduleIdolReply(convId: string, get: () => XingYuDataState) {
 
 
 /**
+ * Sticker-lookup helper used by both the S7 Tool Registry action path
+ * (`{type:'action', name:'sticker', params}`) and the legacy
+ * `{type:'sticker'}` path during the transition. Keeps the lookup logic
+ * in one place so the two dispatch branches can't drift apart.
+ */
+function buildStickerBubble(args: {
+  convId: string;
+  senderId: string;
+  stickerId: string;
+  content: string;
+  ts: number;
+}): { msg: Message; preview: string } {
+  const { convId, senderId, stickerId, content, ts } = args;
+  const stickerPacks = useStickerStore.getState().packs;
+  let foundSticker: { imageData: string; description: string } | undefined;
+  for (const pack of stickerPacks) {
+    const s = pack.stickers.find((st) => st.id === stickerId);
+    if (s) {
+      foundSticker = s;
+      break;
+    }
+  }
+  if (foundSticker) {
+    return {
+      msg: {
+        id: uid(),
+        convId,
+        senderId,
+        type: 'sticker',
+        stickerUrl: foundSticker.imageData,
+        stickerDesc: foundSticker.description,
+        timestamp: ts,
+      },
+      preview: `[表情：${foundSticker.description}]`,
+    };
+  }
+  return {
+    msg: {
+      id: uid(),
+      convId,
+      senderId,
+      type: 'text',
+      text: content || '[表情]',
+      timestamp: ts,
+    },
+    preview: content || '[表情]',
+  };
+}
+
+/**
  * 非流式 AI 回复 + 多消息投递。
+ *
+ * M4.2 S7: prompt assembly + chatComplete 下沉进 `chatWithCharacter`
+ * session，XingYu 只负责 UI 气泡投递 + 手写 assistant rendered
+ * 记忆（memoryStore 用 rendered 形式写入，保留 stale-bubble dedupe
+ * 所需的 abort 权威性）。
  *
  * 流程:
  * 1. 显示 typing indicator（streaming placeholder）
- * 2. 调 chatComplete() 获取完整回复
- * 3. parseReply() 解析 JSON 数组
- * 4. 移除 placeholder，逐条投递消息（每条间隔 300-800ms）
+ * 2. `session.send(userText, { mirror: false })` 获取 ChatReply
+ * 3. 移除 placeholder，手动向 memoryStore append 一条 rendered assistant
+ * 4. 逐条投递消息（每条间隔 300-800ms），支持 action / legacy sticker /
+ *    legacy signature / text 四种条目
  */
-function scheduleAICharacterReply(convId: string, get: () => XingYuDataState) {
+function scheduleAICharacterReply(
+  convId: string,
+  userText: string,
+  get: () => XingYuDataState,
+) {
   // Abort any in-flight request for this conversation
-  const prev = aiControllers.get(convId);
-  if (prev) prev.abort();
+  const prev = aiSessions.get(convId);
+  if (prev) {
+    prev.controller.abort();
+    prev.session.abort();
+  }
 
   const conv = get().conversations.find((c) => c.id === convId);
   if (!conv?.characterId) return;
@@ -262,54 +346,7 @@ function scheduleAICharacterReply(convId: string, get: () => XingYuDataState) {
     return;
   }
 
-  const adapter = getAdapter(aiConfig.provider);
-  if (!adapter) return;
-  const endpoint = aiConfig.apiEndpoint || adapter.defaultEndpoint;
-
-  // ── Assemble prompt via the pipeline ──
-  const persona = usePersonaStore.getState().getActivePersona();
-  const worldBookChunk = useWorldBookStore.getState().buildSystemPromptChunk();
-
-  // Collect available stickers for the AI
-  const allStickers = useStickerStore.getState().packs.flatMap((pack) =>
-    pack.stickers.map((s) => ({ id: s.id, description: s.description })),
-  );
-
-  const allCharacters = useCharacterStore.getState().characters;
-  const charactersById = new Map(allCharacters.map((c) => [c.id, { id: c.id, name: c.name }]));
-  const memoryEntries = useCharacterMemory.getState().getAll(conv.characterId!);
-
-  const { messages: chatMessages } = assemblePrompt({
-    character: {
-      name: character.name,
-      description: character.description,
-      personality: character.personality,
-      scenario: character.scenario,
-      systemPrompt: character.systemPrompt,
-      postHistoryInstructions: character.postHistoryInstructions,
-      messageExamples: character.messageExamples,
-    },
-    persona: {
-      name: persona?.name ?? '用户',
-      description: persona?.description ?? '',
-    },
-    aiConfig: {
-      systemPrompt: aiConfig.systemPrompt,
-      postHistoryInstructions: aiConfig.postHistoryInstructions,
-      contextWindow: aiConfig.contextWindow,
-      maxTokens: aiConfig.maxTokens,
-      keepRecentMessages: aiConfig.keepRecentMessages,
-      worldInfoBudgetPercent: aiConfig.worldInfoBudgetPercent,
-      enableVision: aiConfig.enableVision,
-    },
-    worldBookChunk,
-    memoryEntries,
-    currentCharId: conv.characterId!,
-    charactersById,
-    now: new Date(),
-    deviceContext: buildDeviceContext(),
-    availableStickers: allStickers.length > 0 ? allStickers : undefined,
-  });
+  const characterId = conv.characterId;
 
   // ── Show typing indicator ──
   const placeholderId = uid();
@@ -333,110 +370,105 @@ function scheduleAICharacterReply(convId: string, get: () => XingYuDataState) {
   }
 
   const controller = new AbortController();
-  aiControllers.set(convId, controller);
+  // Wrap session creation in withUserAppContext so the session captures
+  // XingYu's appId — which in turn drives Tool Registry / Renderer /
+  // AppSystemPrompt lookups frozen into the session for KV-cache
+  // stability.
+  const sessionInstance = withUserAppContext(XINGYU_APP_ID, () =>
+    chatWithCharacter(characterId, {
+      persistent: true,
+      signal: controller.signal,
+    }),
+  );
+  aiSessions.set(convId, { session: sessionInstance, controller });
 
-  chatComplete(
-    { endpoint, apiKey: aiConfig.apiKey, model: aiConfig.model, providerId: aiConfig.provider },
-    chatMessages,
-    {
-      maxTokens: aiConfig.maxTokens,
-      temperature: aiConfig.temperature,
-      topP: aiConfig.topP,
-      frequencyPenalty: aiConfig.frequencyPenalty,
-      presencePenalty: aiConfig.presencePenalty,
-      reasoningEffort: aiConfig.reasoningEffort !== 'off' ? aiConfig.reasoningEffort : undefined,
-    },
-    controller.signal,
-  )
-    .then(async (rawReply) => {
+  sessionInstance
+    // mirror:false — the user turn is already in memoryStore via
+    // _appendMessage (see sendMessage et al.), and we append the assistant
+    // entry ourselves below (rendered form, spec D1) so our stale-bubble
+    // abort logic stays authoritative over the memory write.
+    .send(userText, { mirror: false })
+    .then(async (reply: ChatReply) => {
       // Remove typing indicator placeholder
       const s0 = useXYData.getState();
       useXYData.setState({
         messages: s0.messages.filter((m) => m.id !== placeholderId),
       });
 
-      // Record the AI's raw reply in memoryStore as a single assistant entry.
-      // This preserves the original JSON structure (stickerId, signature
-      // actions, multi-bubble intent) for the next prompt — if we wrote
-      // per-bubble entries instead, the model would see its own output
-      // re-serialised and lose key metadata.
-      if (conv.characterId) {
-        useCharacterMemory.getState().append(conv.characterId, {
-          role: 'assistant',
-          speakerId: conv.characterId,
-          content: rawReply,
-          source: 'xingyu',
-        });
-      }
+      // Assistant memory entry — rendered (natural-language) form. The
+      // renderer preserves every decision-relevant identifier (stickerId,
+      // action params) so the next prompt still has full context.
+      useCharacterMemory.getState().append(characterId, {
+        role: 'assistant',
+        speakerId: characterId,
+        content: reply.rendered,
+        source: 'xingyu',
+      });
 
-      // Parse structured reply
-      const items = parseReply(rawReply);
       const active = isChatActive(convId);
 
       // Deliver messages one by one with natural delays
-      for (let i = 0; i < items.length; i++) {
+      for (let i = 0; i < reply.items.length; i++) {
         if (i > 0) {
           await new Promise((r) => setTimeout(r, 300 + Math.random() * 500));
         }
         if (controller.signal.aborted) return;
 
-        const item = items[i]!;
+        const item = reply.items[i]!;
         const ts = Date.now();
+        let msg: Message | null = null;
+        let lastMsgPreview = '';
 
-        // Signature update — silent, no chat bubble
-        if (item.type === 'signature') {
-          if (conv.characterId) {
-            useXYData.getState().updateCharacterSignature(conv.characterId, item.text);
-          }
-          continue;
-        }
-
-        // Action items (S3 parseReply addition) — XingYu hasn't migrated to
-        // Tool Registry yet (S7), so today's XingYu prompt never emits them;
-        // if we see one anyway, drop it silently rather than render.
-        // TODO(S7): replace the item.type `if`-ladder with an assertNever-style
-        // exhaustive switch so future ReplyItem variants trip a typecheck error
-        // instead of silently dropping here.
         if (item.type === 'action') {
-          continue;
-        }
-
-        let msg: Message;
-        let lastMsgPreview: string;
-
-        if (item.type === 'sticker') {
-          // Look up the sticker by ID from the store
-          const stickerPacks = useStickerStore.getState().packs;
-          let foundSticker: { imageData: string; description: string } | undefined;
-          for (const pack of stickerPacks) {
-            const s = pack.stickers.find((st) => st.id === item.stickerId);
-            if (s) { foundSticker = s; break; }
-          }
-
-          if (foundSticker) {
-            msg = {
-              id: uid(),
+          // S7: unified action shape — dispatch by name.
+          if (item.name === 'sticker') {
+            const stickerId = String(item.params.stickerId ?? '');
+            const content = String(item.params.content ?? '');
+            const built = buildStickerBubble({
               convId,
               senderId,
-              type: 'sticker',
-              stickerUrl: foundSticker.imageData,
-              stickerDesc: foundSticker.description,
-              timestamp: ts,
-            };
-            lastMsgPreview = `[表情：${foundSticker.description}]`;
+              stickerId,
+              content,
+              ts,
+            });
+            msg = built.msg;
+            lastMsgPreview = built.preview;
+          } else if (item.name === 'update_signature') {
+            useXYData
+              .getState()
+              .updateCharacterSignature(characterId, String(item.params.text ?? ''));
+            continue; // silent
           } else {
-            // Sticker not found — fallback to text
+            // Unknown tool — render the action verbatim so we don't
+            // silently drop information the model emitted.
+            const label = `[${item.name}] ${JSON.stringify(item.params)}`;
             msg = {
               id: uid(),
               convId,
               senderId,
               type: 'text',
-              text: item.content || '[表情]',
+              text: label,
               timestamp: ts,
             };
-            lastMsgPreview = item.content || '[表情]';
+            lastMsgPreview = label.slice(0, 60);
           }
+        } else if (item.type === 'signature') {
+          // Legacy signature item — backward compat during transition.
+          useXYData.getState().updateCharacterSignature(characterId, item.text);
+          continue;
+        } else if (item.type === 'sticker') {
+          // Legacy sticker item — backward compat during transition.
+          const built = buildStickerBubble({
+            convId,
+            senderId,
+            stickerId: item.stickerId,
+            content: item.content,
+            ts,
+          });
+          msg = built.msg;
+          lastMsgPreview = built.preview;
         } else {
+          // text
           const text = filterReply(item.content) || '[空回复]';
           msg = {
             id: uid(),
@@ -449,6 +481,7 @@ function scheduleAICharacterReply(convId: string, get: () => XingYuDataState) {
           lastMsgPreview = text.slice(0, 60);
         }
 
+        if (!msg) continue;
         const s = useXYData.getState();
         useXYData.setState({
           messages: [...s.messages, msg],
@@ -467,8 +500,9 @@ function scheduleAICharacterReply(convId: string, get: () => XingYuDataState) {
       // Compression is handled automatically by the memoryStore post-append
       // hook (see installAutoCompression). No call needed here.
     })
-    .catch((e) => {
-      if (e?.name === 'AbortError') return;
+    .catch((e: unknown) => {
+      const errObj = e as { name?: string } | null;
+      if (errObj?.name === 'AbortError' || errObj?.name === 'AIAbortedError') return;
       // Keep error message short — raw JSON error bodies in history cause
       // nested-escape issues when re-sent to the API in future requests.
       const rawMsg = e instanceof Error ? e.message : String(e);
@@ -486,8 +520,9 @@ function scheduleAICharacterReply(convId: string, get: () => XingYuDataState) {
       });
     })
     .finally(() => {
-      if (aiControllers.get(convId) === controller) {
-        aiControllers.delete(convId);
+      const entry = aiSessions.get(convId);
+      if (entry && entry.session === sessionInstance) {
+        aiSessions.delete(convId);
       }
     });
 }
@@ -587,7 +622,12 @@ export const useXYData = create<XingYuDataState>()(
           ...(quoteRef ? { quoteRef } : {}),
         };
         _appendMessage(msg, 'xingyu');
-        scheduleIdolReply(convId, get);
+        // Mirror the memoryStore content rule in buildMemoryEntry for the
+        // session.send userText argument: include quoteRef prefix if any.
+        const userText = quoteRef
+          ? `[引用：${quoteRef.preview}] ${text}`
+          : text;
+        scheduleIdolReply(convId, userText, get);
       },
 
       sendNoteMessage: (convId, noteRef) => {
@@ -595,7 +635,7 @@ export const useXYData = create<XingYuDataState>()(
         const text = `[备忘录分享] ${previewTitle}\n${noteRef.body}`;
         const msg: Message = { id: uid(), convId, senderId: 'me', type: 'text', text, noteRef, timestamp: Date.now() };
         _appendMessage(msg, 'xingyu');
-        scheduleIdolReply(convId, get);
+        scheduleIdolReply(convId, text, get);
       },
 
       sendSongMessage: (convId, songRef, lyricsText) => {
@@ -604,19 +644,19 @@ export const useXYData = create<XingYuDataState>()(
         const text = parts.join('');
         const msg: Message = { id: uid(), convId, senderId: 'me', type: 'text', text, songRef, timestamp: Date.now() };
         _appendMessage(msg, 'xingyu');
-        scheduleIdolReply(convId, get);
+        scheduleIdolReply(convId, text, get);
       },
 
       sendImageMessage: (convId, imageUrl) => {
         const msg: Message = { id: uid(), convId, senderId: 'me', type: 'image', imageUrl, timestamp: Date.now() };
         _appendMessage(msg, 'xingyu');
-        scheduleIdolReply(convId, get);
+        scheduleIdolReply(convId, `[图片 ${imageUrl}]`, get);
       },
 
       sendStickerMessage: (convId, stickerUrl, stickerDesc) => {
         const msg: Message = { id: uid(), convId, senderId: 'me', type: 'sticker', stickerUrl, stickerDesc, timestamp: Date.now() };
         _appendMessage(msg, 'xingyu');
-        scheduleIdolReply(convId, get);
+        scheduleIdolReply(convId, stickerDesc ? `[表情：${stickerDesc}]` : '[表情]', get);
       },
 
       markRead: (convId) =>
@@ -634,10 +674,11 @@ export const useXYData = create<XingYuDataState>()(
           clearTimeout(timer);
           replyTimers.delete(convId);
         }
-        const controller = aiControllers.get(convId);
-        if (controller) {
-          controller.abort();
-          aiControllers.delete(convId);
+        const entry = aiSessions.get(convId);
+        if (entry) {
+          entry.controller.abort();
+          entry.session.abort();
+          aiSessions.delete(convId);
         }
         set((s) => ({
           conversations: s.conversations.filter((c) => c.id !== convId),
@@ -853,10 +894,11 @@ export const useXYData = create<XingYuDataState>()(
         const convId = `c-char-${characterId}`;
 
         // Abort in-flight AI stream
-        const controller = aiControllers.get(convId);
-        if (controller) {
-          controller.abort();
-          aiControllers.delete(convId);
+        const entry = aiSessions.get(convId);
+        if (entry) {
+          entry.controller.abort();
+          entry.session.abort();
+          aiSessions.delete(convId);
         }
         const timer = replyTimers.get(convId);
         if (timer) {
@@ -958,9 +1000,9 @@ export const useXYData = create<XingYuDataState>()(
         const now = Date.now();
         const built = buildForwardedMessage(msg, targetConvId, now);
         if (!built) return;
-        const { newMsg } = built;
+        const { newMsg, preview } = built;
         _appendMessage(newMsg, 'xingyu');
-        scheduleIdolReply(targetConvId, get);
+        scheduleIdolReply(targetConvId, preview, get);
       },
 
       forwardMessages: (msgs, targetConvId) => {
@@ -982,7 +1024,7 @@ export const useXYData = create<XingYuDataState>()(
               : c,
           ),
         }));
-        scheduleIdolReply(targetConvId, get);
+        scheduleIdolReply(targetConvId, lastPreview, get);
       },
 
       forwardAsCard: (msgs, targetConvId, title, getSenderName) => {
@@ -1027,7 +1069,7 @@ export const useXYData = create<XingYuDataState>()(
             c.id === targetConvId ? { ...c, lastMsg: '[聊天记录]' } : c,
           ),
         }));
-        scheduleIdolReply(targetConvId, get);
+        scheduleIdolReply(targetConvId, `[转发的聊天记录：${title}]`, get);
       },
 
       ensureAIChatConversation: (charIdA, charIdB) => {

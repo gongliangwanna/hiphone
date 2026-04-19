@@ -13,9 +13,10 @@ beforeEach(async () => {
   // state — otherwise its async loadCharacterMemoryFromIdb could race
   // our reset and clear our test setup mid-flight.
   await new Promise((r) => setTimeout(r, 20));
-  // XingYu's sendMessage path does not run under withUserAppContext, so no
-  // marker is ever injected here; but reset the per-character app state
-  // anyway to keep tests order-independent.
+  // S7: scheduleAICharacterReply wraps chatWithCharacter in
+  // withUserAppContext('xingyu'), so the [上下文切换] marker is injected
+  // the first time any character starts a session under 'xingyu'. Reset
+  // the per-character app state so tests see a fresh first-contact marker.
   _resetCharacterAppStateForTests();
   await _resetCharacterMemoryForTests();
   useCharacterStore.setState({
@@ -60,7 +61,7 @@ beforeEach(async () => {
 });
 
 describe('XingYu sendMessage flow — memoryStore integration', () => {
-  it('user send + AI reply → memoryStore has user entry + ONE raw assistant entry', async () => {
+  it('user send + AI reply → memoryStore has app-switch marker + user entry + ONE rendered assistant entry', async () => {
     const rawJson = '[{"type":"text","content":"挺不错的呀"},{"type":"text","content":"阳光明媚"}]';
     vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue(rawJson);
 
@@ -75,17 +76,24 @@ describe('XingYu sendMessage flow — memoryStore integration', () => {
     console.log('[t=1500ms]', useCharacterMemory.getState().getAll('char-001').length);
     await new Promise((r) => setTimeout(r, 1000));
     const mem = useCharacterMemory.getState().getAll('char-001');
-    expect(mem).toHaveLength(2);
+    // S7: order is [user, marker, assistant] — _appendMessage writes the
+    // user turn to memoryStore BEFORE scheduleAICharacterReply calls
+    // chatWithCharacter under withUserAppContext('xingyu'), which then
+    // injects the [上下文切换] marker on first contact. Assistant entry
+    // is the RENDERED form (spec D1), not raw JSON.
+    expect(mem).toHaveLength(3);
     expect(mem[0]!).toMatchObject({
       role: 'user',
       speakerId: 'me',
       content: '今天天气怎么样',
       source: 'xingyu',
     });
-    expect(mem[1]!).toMatchObject({
+    expect(mem[1]!.role).toBe('system');
+    expect(mem[1]!.content).toMatch(/上下文切换/);
+    expect(mem[2]!).toMatchObject({
       role: 'assistant',
       speakerId: 'char-001',
-      content: rawJson, // ← critical: raw JSON, not per-bubble split
+      content: '小星: 挺不错的呀\n小星: 阳光明媚', // ← rendered form
       source: 'xingyu',
     });
 
@@ -105,10 +113,14 @@ describe('XingYu sendMessage flow — memoryStore integration', () => {
     await new Promise((r) => setTimeout(r, 100));
 
     const mem = useCharacterMemory.getState().getAll('char-001');
-    // Only the user message; no assistant entry (the error placeholder is
-    // [AI 回复失败]... which buildMemoryEntry filters to null).
-    expect(mem).toHaveLength(1);
+    // S7: user message (written by _appendMessage) + [上下文切换] marker
+    // (injected by chatWithCharacter on session create). No assistant
+    // entry — XingYu's catch path does not append on failure, and the
+    // [AI 回复失败] UI bubble isn't routed through memoryStore either.
+    expect(mem).toHaveLength(2);
     expect(mem[0]!.role).toBe('user');
+    expect(mem[1]!.role).toBe('system');
+    expect(mem[1]!.content).toMatch(/上下文切换/);
 
     const xyMsgs = useXYData.getState().messages.filter((m) => !m.streaming);
     const errMsg = xyMsgs.find((m) => m.type === 'text' && m.text.startsWith('[AI 回复失败]'));
@@ -128,13 +140,19 @@ describe('XingYu sendMessage flow — memoryStore integration', () => {
     await new Promise((r) => setTimeout(r, 2500));
 
     const mem = useCharacterMemory.getState().getAll('char-001');
-    expect(mem).toHaveLength(2);
+    // S7: user + marker + rendered assistant
+    expect(mem).toHaveLength(3);
     expect(mem[0]!).toMatchObject({
       role: 'user',
       speakerId: 'me',
       content: '[图片 https://example.com/cat.jpg]',
     });
-    expect(mem[1]!.role).toBe('assistant');
+    expect(mem[1]!.role).toBe('system');
+    expect(mem[1]!.content).toMatch(/上下文切换/);
+    expect(mem[2]!).toMatchObject({
+      role: 'assistant',
+      content: '小星: 好可爱',
+    });
   }, 10_000);
 
   it('sendStickerMessage → memoryStore has "[表情：desc]" user entry', async () => {
@@ -151,8 +169,14 @@ describe('XingYu sendMessage flow — memoryStore integration', () => {
     await new Promise((r) => setTimeout(r, 2500));
 
     const mem = useCharacterMemory.getState().getAll('char-001');
-    expect(mem).toHaveLength(2);
+    // S7: user + marker + rendered assistant
+    expect(mem).toHaveLength(3);
     expect(mem[0]!.content).toBe('[表情：笑脸]');
-    expect(mem[1]!.role).toBe('assistant');
+    expect(mem[1]!.role).toBe('system');
+    expect(mem[1]!.content).toMatch(/上下文切换/);
+    expect(mem[2]!).toMatchObject({
+      role: 'assistant',
+      content: '小星: 哈哈',
+    });
   }, 10_000);
 });
