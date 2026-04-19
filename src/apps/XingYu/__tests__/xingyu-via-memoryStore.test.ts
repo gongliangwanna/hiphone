@@ -6,12 +6,17 @@ import { useCharacterMemory, _resetCharacterMemoryForTests } from '@/platform/ai
 import { useAIConfigStore } from '@/platform/stores/aiConfigStore';
 import { usePersonaStore } from '@/platform/stores/personaStore';
 import * as chatCompleteMod from '@/platform/ai/chatComplete';
+import { _resetCharacterAppStateForTests } from '@/platform/ai/characterAppState';
 
 beforeEach(async () => {
   // Let any in-flight xingYuDataStore rehydrate settle before we wipe
   // state — otherwise its async loadCharacterMemoryFromIdb could race
   // our reset and clear our test setup mid-flight.
   await new Promise((r) => setTimeout(r, 20));
+  // XingYu's sendMessage path does not run under withUserAppContext, so no
+  // marker is ever injected here; but reset the per-character app state
+  // anyway to keep tests order-independent.
+  _resetCharacterAppStateForTests();
   await _resetCharacterMemoryForTests();
   useCharacterStore.setState({
     characters: [{

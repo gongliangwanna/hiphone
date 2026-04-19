@@ -8,8 +8,10 @@ import { useAIConfigStore } from '@/platform/stores/aiConfigStore';
 import { usePersonaStore } from '@/platform/stores/personaStore';
 import * as chatCompleteMod from '../chatComplete';
 import { withUserAppContext } from '@/platform/userApp/sdk/context';
+import { _resetCharacterAppStateForTests } from '../characterAppState';
 
 beforeEach(() => {
+  _resetCharacterAppStateForTests();
   useCharacterMemory.getState().clearAll();
   useCharacterStore.setState({
     characters: [{
@@ -57,23 +59,28 @@ describe('M4.1 E2E — persistent vs clone across session lifetimes', () => {
       const s2 = chatWithCharacter('char-001', { persistent: true });
       expect(s2.history).toEqual([]); // session buffer is fresh
 
-      // But memoryStore retains the previous exchange — visible via prompt replay
+      // memoryStore retains the previous exchange plus a leading
+      // [上下文切换] marker from the first session's creation (null → app-test).
+      // The second session is in the SAME app, so no additional marker fires.
       const mem = useCharacterMemory.getState().getAll('char-001');
-      expect(mem).toHaveLength(2);
-      expect(mem[0]!.content).toBe('hello');
-      expect(mem[1]!.content).toBe('first reply');
+      expect(mem).toHaveLength(3);
+      expect(mem[0]!.role).toBe('system');
+      expect(mem[0]!.content).toMatch(/上下文切换/);
+      expect(mem[0]!.content).toMatch(/app-test/);
+      expect(mem[1]!.content).toBe('hello');
+      expect(mem[2]!.content).toBe('first reply');
 
-      // Next send layers on top; memoryStore ends with all four entries
+      // Next send layers on top; memoryStore ends with marker + all four turns.
       await s2.send('are you still there');
       const finalMem = useCharacterMemory.getState().getAll('char-001');
-      expect(finalMem).toHaveLength(4);
-      expect(finalMem.map((e) => e.content)).toEqual([
+      expect(finalMem).toHaveLength(5);
+      expect(finalMem.map((e) => e.content).slice(1)).toEqual([
         'hello', 'first reply', 'are you still there', 'second reply',
       ]);
     });
   });
 
-  it('persistent=false: clone is isolated and leaves memoryStore empty', async () => {
+  it('persistent=false: clone is isolated; memoryStore only sees the creation marker', async () => {
     vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue('clone reply');
 
     await withUserAppContext('app-test', async () => {
@@ -82,14 +89,20 @@ describe('M4.1 E2E — persistent vs clone across session lifetimes', () => {
       expect(s1.history).toHaveLength(2);
     });
 
-    // memoryStore completely untouched
-    expect(useCharacterMemory.getState().getAll('char-001')).toHaveLength(0);
+    // memoryStore receives ONLY the [上下文切换] marker from session creation —
+    // the persistent=false session itself does not mirror user/assistant turns.
+    const mem = useCharacterMemory.getState().getAll('char-001');
+    expect(mem).toHaveLength(1);
+    expect(mem[0]!.role).toBe('system');
+    expect(mem[0]!.content).toMatch(/上下文切换/);
 
-    // A subsequent persistent=false session starts from the same (empty) snapshot
+    // A subsequent persistent=false session in the SAME app starts from a
+    // fresh buffer; no additional marker fires (same lastActiveAppId).
     await withUserAppContext('app-test', async () => {
       const s2 = chatWithCharacter('char-001', { persistent: false });
       expect(s2.history).toEqual([]);
     });
+    expect(useCharacterMemory.getState().getAll('char-001')).toHaveLength(1);
   });
 
   it('mixed: persistent=false side conversation does not leak into persistent=true', async () => {
@@ -106,7 +119,14 @@ describe('M4.1 E2E — persistent vs clone across session lifetimes', () => {
     });
 
     const mem = useCharacterMemory.getState().getAll('char-001');
-    // Only the real exchange is persisted
-    expect(mem.map((e) => e.content)).toEqual(['main topic', 'reply']);
+    // The clone's session-creation marker lands in memoryStore (scene state is
+    // character-scoped, not session-scoped); the clone's user/assistant turns
+    // do NOT leak. The subsequent persistent=true session in the same app does
+    // not inject a second marker.
+    expect(mem.map((e) => e.content)).toEqual([
+      '[上下文切换] 用户打开了 app-test',
+      'main topic',
+      'reply',
+    ]);
   });
 });
