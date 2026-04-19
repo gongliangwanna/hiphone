@@ -132,4 +132,51 @@ describe('parseReply', () => {
       { type: 'text', content: '第二条' },
     ]);
   });
+
+  it('parses {type:"action",name,params} items with arbitrary params', () => {
+    const input = '[{"type":"action","name":"hammer_down","params":{"item":"vase","winner":"A","final":1200}}]';
+    const result = parseReply(input);
+    expect(result).toEqual([
+      { type: 'action', name: 'hammer_down', params: { item: 'vase', winner: 'A', final: 1200 } },
+    ]);
+  });
+
+  it('parses mixed text + action items preserving order', () => {
+    const input =
+      '[{"type":"text","content":"请出价"},{"type":"action","name":"bid_call","params":{"min":100}},{"type":"text","content":"有人加价吗"}]';
+    const result = parseReply(input);
+    expect(result).toEqual([
+      { type: 'text', content: '请出价' },
+      { type: 'action', name: 'bid_call', params: { min: 100 } },
+      { type: 'text', content: '有人加价吗' },
+    ]);
+  });
+
+  it('action items with missing params default to an empty object', () => {
+    const input = '[{"type":"action","name":"ready"}]';
+    const result = parseReply(input);
+    expect(result).toEqual([{ type: 'action', name: 'ready', params: {} }]);
+  });
+
+  it('action items with non-object params are rejected (dropped)', () => {
+    const input = '[{"type":"action","name":"x","params":"not-an-object"},{"type":"text","content":"after"}]';
+    const result = parseReply(input);
+    expect(result).toEqual([{ type: 'text', content: 'after' }]); // bad action dropped, text kept
+  });
+
+  it('action items with missing or non-string name are dropped', () => {
+    const input = '[{"type":"action","params":{}},{"type":"action","name":123,"params":{}}]';
+    const result = parseReply(input);
+    // both invalid → no action items; fall back to treating the whole string as text
+    expect(result).toEqual([{ type: 'text', content: input }]);
+  });
+
+  it('legacy sticker / signature items still parse correctly (backwards compat)', () => {
+    const input = '[{"type":"sticker","stickerId":"s1","content":"笑"},{"type":"signature","text":"新签名"}]';
+    const result = parseReply(input);
+    expect(result).toEqual([
+      { type: 'sticker', stickerId: 's1', content: '笑' },
+      { type: 'signature', text: '新签名' },
+    ]);
+  });
 });

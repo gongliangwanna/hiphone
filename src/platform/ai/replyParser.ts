@@ -35,7 +35,17 @@ export interface ReplySignatureItem {
   text: string;
 }
 
-export type ReplyItem = ReplyTextItem | ReplyStickerItem | ReplySignatureItem;
+export interface ReplyActionItem {
+  type: 'action';
+  name: string;
+  params: Record<string, unknown>;
+}
+
+export type ReplyItem =
+  | ReplyTextItem
+  | ReplyStickerItem
+  | ReplySignatureItem
+  | ReplyActionItem;
 
 // ---------------------------------------------------------------------------
 // Parser
@@ -162,6 +172,22 @@ function tryParseItems(text: string): ReplyItem[] | null {
         item.text.trim()
       ) {
         items.push({ type: 'signature', text: item.text.trim() });
+      } else if (
+        item.type === 'action' &&
+        typeof item.name === 'string' &&
+        item.name.trim()
+      ) {
+        const rawParams = item.params;
+        // Accept `undefined` / missing → {}; reject non-object scalars + arrays.
+        const params =
+          rawParams === undefined || rawParams === null
+            ? {}
+            : typeof rawParams === 'object' && !Array.isArray(rawParams)
+              ? (rawParams as Record<string, unknown>)
+              : null;
+        if (params !== null) {
+          items.push({ type: 'action', name: item.name.trim(), params });
+        }
       }
     }
     return items.length > 0 ? items : null;
