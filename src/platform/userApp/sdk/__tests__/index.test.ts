@@ -27,8 +27,19 @@ describe('resolveModule', () => {
     expect(typeof mod.globalSet).toBe('function');
   });
 
-  it('throws for @hiphone/* submodules not yet available', () => {
-    expect(() => resolveModule('@hiphone/ai')).toThrow(/Module not found/);
+  it('resolves "@hiphone/ai" to an object with complete / streamComplete / getCharacters / extractPlainText', () => {
+    const mod = resolveModule('@hiphone/ai') as {
+      complete: unknown;
+      streamComplete: unknown;
+      getCharacters: unknown;
+      extractPlainText: unknown;
+      AIUnavailableError: unknown;
+    };
+    expect(typeof mod.complete).toBe('function');
+    expect(typeof mod.streamComplete).toBe('function');
+    expect(typeof mod.getCharacters).toBe('function');
+    expect(typeof mod.extractPlainText).toBe('function');
+    expect(mod.AIUnavailableError).toBeDefined();
   });
 
   it('resolves "@hiphone/nav" to an object with open and goHome', () => {

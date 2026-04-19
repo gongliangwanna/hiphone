@@ -1,0 +1,9 @@
+{
+  "id": "ai-translator",
+  "name": "AI 翻译",
+  "version": "1.0.0",
+  "entry": "App.tsx",
+  "icon": "icon.svg",
+  "perspectiveAware": false,
+  "description": "demo: @hiphone/ai.complete — translates Chinese → English"
+}
