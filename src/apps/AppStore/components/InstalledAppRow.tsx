@@ -1,4 +1,3 @@
-import { ChevronRight } from 'lucide-react';
 import type { InstalledUserApp } from '@/platform/stores/installedUserAppsStore';
 import { useLongPress } from '@/platform/gesture/useLongPress';
 import { formatByteSize, formatRelativeTime } from '@/platform/utils/formatters';
@@ -64,12 +63,6 @@ export function InstalledAppRow({ app, onOpen, onLongPress, onDetail }: Props) {
       >
         打开
       </button>
-      <ChevronRight
-        size={16}
-        strokeWidth={2.5}
-        className="flex-shrink-0 text-[var(--color-tertiaryLabel)] -ml-1"
-        aria-hidden
-      />
     </div>
   );
 }

@@ -31,7 +31,7 @@ export function AppDetailSheet({ app, onClose, onUninstall }: Props) {
             {app.author ?? '\u00A0'}
           </div>
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-4">
+        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide flex flex-col gap-4">
           <div className="bg-white rounded-[14px] p-4 flex items-center gap-4">
             {app.iconDataUrl
               ? <img src={app.iconDataUrl} alt="" className="w-20 h-20 rounded-[20px]" />
@@ -77,10 +77,14 @@ export function AppDetailSheet({ app, onClose, onUninstall }: Props) {
           <Section title="权限">
             <Row k="Perspective-aware" v={app.perspectiveAware ? '是' : '否'} />
           </Section>
-          <button type="button" onClick={() => { onUninstall(); onClose(); }}
-            className="w-full h-11 rounded-[11px]
-              bg-[rgba(118,118,128,0.16)]
-              text-[17px] font-semibold text-[var(--color-systemRed)]">
+          <button
+            type="button"
+            onClick={() => { onUninstall(); onClose(); }}
+            className="mt-2 w-full rounded-[14px] bg-white
+              px-4 py-[14px] text-center
+              text-[17px] font-normal text-[var(--color-systemRed)]
+              active:bg-[rgba(118,118,128,0.12)]"
+          >
             卸载 App
           </button>
         </div>
