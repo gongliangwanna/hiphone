@@ -21,6 +21,9 @@ import { migrateS3ToS4Owner } from './migrations';
 import { registerMountedApp } from './sdk/context';
 import { ensureTwindInstalled } from './twindRuntime';
 import { serviceRegistry } from '@/platform/services/serviceRegistry';
+import { unregisterApp as unregisterToolRegistryApp } from '@/platform/ai/toolRegistry';
+import { unregisterApp as unregisterReplyRendererApp } from '@/platform/ai/replyRendererRegistry';
+import { unregisterApp as unregisterAppSystemPromptApp } from '@/platform/ai/appSystemPromptRegistry';
 
 export type InstallErrorKind =
   | 'bad-zip'
@@ -317,6 +320,9 @@ export async function uninstall(appId: string): Promise<void> {
   useInstalledUserAppsStore.getState().remove(appId);
   appRegistry.unregister(appId);
   serviceRegistry.unregisterApp(appId);
+  unregisterToolRegistryApp(appId);
+  unregisterReplyRendererApp(appId);
+  unregisterAppSystemPromptApp(appId);
 }
 
 export async function loadInstalledApps(): Promise<void> {
