@@ -1,0 +1,9 @@
+{
+  "id": "ai-auction",
+  "name": "AI 拍卖会",
+  "version": "1.0.0",
+  "entry": "App.tsx",
+  "icon": "icon.svg",
+  "perspectiveAware": false,
+  "description": "demo: Tool Registry + custom renderer + appSystemPrompt + injectSystemEvent via @hiphone/ai"
+}
