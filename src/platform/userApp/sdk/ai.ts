@@ -344,6 +344,11 @@ export function chatWithCharacter(
 
   // ── Internal helpers ──────────────────────────────────────────
 
+  /**
+   * Runs parseReply + the app's registered renderer on a raw reply string.
+   * Exposed separately so future streaming paths can render incrementally
+   * without paying for the full items/actions/text expansion of buildChatReply.
+   */
   function renderAssistantReply(raw: string): {
     rendered: string;
     items: ParseReplyItem[];
@@ -359,6 +364,11 @@ export function chatWithCharacter(
     return { rendered, items };
   }
 
+  /**
+   * Full ChatReply expansion from a raw reply string. Combines
+   * renderAssistantReply with parseReply-derived items + action/text
+   * conveniences. Used by the non-streaming send / replyToLast paths.
+   */
   function buildChatReply(raw: string): ChatReply {
     const { rendered, items } = renderAssistantReply(raw);
     const actions = items.filter(
@@ -371,7 +381,7 @@ export function chatWithCharacter(
       raw,
       rendered,
       items: items as ReplyItem[],
-      actions: actions as ReplyItemAction[],
+      actions,
       text: texts.join('\n'),
     };
   }
@@ -516,6 +526,16 @@ export function chatWithCharacter(
     }
   }
 
+  /**
+   * M4.1 / M4.2 behavior: callLLM currently resolves the full reply before
+   * yielding. The assistant `doAppend` runs before `yield raw` so the
+   * post-stream session state matches the non-streaming path.
+   *
+   * TODO(M4.3): once provider-native streaming lands, flip to "yield
+   * deltas → commit rendered on close" — the current ordering will produce
+   * a stale-then-final history view if consumers read session.history
+   * mid-iteration.
+   */
   async function* streamSend(
     content: string,
     opts: MirrorOption = {},
@@ -569,6 +589,16 @@ export function chatWithCharacter(
     }
   }
 
+  /**
+   * M4.1 / M4.2 behavior: callLLM currently resolves the full reply before
+   * yielding. The assistant `doAppend` runs before `yield raw` so the
+   * post-stream session state matches the non-streaming path.
+   *
+   * TODO(M4.3): once provider-native streaming lands, flip to "yield
+   * deltas → commit rendered on close" — the current ordering will produce
+   * a stale-then-final history view if consumers read session.history
+   * mid-iteration.
+   */
   async function* streamReplyToLast(opts: MirrorOption = {}): AsyncIterable<string> {
     const mirror = opts.mirror !== false;
     const controller = new AbortController();
