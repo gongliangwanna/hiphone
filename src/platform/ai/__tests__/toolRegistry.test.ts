@@ -55,4 +55,15 @@ describe('toolRegistry', () => {
     retrieved.push({ name: 'injected', description: '', parameters: {} });
     expect(getTools('app-a')).toEqual(SAMPLE); // unchanged
   });
+
+  it('register defensive-copies the input array (caller push after register does not affect registry)', () => {
+    const input: ToolDefinition[] = [
+      { name: 'a', description: '', parameters: {} },
+    ];
+    registerTools('app-a', input);
+    input.push({ name: 'injected', description: '', parameters: {} });
+    const retrieved = getTools('app-a');
+    expect(retrieved).toHaveLength(1);
+    expect(retrieved[0]!.name).toBe('a');
+  });
 });
