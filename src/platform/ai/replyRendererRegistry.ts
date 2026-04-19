@@ -8,9 +8,8 @@
  * the rendered text so subsequent prompts still have full context. See
  * spec §2 + D2.
  *
- * S1 ships a stub default renderer so the module wires cleanly; S3
- * replaces DEFAULT_XINGYU_RENDERER with the full no-loss implementation
- * in defaultXingYuRenderer.ts.
+ * `DEFAULT_XINGYU_RENDERER` re-exports the lossless implementation in
+ * `defaultXingYuRenderer.ts`. Consumers always go through the registry.
  *
  * See docs/superpowers/specs/2026-04-19-m4.2-tool-registry-and-rendering-design.md §1 + §2
  */
