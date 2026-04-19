@@ -98,4 +98,31 @@ describe('validateManifest', () => {
     expect(() => validateManifest('string')).toThrow();
     expect(() => validateManifest([])).toThrow();
   });
+
+  it('accepts services field as a non-empty string', () => {
+    const result = validateManifest({
+      id: 'wallet-x',
+      name: 'W',
+      version: '1.0.0',
+      entry: 'App.tsx',
+      services: 'services.ts',
+    });
+    expect(result.services).toBe('services.ts');
+  });
+
+  it('defaults services to undefined when absent', () => {
+    const result = validateManifest({
+      id: 'wallet-x', name: 'W', version: '1.0.0', entry: 'App.tsx',
+    });
+    expect(result.services).toBeUndefined();
+  });
+
+  it('rejects non-string services value', () => {
+    expect(() =>
+      validateManifest({
+        id: 'wallet-x', name: 'W', version: '1.0.0', entry: 'App.tsx',
+        services: 42 as unknown as string,
+      }),
+    ).toThrow(/services/);
+  });
 });

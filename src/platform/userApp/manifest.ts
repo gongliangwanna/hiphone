@@ -40,6 +40,12 @@ export interface UserAppManifest {
    * unmount.
    */
   statusBarStyle?: StatusBarStyle;
+  /**
+   * Optional path (relative to zip root) to a services module. If set,
+   * Installer compiles it into compiledMap; serviceRegistry lazy-runs
+   * its top-level registerService() calls on first invoke of this app.
+   */
+  services?: string;
   // M3+ fields — allowed but ignored in M2
   author?: string;
   description?: string;
@@ -80,6 +86,16 @@ export function validateManifest(raw: unknown): UserAppManifest {
     );
   }
 
+  let services: string | undefined;
+  if (obj.services !== undefined) {
+    if (typeof obj.services !== 'string' || obj.services.length === 0) {
+      throw new ManifestError(
+        `manifest.services must be a non-empty string when provided (got ${JSON.stringify(obj.services)})`,
+      );
+    }
+    services = obj.services;
+  }
+
   return {
     id,
     name,
@@ -89,6 +105,7 @@ export function validateManifest(raw: unknown): UserAppManifest {
     perspectiveAware: obj.perspectiveAware === true,
     edgeToEdge: obj.edgeToEdge === true ? true : undefined,
     statusBarStyle,
+    services,
     author: typeof obj.author === 'string' ? obj.author : undefined,
     description: typeof obj.description === 'string' ? obj.description : undefined,
     permissions: Array.isArray(obj.permissions)
