@@ -57,11 +57,21 @@ export interface CharacterMemoryState {
   clearAll: () => void;
 }
 
+// Monotonic timestamp: always strictly greater than any previously returned
+// value for the same process. Prevents ambiguous sort order when multiple
+// entries are appended within the same clock tick (Date.now's 1 ms resolution).
+let lastTs = 0;
+function monotonicNow(): number {
+  const now = Date.now();
+  lastTs = now <= lastTs ? lastTs + 1 : now;
+  return lastTs;
+}
+
 function makeEntry(characterId: string, input: AppendInput): MemoryEntry {
   return {
     id: uid(),
     characterId,
-    createdAt: Date.now(),
+    createdAt: monotonicNow(),
     ...input,
   };
 }
