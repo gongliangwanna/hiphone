@@ -29,6 +29,8 @@ import {
 } from '@/platform/ai/characterAppState';
 import { getTools, type ToolDefinition } from '@/platform/ai/toolRegistry';
 import { getAppSystemPrompt } from '@/platform/ai/appSystemPromptRegistry';
+import { getReplyRenderer } from '@/platform/ai/replyRendererRegistry';
+import { parseReply, type ReplyItem as ParseReplyItem } from '@/platform/ai/replyParser';
 import { getCurrentAppId } from './context';
 
 // ════════════════════════════════════════════════════════════════
@@ -212,12 +214,55 @@ export interface MirrorOption {
   mirror?: boolean;
 }
 
+// ════════════════════════════════════════════════════════════════
+// M4.2 Chat reply shape
+// ════════════════════════════════════════════════════════════════
+
+export interface ReplyItemText {
+  type: 'text';
+  content: string;
+}
+export interface ReplyItemAction {
+  type: 'action';
+  name: string;
+  params: Record<string, unknown>;
+}
+// Legacy types — used during XingYu's transition to tool-based actions.
+export interface ReplyItemSticker {
+  type: 'sticker';
+  stickerId: string;
+  content: string;
+}
+export interface ReplyItemSignature {
+  type: 'signature';
+  text: string;
+}
+
+export type ReplyItem =
+  | ReplyItemText
+  | ReplyItemAction
+  | ReplyItemSticker
+  | ReplyItemSignature;
+
+export interface ChatReply {
+  /** LLM output string, byte-identical to what the provider returned. */
+  raw: string;
+  /** Renderer output — the exact text written to memoryStore (when mirroring). */
+  rendered: string;
+  /** parseReply'd items from `raw`, in original order. */
+  items: ReplyItem[];
+  /** Convenience: items.filter(i => i.type === 'action'). */
+  actions: ReplyItemAction[];
+  /** Convenience: items[type==='text'].map(i.content).join('\n'). */
+  text: string;
+}
+
 export interface ChatSession {
   readonly characterId: string;
   readonly persistent: boolean;
   readonly history: readonly SessionEntry[];
 
-  send(content: string, opts?: MirrorOption): Promise<string>;
+  send(content: string, opts?: MirrorOption): Promise<ChatReply>;
   streamSend(content: string, opts?: MirrorOption): AsyncIterable<string>;
 
   append(
@@ -225,7 +270,7 @@ export interface ChatSession {
     opts?: MirrorOption,
   ): void;
 
-  replyToLast(opts?: MirrorOption): Promise<string>;
+  replyToLast(opts?: MirrorOption): Promise<ChatReply>;
   streamReplyToLast(opts?: MirrorOption): AsyncIterable<string>;
 
   abort(): void;
@@ -295,7 +340,41 @@ export function chatWithCharacter(
   const buffer: SessionEntry[] = [];
   const controllers = new Set<AbortController>();
 
+  const speakerName = character.name.trim() || characterId;
+
   // ── Internal helpers ──────────────────────────────────────────
+
+  function renderAssistantReply(raw: string): {
+    rendered: string;
+    items: ParseReplyItem[];
+  } {
+    const items = parseReply(raw);
+    const renderer = capturedAppId
+      ? getReplyRenderer(capturedAppId)
+      : getReplyRenderer('');
+    const rendered = renderer.render(raw, {
+      speakerName,
+      tools: frozenTools,
+    });
+    return { rendered, items };
+  }
+
+  function buildChatReply(raw: string): ChatReply {
+    const { rendered, items } = renderAssistantReply(raw);
+    const actions = items.filter(
+      (i): i is ReplyItemAction => i.type === 'action',
+    );
+    const texts = items
+      .filter((i): i is ReplyItemText => i.type === 'text')
+      .map((i) => i.content);
+    return {
+      raw,
+      rendered,
+      items: items as ReplyItem[],
+      actions: actions as ReplyItemAction[],
+      text: texts.join('\n'),
+    };
+  }
 
   function doAppend(
     entry: { role: 'user' | 'assistant'; content: string; speakerId?: string },
@@ -412,7 +491,7 @@ export function chatWithCharacter(
   async function send(
     content: string,
     opts: MirrorOption = {},
-  ): Promise<string> {
+  ): Promise<ChatReply> {
     const mirror = opts.mirror !== false;
     const controller = new AbortController();
     if (options.signal) {
@@ -421,9 +500,16 @@ export function chatWithCharacter(
     controllers.add(controller);
     try {
       doAppend({ role: 'user', content }, mirror);
-      const reply = await callLLM(controller);
+      const raw = await callLLM(controller);
       if (controller.signal.aborted) throw new AIAbortedError();
-      doAppend({ role: 'assistant', content: reply, speakerId: characterId }, mirror);
+      const reply = buildChatReply(raw);
+      // Buffer + memoryStore always get the RENDERED content (the shape
+      // consumers see as "what the character said"). memoryStore only
+      // receives it when mirror is true.
+      doAppend(
+        { role: 'assistant', content: reply.rendered, speakerId: characterId },
+        mirror,
+      );
       return reply;
     } finally {
       controllers.delete(controller);
@@ -442,10 +528,14 @@ export function chatWithCharacter(
     controllers.add(controller);
     try {
       doAppend({ role: 'user', content }, mirror);
-      const reply = await callLLM(controller);
+      const raw = await callLLM(controller);
       if (controller.signal.aborted) throw new AIAbortedError();
-      doAppend({ role: 'assistant', content: reply, speakerId: characterId }, mirror);
-      yield reply;
+      const reply = buildChatReply(raw);
+      doAppend(
+        { role: 'assistant', content: reply.rendered, speakerId: characterId },
+        mirror,
+      );
+      yield raw; // still yield raw for streaming consumers
     } finally {
       controllers.delete(controller);
     }
@@ -458,7 +548,7 @@ export function chatWithCharacter(
     doAppend(entry, opts.mirror !== false);
   }
 
-  async function replyToLast(opts: MirrorOption = {}): Promise<string> {
+  async function replyToLast(opts: MirrorOption = {}): Promise<ChatReply> {
     const mirror = opts.mirror !== false;
     const controller = new AbortController();
     if (options.signal) {
@@ -466,9 +556,13 @@ export function chatWithCharacter(
     }
     controllers.add(controller);
     try {
-      const reply = await callLLM(controller);
+      const raw = await callLLM(controller);
       if (controller.signal.aborted) throw new AIAbortedError();
-      doAppend({ role: 'assistant', content: reply, speakerId: characterId }, mirror);
+      const reply = buildChatReply(raw);
+      doAppend(
+        { role: 'assistant', content: reply.rendered, speakerId: characterId },
+        mirror,
+      );
       return reply;
     } finally {
       controllers.delete(controller);
@@ -483,10 +577,14 @@ export function chatWithCharacter(
     }
     controllers.add(controller);
     try {
-      const reply = await callLLM(controller);
+      const raw = await callLLM(controller);
       if (controller.signal.aborted) throw new AIAbortedError();
-      doAppend({ role: 'assistant', content: reply, speakerId: characterId }, mirror);
-      yield reply;
+      const reply = buildChatReply(raw);
+      doAppend(
+        { role: 'assistant', content: reply.rendered, speakerId: characterId },
+        mirror,
+      );
+      yield raw;
     } finally {
       controllers.delete(controller);
     }

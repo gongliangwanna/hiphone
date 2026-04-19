@@ -62,20 +62,23 @@ describe('M4.1 E2E — persistent vs clone across session lifetimes', () => {
       // memoryStore retains the previous exchange plus a leading
       // [上下文切换] marker from the first session's creation (null → app-test).
       // The second session is in the SAME app, so no additional marker fires.
+      // Under M4.2 the assistant entry stores the RENDERED form — the mock
+      // returns 'first reply' (non-JSON) → parseReply fallback → default
+      // renderer wraps to '小星: first reply'.
       const mem = useCharacterMemory.getState().getAll('char-001');
       expect(mem).toHaveLength(3);
       expect(mem[0]!.role).toBe('system');
       expect(mem[0]!.content).toMatch(/上下文切换/);
       expect(mem[0]!.content).toMatch(/app-test/);
       expect(mem[1]!.content).toBe('hello');
-      expect(mem[2]!.content).toBe('first reply');
+      expect(mem[2]!.content).toBe('小星: first reply');
 
       // Next send layers on top; memoryStore ends with marker + all four turns.
       await s2.send('are you still there');
       const finalMem = useCharacterMemory.getState().getAll('char-001');
       expect(finalMem).toHaveLength(5);
       expect(finalMem.map((e) => e.content).slice(1)).toEqual([
-        'hello', 'first reply', 'are you still there', 'second reply',
+        'hello', '小星: first reply', 'are you still there', '小星: second reply',
       ]);
     });
   });
@@ -122,11 +125,13 @@ describe('M4.1 E2E — persistent vs clone across session lifetimes', () => {
     // The clone's session-creation marker lands in memoryStore (scene state is
     // character-scoped, not session-scoped); the clone's user/assistant turns
     // do NOT leak. The subsequent persistent=true session in the same app does
-    // not inject a second marker.
+    // not inject a second marker. The assistant entry is stored in its
+    // RENDERED form (M4.2) — 'reply' is non-JSON so the default renderer
+    // wraps it as '小星: reply'.
     expect(mem.map((e) => e.content)).toEqual([
       '[上下文切换] 用户打开了 app-test',
       'main topic',
-      'reply',
+      '小星: reply',
     ]);
   });
 });

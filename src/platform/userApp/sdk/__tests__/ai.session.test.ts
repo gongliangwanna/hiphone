@@ -23,11 +23,17 @@ import {
   registerAppSystemPrompt,
   _resetAppSystemPromptRegistryForTests,
 } from '@/platform/ai/appSystemPromptRegistry';
+import {
+  registerReplyRenderer,
+  _resetReplyRendererRegistryForTests,
+} from '@/platform/ai/replyRendererRegistry';
+import { parseReply } from '@/platform/ai/replyParser';
 
 beforeEach(() => {
   _resetCharacterAppStateForTests();
   _resetToolRegistryForTests();
   _resetAppSystemPromptRegistryForTests();
+  _resetReplyRendererRegistryForTests();
   useCharacterMemory.getState().clearAll();
   useCharacterStore.setState({
     characters: [
@@ -136,8 +142,12 @@ describe('session.send (non-streaming)', () => {
     const s = chatWithCharacter('char-001');
     const reply = await s.send('hello');
 
-    expect(reply).toBe('reply A');
-    expect(s.history.map((e) => e.content)).toEqual(['hello', 'reply A']);
+    // Mocked 'reply A' is non-JSON → parseReply fallback yields a single
+    // text item; default renderer wraps with the speaker name.
+    expect(reply.raw).toBe('reply A');
+    expect(reply.rendered).toBe('小星: reply A');
+    expect(reply.text).toBe('reply A');
+    expect(s.history.map((e) => e.content)).toEqual(['hello', '小星: reply A']);
     expect(useCharacterMemory.getState().getAll('char-001')).toHaveLength(0);
   });
 
@@ -148,14 +158,16 @@ describe('session.send (non-streaming)', () => {
     );
     const reply = await withUserAppContext('app-demo', () => s.send('hello'));
 
-    expect(reply).toBe('reply B');
+    expect(reply.raw).toBe('reply B');
+    expect(reply.rendered).toBe('小星: reply B');
     // mem[0] is the session-creation [上下文切换] marker, then user + reply.
     const mem = useCharacterMemory.getState().getAll('char-001');
     expect(mem).toHaveLength(3);
     expect(mem[0]!.role).toBe('system');
     expect(mem[0]!.content).toMatch(/上下文切换/);
     expect(mem[1]!).toMatchObject({ role: 'user', speakerId: 'me', content: 'hello', source: 'app:app-demo' });
-    expect(mem[2]!).toMatchObject({ role: 'assistant', speakerId: 'char-001', content: 'reply B', source: 'app:app-demo' });
+    // Assistant entry now stores the RENDERED form, not the raw string.
+    expect(mem[2]!).toMatchObject({ role: 'assistant', speakerId: 'char-001', content: '小星: reply B', source: 'app:app-demo' });
   });
 
   it('persistent=true + mirror:false: buffer updated, memoryStore gets only the creation marker', async () => {
@@ -165,7 +177,8 @@ describe('session.send (non-streaming)', () => {
     );
     const reply = await withUserAppContext('app-demo', () => s.send('hello', { mirror: false }));
 
-    expect(reply).toBe('reply C');
+    expect(reply.raw).toBe('reply C');
+    expect(reply.rendered).toBe('小星: reply C');
     // Creation still injects one [上下文切换] marker; mirror:false keeps the
     // actual user/assistant turns out of memoryStore.
     const mem = useCharacterMemory.getState().getAll('char-001');
@@ -182,8 +195,9 @@ describe('session.replyToLast', () => {
     s.append({ role: 'user', content: 'hi' });
     const reply = await s.replyToLast();
 
-    expect(reply).toBe('reply D');
-    expect(s.history.map((e) => e.content)).toEqual(['hi', 'reply D']);
+    expect(reply.raw).toBe('reply D');
+    expect(reply.rendered).toBe('小星: reply D');
+    expect(s.history.map((e) => e.content)).toEqual(['hi', '小星: reply D']);
     expect(useCharacterMemory.getState().getAll('char-001')).toHaveLength(0);
   });
 });
@@ -195,8 +209,11 @@ describe('session.streamSend', () => {
 
     const chunks: string[] = [];
     for await (const c of s.streamSend('hi')) chunks.push(c);
+    // streamSend still yields RAW tokens for streaming consumers.
     expect(chunks).toEqual(['hello world']);
-    expect(s.history.map((e) => e.content)).toEqual(['hi', 'hello world']);
+    // Buffer records the RENDERED form (non-JSON input falls back to a
+    // single text item, which the default renderer wraps).
+    expect(s.history.map((e) => e.content)).toEqual(['hi', '小星: hello world']);
   });
 
   it('abort() mid-stream → throws AIAbortedError', async () => {
@@ -346,5 +363,104 @@ describe('chatWithCharacter — session captures registry snapshots at creation'
 
     spy.mockRestore();
     chatSpy.mockRestore();
+  });
+});
+
+describe('chatWithCharacter — ChatReply shape (M4.2)', () => {
+  it('send returns ChatReply with raw + rendered + items + actions + text', async () => {
+    const rawJson = '[{"type":"text","content":"挺好"},{"type":"action","name":"bid_call","params":{"min":100}}]';
+    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue(rawJson);
+
+    const reply = await withUserAppContext('app-test', async () => {
+      const s = chatWithCharacter('char-001', { persistent: true });
+      return s.send('开拍');
+    });
+
+    expect(reply.raw).toBe(rawJson);
+    expect(reply.items).toEqual([
+      { type: 'text', content: '挺好' },
+      { type: 'action', name: 'bid_call', params: { min: 100 } },
+    ]);
+    expect(reply.actions).toEqual([
+      { type: 'action', name: 'bid_call', params: { min: 100 } },
+    ]);
+    expect(reply.text).toBe('挺好');
+    // Default renderer, no app-specific override → goes through defaultXingYuRenderer
+    expect(reply.rendered).toBe('小星: 挺好\n小星: 【bid_call】min=100');
+  });
+
+  it('mirror=true writes reply.rendered (not raw) into memoryStore', async () => {
+    const rawJson = '[{"type":"text","content":"你好"}]';
+    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue(rawJson);
+
+    await withUserAppContext('app-test', async () => {
+      const s = chatWithCharacter('char-001', { persistent: true });
+      await s.send('hi');
+    });
+
+    const mem = useCharacterMemory.getState().getAll('char-001');
+    const assistantEntry = mem.find((e) => e.role === 'assistant')!;
+    expect(assistantEntry.content).toBe('小星: 你好'); // rendered, not raw JSON
+  });
+
+  it('session.history assistant entry also holds rendered text', async () => {
+    const rawJson = '[{"type":"text","content":"再见"}]';
+    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue(rawJson);
+
+    const s = await withUserAppContext('app-test', async () => {
+      const session = chatWithCharacter('char-001', { persistent: true });
+      await session.send('bye');
+      return session;
+    });
+
+    const assistantInBuffer = s.history.find((h) => h.role === 'assistant')!;
+    expect(assistantInBuffer.content).toBe('小星: 再见');
+  });
+
+  it('app-specific renderer (registered via replyRendererRegistry) drives rendered output', async () => {
+    registerReplyRenderer('app-test', {
+      render(raw, ctx) {
+        const items = parseReply(raw);
+        return `[CUSTOM ${ctx.speakerName}] ${items.length} items`;
+      },
+    });
+    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue('[{"type":"text","content":"a"}]');
+
+    const reply = await withUserAppContext('app-test', async () => {
+      const s = chatWithCharacter('char-001', { persistent: true });
+      return s.send('hi');
+    });
+
+    expect(reply.rendered).toBe('[CUSTOM 小星] 1 items');
+    const mem = useCharacterMemory.getState().getAll('char-001');
+    expect(mem.find((e) => e.role === 'assistant')!.content).toBe('[CUSTOM 小星] 1 items');
+  });
+
+  it('mirror=false: session.history + rendered shape still computed, but memoryStore NOT written', async () => {
+    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue('[{"type":"text","content":"x"}]');
+
+    const { reply, historyAssistant } = await withUserAppContext('app-test', async () => {
+      const s = chatWithCharacter('char-001', { persistent: true });
+      const r = await s.send('q', { mirror: false });
+      return { reply: r, historyAssistant: s.history.find((h) => h.role === 'assistant')! };
+    });
+
+    expect(reply.rendered).toBe('小星: x');
+    expect(historyAssistant.content).toBe('小星: x'); // buffer always rendered
+    expect(useCharacterMemory.getState().getAll('char-001')).toHaveLength(1); // only the [上下文切换] marker from S2; no assistant
+  });
+
+  it('replyToLast returns ChatReply with the same shape semantics', async () => {
+    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue('[{"type":"text","content":"re-reply"}]');
+
+    const reply = await withUserAppContext('app-test', async () => {
+      const s = chatWithCharacter('char-001', { persistent: true });
+      s.append({ role: 'user', content: 'context' });
+      return s.replyToLast();
+    });
+
+    expect(reply.raw).toBe('[{"type":"text","content":"re-reply"}]');
+    expect(reply.rendered).toBe('小星: re-reply');
+    expect(reply.text).toBe('re-reply');
   });
 });
