@@ -355,6 +355,20 @@ function scheduleAICharacterReply(convId: string, get: () => XingYuDataState) {
         messages: s0.messages.filter((m) => m.id !== placeholderId),
       });
 
+      // Record the AI's raw reply in memoryStore as a single assistant entry.
+      // This preserves the original JSON structure (stickerId, signature
+      // actions, multi-bubble intent) for the next prompt — if we wrote
+      // per-bubble entries instead, the model would see its own output
+      // re-serialised and lose key metadata.
+      if (conv.characterId) {
+        useCharacterMemory.getState().append(conv.characterId, {
+          role: 'assistant',
+          speakerId: conv.characterId,
+          content: rawReply,
+          source: 'xingyu',
+        });
+      }
+
       // Parse structured reply
       const items = parseReply(rawReply);
       const active = isChatActive(convId);
