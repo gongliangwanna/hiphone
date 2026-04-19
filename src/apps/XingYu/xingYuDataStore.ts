@@ -7,6 +7,7 @@ import {
   loadCharacterMemoryFromIdb,
   startCharacterMemoryIdbSync,
 } from '@/platform/ai/characterMemoryStore';
+import { _appendMessage } from '@/platform/ai/memoryWriter';
 import { uid } from '@/platform/utils/uid';
 import type {
   Conversation,
@@ -716,14 +717,7 @@ export const useXYData = create<XingYuDataState>()(
           timestamp: Date.now(),
           ...(quoteRef ? { quoteRef } : {}),
         };
-        set((s) => ({
-          messages: [...s.messages, msg],
-          conversations: s.conversations.map((c) =>
-            c.id === convId
-              ? { ...c, lastMsg: text, lastTime: Date.now(), unread: 0 }
-              : c,
-          ),
-        }));
+        _appendMessage(msg, 'xingyu');
         scheduleIdolReply(convId, get);
       },
 
@@ -731,14 +725,7 @@ export const useXYData = create<XingYuDataState>()(
         const previewTitle = noteRef.title || '无标题';
         const text = `[备忘录分享] ${previewTitle}\n${noteRef.body}`;
         const msg: Message = { id: uid(), convId, senderId: 'me', type: 'text', text, noteRef, timestamp: Date.now() };
-        set((s) => ({
-          messages: [...s.messages, msg],
-          conversations: s.conversations.map((c) =>
-            c.id === convId
-              ? { ...c, lastMsg: `[备忘录] ${previewTitle}`, lastTime: Date.now(), unread: 0 }
-              : c,
-          ),
-        }));
+        _appendMessage(msg, 'xingyu');
         scheduleIdolReply(convId, get);
       },
 
@@ -747,40 +734,19 @@ export const useXYData = create<XingYuDataState>()(
         if (lyricsText) parts.push(`\n歌词:\n${lyricsText}`);
         const text = parts.join('');
         const msg: Message = { id: uid(), convId, senderId: 'me', type: 'text', text, songRef, timestamp: Date.now() };
-        set((s) => ({
-          messages: [...s.messages, msg],
-          conversations: s.conversations.map((c) =>
-            c.id === convId
-              ? { ...c, lastMsg: `[音乐] ${songRef.title}`, lastTime: Date.now(), unread: 0 }
-              : c,
-          ),
-        }));
+        _appendMessage(msg, 'xingyu');
         scheduleIdolReply(convId, get);
       },
 
       sendImageMessage: (convId, imageUrl) => {
         const msg: Message = { id: uid(), convId, senderId: 'me', type: 'image', imageUrl, timestamp: Date.now() };
-        set((s) => ({
-          messages: [...s.messages, msg],
-          conversations: s.conversations.map((c) =>
-            c.id === convId
-              ? { ...c, lastMsg: '[图片]', lastTime: Date.now(), unread: 0 }
-              : c,
-          ),
-        }));
+        _appendMessage(msg, 'xingyu');
         scheduleIdolReply(convId, get);
       },
 
       sendStickerMessage: (convId, stickerUrl, stickerDesc) => {
         const msg: Message = { id: uid(), convId, senderId: 'me', type: 'sticker', stickerUrl, stickerDesc, timestamp: Date.now() };
-        set((s) => ({
-          messages: [...s.messages, msg],
-          conversations: s.conversations.map((c) =>
-            c.id === convId
-              ? { ...c, lastMsg: '[表情]', lastTime: Date.now(), unread: 0 }
-              : c,
-          ),
-        }));
+        _appendMessage(msg, 'xingyu');
         scheduleIdolReply(convId, get);
       },
 
@@ -1125,13 +1091,8 @@ export const useXYData = create<XingYuDataState>()(
         const now = Date.now();
         const built = buildForwardedMessage(msg, targetConvId, now);
         if (!built) return;
-        const { newMsg, preview } = built;
-        set((s) => ({
-          messages: [...s.messages, newMsg],
-          conversations: s.conversations.map((c) =>
-            c.id === targetConvId ? { ...c, lastMsg: preview, lastTime: now, unread: 0 } : c,
-          ),
-        }));
+        const { newMsg } = built;
+        _appendMessage(newMsg, 'xingyu');
         scheduleIdolReply(targetConvId, get);
       },
 
@@ -1142,13 +1103,15 @@ export const useXYData = create<XingYuDataState>()(
           .map((m, i) => buildForwardedMessage(m, targetConvId, now + i))
           .filter((b): b is { newMsg: Message; preview: string } => b !== null);
         if (built.length === 0) return;
-        const newMsgs = built.map((b) => b.newMsg);
+        for (const b of built) {
+          _appendMessage(b.newMsg, 'xingyu');
+        }
+        // Override the lastMsg with the batch preview (matches existing behaviour)
         const lastPreview = `[转发] ${built.length}条消息`;
         set((s) => ({
-          messages: [...s.messages, ...newMsgs],
           conversations: s.conversations.map((c) =>
             c.id === targetConvId
-              ? { ...c, lastMsg: lastPreview, lastTime: now + built.length, unread: 0 }
+              ? { ...c, lastMsg: lastPreview, lastTime: now + built.length }
               : c,
           ),
         }));
@@ -1189,10 +1152,12 @@ export const useXYData = create<XingYuDataState>()(
           forwardCard: { title, messages: forwarded, preview },
           timestamp: now,
         };
+        _appendMessage(cardMsg, 'xingyu');
+        // Override the default "[聊天记录：<title>]" preview with the simpler
+        // "[聊天记录]" to match the existing UI expectation.
         set((s) => ({
-          messages: [...s.messages, cardMsg],
           conversations: s.conversations.map((c) =>
-            c.id === targetConvId ? { ...c, lastMsg: '[聊天记录]', lastTime: now, unread: 0 } : c,
+            c.id === targetConvId ? { ...c, lastMsg: '[聊天记录]' } : c,
           ),
         }));
         scheduleIdolReply(targetConvId, get);

@@ -22,6 +22,7 @@ import { parseReply } from './replyParser';
 import { filterReply } from './replyFilters';
 import { buildDeviceContext } from './deviceContext';
 import { uid } from './heartbeatTools';
+import { _appendMessage } from './memoryWriter';
 import type { Message } from '@/apps/XingYu/data';
 
 // ---------------------------------------------------------------------------
@@ -223,13 +224,5 @@ function insertMessage(convId: string, characterId: string, text: string) {
     text,
     timestamp: now,
   };
-  const state = useXYData.getState();
-  useXYData.setState({
-    messages: [...state.messages, msg],
-    conversations: state.conversations.map((c) =>
-      c.id === convId
-        ? { ...c, lastMsg: text.slice(0, 60), lastTime: now }
-        : c,
-    ),
-  });
+  _appendMessage(msg, 'xingyu');
 }

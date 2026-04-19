@@ -68,17 +68,28 @@ export function _appendMessage(msg: Message, source: MemorySource): void {
 // ════════════════════════════════════════════════════════════════
 
 function derivePreview(msg: Message): string {
+  // Matches the existing per-action convention in xingYuDataStore:
+  //   - plain text    → full text (UI truncates on render)
+  //   - note share    → "[备忘录] <title>"
+  //   - song share    → "[音乐] <title>"
+  //   - image         → "[图片]"
+  //   - sticker       → "[表情]"
+  //   - forward       → "[聊天记录：<title>]"
+  //   - heartbeat_log → full text
   switch (msg.type) {
-    case 'text':
-      return (msg.text ?? '').slice(0, 60);
+    case 'text': {
+      if (msg.noteRef) return `[备忘录] ${msg.noteRef.title || '无标题'}`;
+      if (msg.songRef) return `[音乐] ${msg.songRef.title}`;
+      return msg.text ?? '';
+    }
     case 'image':
       return '[图片]';
     case 'sticker':
-      return msg.stickerDesc ? `[表情：${msg.stickerDesc}]` : '[表情]';
+      return '[表情]';
     case 'forward_card':
       return `[聊天记录：${msg.forwardCard.title}]`;
     case 'heartbeat_log':
-      return (msg.text ?? '').slice(0, 60);
+      return msg.text ?? '';
     default:
       return '';
   }

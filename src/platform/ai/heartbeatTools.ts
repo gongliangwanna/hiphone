@@ -11,6 +11,7 @@ import { useCharacterStore } from '@/platform/stores/characterStore';
 import { useHeartbeatStore } from '@/platform/stores/heartbeatStore';
 import { notesRegistry, type NotesDataState } from '@/apps/Notes/notesDataStore';
 import { runAIChat } from './aiChatEngine';
+import { _appendMessage } from './memoryWriter';
 import type { Message, Moment } from '@/apps/XingYu/data';
 import type { StoreApi, UseBoundStore } from 'zustand';
 
@@ -265,15 +266,7 @@ function execSendMessage(
     proactive: true,
   };
 
-  const currentState = useXYData.getState();
-  useXYData.setState({
-    messages: [...currentState.messages, msg],
-    conversations: currentState.conversations.map((c) =>
-      c.id === convId
-        ? { ...c, lastMsg: text.slice(0, 60), lastTime: now, unread: c.unread + 1 }
-        : c,
-    ),
-  });
+  _appendMessage(msg, 'heartbeat');
 
   useHeartbeatStore.getState().pushLog({
     characterId,

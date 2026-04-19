@@ -36,6 +36,7 @@ import { assemblePrompt, type ChatMessage } from './promptAssembly';
 import { buildDeviceContext } from './deviceContext';
 import { buildHeartbeatFormatOverride } from './heartbeatPrompt';
 import { executeTool, resetHeartbeatLimits, getCharacterAlias, resolveCharacterId, uid } from './heartbeatTools';
+import { _appendMessage } from './memoryWriter';
 import type { Message } from '@/apps/XingYu/data';
 
 // ---------------------------------------------------------------------------
@@ -415,10 +416,7 @@ async function runHeartbeat(
         text: parts.join('\n'),
         timestamp: Date.now(),
       };
-      const currentState = useXYData.getState();
-      useXYData.setState({
-        messages: [...currentState.messages, logMsg],
-      });
+      _appendMessage(logMsg, 'heartbeat');
     }
   }
 
