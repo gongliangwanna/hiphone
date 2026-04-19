@@ -1,0 +1,9 @@
+{
+  "id": "ai-chat",
+  "name": "AI 陪聊",
+  "version": "1.0.0",
+  "entry": "App.tsx",
+  "icon": "icon.svg",
+  "perspectiveAware": false,
+  "description": "demo: @hiphone/ai.chatWithCharacter session — multi-turn chat, persistent toggle"
+}

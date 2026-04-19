@@ -11,8 +11,18 @@
 
 import { useAIConfigStore } from '@/platform/stores/aiConfigStore';
 import { useCharacterStore } from '@/platform/stores/characterStore';
+import { usePersonaStore } from '@/platform/stores/personaStore';
+import { useWorldBookStore } from '@/platform/stores/worldBookStore';
+import { useStickerStore } from '@/apps/XingYu/stickerStore';
 import { getAdapter } from '@/platform/ai/providers';
 import { chatComplete } from '@/platform/ai/chatComplete';
+import { assemblePrompt } from '@/platform/ai/promptAssembly';
+import { buildDeviceContext } from '@/platform/ai/deviceContext';
+import {
+  useCharacterMemory,
+  type MemoryEntry,
+} from '@/platform/ai/characterMemoryStore';
+import { getCurrentAppId } from './context';
 
 // ════════════════════════════════════════════════════════════════
 // Public types
@@ -173,4 +183,290 @@ export function extractPlainText(raw: string): string {
   } catch {
     return raw;
   }
+}
+
+// ════════════════════════════════════════════════════════════════
+// Level 2 — ChatSession (character chat with memory)
+// ════════════════════════════════════════════════════════════════
+
+export interface ChatOptions {
+  persistent?: boolean;
+  signal?: AbortSignal;
+}
+
+export interface SessionEntry {
+  role: 'user' | 'assistant';
+  speakerId: string;
+  content: string;
+  timestamp: number;
+}
+
+export interface MirrorOption {
+  mirror?: boolean;
+}
+
+export interface ChatSession {
+  readonly characterId: string;
+  readonly persistent: boolean;
+  readonly history: readonly SessionEntry[];
+
+  send(content: string, opts?: MirrorOption): Promise<string>;
+  streamSend(content: string, opts?: MirrorOption): AsyncIterable<string>;
+
+  append(
+    entry: { role: 'user' | 'assistant'; content: string; speakerId?: string },
+    opts?: MirrorOption,
+  ): void;
+
+  replyToLast(opts?: MirrorOption): Promise<string>;
+  streamReplyToLast(opts?: MirrorOption): AsyncIterable<string>;
+
+  abort(): void;
+}
+
+export function chatWithCharacter(
+  characterId: string,
+  options: ChatOptions = {},
+): ChatSession {
+  const foundCharacter = useCharacterStore
+    .getState()
+    .characters.find((c) => c.id === characterId);
+  if (!foundCharacter) throw new AICharacterNotFoundError(characterId);
+  // Once inside the closures below, TS loses the narrowing — rebind to
+  // a non-null constant so callLLM can reference it freely.
+  const character = foundCharacter;
+
+  const persistent = options.persistent === true;
+  // Capture appId opportunistically — tests (and potential future cases
+  // where Level 2 is used from platform code) may not have a sandbox
+  // context active. source defaults to 'app:unknown' in that case.
+  let capturedAppId: string | null = null;
+  try {
+    capturedAppId = getCurrentAppId();
+  } catch {
+    capturedAppId = null;
+  }
+  const sessionAppId = capturedAppId || 'unknown';
+  const source: MemoryEntry['source'] = `app:${sessionAppId}`;
+
+  // persistent=false: snapshot the character's memory at creation time
+  // so subsequent concurrent writes from elsewhere don't leak in.
+  const snapshot: readonly MemoryEntry[] | null = persistent
+    ? null
+    : useCharacterMemory.getState().getSnapshot(characterId);
+
+  const buffer: SessionEntry[] = [];
+  const controllers = new Set<AbortController>();
+
+  // ── Internal helpers ──────────────────────────────────────────
+
+  function doAppend(
+    entry: { role: 'user' | 'assistant'; content: string; speakerId?: string },
+    mirror: boolean,
+  ): void {
+    const speakerId =
+      entry.speakerId ?? (entry.role === 'user' ? 'me' : characterId);
+
+    buffer.push({
+      role: entry.role,
+      speakerId,
+      content: entry.content,
+      timestamp: Date.now(),
+    });
+
+    if (persistent && mirror) {
+      useCharacterMemory.getState().append(characterId, {
+        role: entry.role,
+        speakerId,
+        content: entry.content,
+        source,
+      });
+    }
+  }
+
+  async function callLLM(controller: AbortController): Promise<string> {
+    const provider = requireProvider();
+
+    const persona = usePersonaStore.getState().getActivePersona();
+    const worldBookChunk = useWorldBookStore.getState().buildSystemPromptChunk();
+    const aiConfig = useAIConfigStore.getState();
+    const allCharacters = useCharacterStore.getState().characters;
+    const charactersById = new Map(
+      allCharacters.map((c) => [c.id, { id: c.id, name: c.name }]),
+    );
+    const allStickers = useStickerStore.getState().packs.flatMap((pack) =>
+      pack.stickers.map((s) => ({ id: s.id, description: s.description })),
+    );
+
+    // Base entries: live memory (persistent=true) or snapshot (persistent=false).
+    const baseEntries = persistent
+      ? useCharacterMemory.getState().getAll(characterId)
+      : (snapshot ?? []);
+
+    // Overlay the session buffer that hasn't been mirrored into memoryStore.
+    // For persistent=true+mirror=true flows, buffer entries are already in
+    // memoryStore so we'd double-count; suppress by skipping buffer items
+    // whose content+timestamp matches the tail of base.
+    const baseIds = new Set(baseEntries.map((e) => `${e.createdAt}|${e.speakerId}|${e.content}`));
+    const overlay: MemoryEntry[] = [];
+    for (let i = 0; i < buffer.length; i++) {
+      const b = buffer[i]!;
+      const key = `${b.timestamp}|${b.speakerId}|${b.content}`;
+      if (baseIds.has(key)) continue;
+      overlay.push({
+        id: `session-buf-${i}`,
+        characterId,
+        role: b.role,
+        speakerId: b.speakerId,
+        content: b.content,
+        source,
+        createdAt: b.timestamp,
+      });
+    }
+
+    const memoryEntries = [...baseEntries, ...overlay];
+
+    const { messages } = assemblePrompt({
+      character: {
+        name: character.name,
+        description: character.description,
+        personality: character.personality,
+        scenario: character.scenario,
+        systemPrompt: character.systemPrompt,
+        postHistoryInstructions: character.postHistoryInstructions,
+        messageExamples: character.messageExamples,
+      },
+      persona: {
+        name: persona?.name ?? '用户',
+        description: persona?.description ?? '',
+      },
+      aiConfig: {
+        systemPrompt: aiConfig.systemPrompt,
+        postHistoryInstructions: aiConfig.postHistoryInstructions,
+        contextWindow: aiConfig.contextWindow,
+        maxTokens: aiConfig.maxTokens,
+        keepRecentMessages: aiConfig.keepRecentMessages,
+        worldInfoBudgetPercent: aiConfig.worldInfoBudgetPercent,
+        enableVision: aiConfig.enableVision,
+      },
+      worldBookChunk,
+      memoryEntries,
+      currentCharId: characterId,
+      charactersById,
+      now: new Date(),
+      deviceContext: buildDeviceContext(),
+      availableStickers: allStickers.length > 0 ? allStickers : undefined,
+    });
+
+    return chatComplete(
+      { endpoint: provider.endpoint, apiKey: provider.apiKey, model: provider.model, providerId: provider.providerId },
+      messages,
+      { maxTokens: provider.maxTokens, temperature: provider.temperature },
+      controller.signal,
+    );
+  }
+
+  // ── Public methods ────────────────────────────────────────────
+
+  async function send(
+    content: string,
+    opts: MirrorOption = {},
+  ): Promise<string> {
+    const mirror = opts.mirror !== false;
+    const controller = new AbortController();
+    if (options.signal) {
+      options.signal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
+    controllers.add(controller);
+    try {
+      doAppend({ role: 'user', content }, mirror);
+      const reply = await callLLM(controller);
+      if (controller.signal.aborted) throw new AIAbortedError();
+      doAppend({ role: 'assistant', content: reply, speakerId: characterId }, mirror);
+      return reply;
+    } finally {
+      controllers.delete(controller);
+    }
+  }
+
+  async function* streamSend(
+    content: string,
+    opts: MirrorOption = {},
+  ): AsyncIterable<string> {
+    const mirror = opts.mirror !== false;
+    const controller = new AbortController();
+    if (options.signal) {
+      options.signal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
+    controllers.add(controller);
+    try {
+      doAppend({ role: 'user', content }, mirror);
+      const reply = await callLLM(controller);
+      if (controller.signal.aborted) throw new AIAbortedError();
+      doAppend({ role: 'assistant', content: reply, speakerId: characterId }, mirror);
+      yield reply;
+    } finally {
+      controllers.delete(controller);
+    }
+  }
+
+  function append(
+    entry: { role: 'user' | 'assistant'; content: string; speakerId?: string },
+    opts: MirrorOption = {},
+  ): void {
+    doAppend(entry, opts.mirror !== false);
+  }
+
+  async function replyToLast(opts: MirrorOption = {}): Promise<string> {
+    const mirror = opts.mirror !== false;
+    const controller = new AbortController();
+    if (options.signal) {
+      options.signal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
+    controllers.add(controller);
+    try {
+      const reply = await callLLM(controller);
+      if (controller.signal.aborted) throw new AIAbortedError();
+      doAppend({ role: 'assistant', content: reply, speakerId: characterId }, mirror);
+      return reply;
+    } finally {
+      controllers.delete(controller);
+    }
+  }
+
+  async function* streamReplyToLast(opts: MirrorOption = {}): AsyncIterable<string> {
+    const mirror = opts.mirror !== false;
+    const controller = new AbortController();
+    if (options.signal) {
+      options.signal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
+    controllers.add(controller);
+    try {
+      const reply = await callLLM(controller);
+      if (controller.signal.aborted) throw new AIAbortedError();
+      doAppend({ role: 'assistant', content: reply, speakerId: characterId }, mirror);
+      yield reply;
+    } finally {
+      controllers.delete(controller);
+    }
+  }
+
+  function abort(): void {
+    for (const c of controllers) c.abort();
+    controllers.clear();
+  }
+
+  return {
+    characterId,
+    persistent,
+    get history() {
+      return buffer as readonly SessionEntry[];
+    },
+    send,
+    streamSend,
+    append,
+    replyToLast,
+    streamReplyToLast,
+    abort,
+  };
 }
