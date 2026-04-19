@@ -29,7 +29,8 @@ export type InstallErrorKind =
   | 'entry-missing'
   | 'compile'
   | 'uninstall-builtin'
-  | 'io';
+  | 'io'
+  | 'user-cancelled';
 
 export class InstallError extends Error {
   constructor(
@@ -52,6 +53,17 @@ export type InstallProgressEvent =
 
 export interface InstallOptions {
   onProgress?: (event: InstallProgressEvent) => void;
+  /**
+   * Called after manifest validation when the incoming app's id matches an
+   * already-installed user app. The caller inspects the version diff and
+   * resolves true (continue upgrade) or false (abort — installer will throw
+   * InstallError('user-cancelled')). If not provided, upgrades proceed
+   * automatically (current behavior).
+   */
+  onUpgradeDetected?: (info: {
+    existing: { id: string; name: string; version: string };
+    incoming: { id: string; name: string; version: string };
+  }) => boolean | Promise<boolean>;
 }
 
 export interface InstallResult {
