@@ -312,6 +312,11 @@ function buildSystemBlock(
   //                        emitted only when their input is non-empty.
   const hasStickers = availableStickers && availableStickers.length > 0;
   const hasTools = availableTools && availableTools.length > 0;
+  // Note: empty-string snapshot still counts as "has app prompt" here so
+  // the caller is recognised as having opted into the M4.2 unified path;
+  // the chunk 6.5 renderer at line ~363 separately suppresses the
+  // `[当前任务]` block when the snapshot is blank/whitespace-only. This
+  // asymmetry is intentional — `'' → unified branch but no 6.5`.
   const hasAppPrompt = appSystemPromptSnapshot !== undefined;
   const useLegacy = hasStickers && !hasTools && !hasAppPrompt;
 
