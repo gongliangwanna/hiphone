@@ -14,6 +14,7 @@
 
 import { estimateTokens } from './tokenEstimator';
 import type { MemoryEntry } from './characterMemoryStore';
+import type { ToolDefinition } from './toolRegistry';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -73,6 +74,12 @@ export interface PromptInput {
    * in the system block. Used by heartbeat agent to inject ReAct format instead.
    */
   formatOverride?: string;
+  /** Platform-captured app id for this session (used to gate M4.2 chunks). */
+  currentAppId?: string;
+  /** Tool Registry snapshot; drives chunk 8 [可用动作]. */
+  availableTools?: ToolDefinition[];
+  /** appSystemPromptRegistry snapshot; drives chunk 6.5 [当前任务]. */
+  appSystemPromptSnapshot?: string;
 }
 
 // Multimodal content parts (OpenAI Vision format)
@@ -247,6 +254,8 @@ function buildSystemBlock(
   worldBookChunk: string,
   availableStickers?: AvailableSticker[],
   formatOverride?: string,
+  availableTools?: ToolDefinition[],
+  appSystemPromptSnapshot?: string,
 ): string {
   const chunks: string[] = [];
 
@@ -291,31 +300,38 @@ function buildSystemBlock(
     chunks.push(`[对话示例]\n${character.messageExamples.trim()}`);
   }
 
-  // 7-8. Format instructions + sticker inventory (or formatOverride)
+  // 6.5 / 7 / 8 — Format / tools / app-task chunks.
+  //
+  // Priority (first match wins):
+  //   1. formatOverride  → legacy ReAct path (heartbeat). Everything else skipped.
+  //   2. Legacy XingYu   → old 7 [回复格式] + [可用表情包]. Fires when availableStickers
+  //                        is set AND neither tools nor appSystemPromptSnapshot is
+  //                        present. Preserves pre-migration XingYu behavior.
+  //   3. Unified M4.2    → 6.5 [当前任务] + 7 [回复格式] + 8 [可用动作].
+  //                        Default when the M4.2 path is relevant. Chunks 6.5/8 are
+  //                        emitted only when their input is non-empty.
+  const hasStickers = availableStickers && availableStickers.length > 0;
+  const hasTools = availableTools && availableTools.length > 0;
+  const hasAppPrompt = appSystemPromptSnapshot !== undefined;
+  const useLegacy = hasStickers && !hasTools && !hasAppPrompt;
+
   if (formatOverride) {
     chunks.push(formatOverride);
-  } else {
-    const hasStickers = availableStickers && availableStickers.length > 0;
-
+  } else if (useLegacy) {
+    // Legacy path — pre-migration XingYu style
     const formatLines = [
       `[回复格式]`,
       `你必须用 JSON 数组格式回复，每条消息是数组中的一个对象。像真人发微信一样，发多条简短消息而不是一条长消息。`,
       `文字消息格式：{"type":"text","content":"消息内容"}`,
     ];
 
-    if (hasStickers) {
-      const example = availableStickers![0]!;
-      formatLines.push(
-        `表情包消息格式：{"type":"sticker","stickerId":"表情ID"}`,
-      );
-      formatLines.push(
-        `示例：[{"type":"text","content":"哈哈好的"},{"type":"sticker","stickerId":"${example.id}"}]`,
-      );
-    } else {
-      formatLines.push(
-        `示例：[{"type":"text","content":"你好呀"},{"type":"text","content":"今天过得怎么样？"}]`,
-      );
-    }
+    const example = availableStickers![0]!;
+    formatLines.push(
+      `表情包消息格式：{"type":"sticker","stickerId":"表情ID"}`,
+    );
+    formatLines.push(
+      `示例：[{"type":"text","content":"哈哈好的"},{"type":"sticker","stickerId":"${example.id}"}]`,
+    );
 
     formatLines.push(
       `修改个性签名：{"type":"signature","text":"新的签名内容"}`,
@@ -329,22 +345,52 @@ function buildSystemBlock(
       `- 不要使用动作描述（如 *叹气*、*微笑*）`,
       `- 不要使用 markdown 格式`,
       `- 只输出 JSON 数组，不要输出其他内容`,
+      `- 表情包穿插在文字消息之间使用能提升活人感，适度使用，不要每条都发`,
+      `- stickerId 必须使用下方列表中存在的 ID，不要编造`,
     );
-
-    if (hasStickers) {
-      formatLines.push(
-        `- 表情包穿插在文字消息之间使用能提升活人感，适度使用，不要每条都发`,
-        `- stickerId 必须使用下方列表中存在的 ID，不要编造`,
-      );
-    }
 
     chunks.push(formatLines.join('\n'));
 
-    if (hasStickers) {
-      const stickerList = availableStickers
-        .map((s) => `- ${s.id}：${s.description}`)
-        .join('\n');
-      chunks.push(`[可用表情包]\n你可以发送以下表情：\n${stickerList}`);
+    const stickerList = availableStickers!
+      .map((s) => `- ${s.id}：${s.description}`)
+      .join('\n');
+    chunks.push(`[可用表情包]\n你可以发送以下表情：\n${stickerList}`);
+  } else {
+    // Unified M4.2 path — default for M4.2-aware callers (and back-compat
+    // fallback when nothing triggers the legacy path).
+
+    // 6.5 — app-specific "current task" snapshot (optional)
+    if (appSystemPromptSnapshot && appSystemPromptSnapshot.trim()) {
+      chunks.push(`[当前任务]\n${appSystemPromptSnapshot.trim()}`);
+    }
+
+    // 7 — unified reply format
+    chunks.push(
+      [
+        `[回复格式]`,
+        `你用 JSON 数组回复，每条消息是以下两类之一：`,
+        ``,
+        `1. 叙述 / 对白：`,
+        `   {"type":"text","content":"..."}`,
+        ``,
+        `2. 执行动作：`,
+        `   {"type":"action","name":"<动作名>","params":{...}}`,
+        ``,
+        `示例：[{"type":"text","content":"欢迎"},{"type":"action","name":"<动作>","params":{...}}]`,
+        ``,
+        `只输出 JSON 数组，不要其他内容。`,
+      ].join('\n'),
+    );
+
+    // 8 — Tool Registry derived list (optional)
+    if (hasTools) {
+      const toolLines = availableTools!.map((t) => {
+        const params = Object.entries(t.parameters)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join(', ');
+        return `- ${t.name}: ${t.description}\n  参数: { ${params} }`;
+      });
+      chunks.push(`[可用动作]\n${toolLines.join('\n')}`);
     }
   }
 
@@ -416,7 +462,16 @@ export interface PromptInspection {
 export function inspectPrompt(input: PromptInput): PromptInspection {
   const { character, persona, aiConfig, worldBookChunk, now, deviceContext, availableStickers, formatOverride } = input;
 
-  let systemBlock = buildSystemBlock(character, persona, aiConfig, worldBookChunk, availableStickers, formatOverride);
+  let systemBlock = buildSystemBlock(
+    character,
+    persona,
+    aiConfig,
+    worldBookChunk,
+    availableStickers,
+    formatOverride,
+    input.availableTools,
+    input.appSystemPromptSnapshot,
+  );
   systemBlock = expandMacros(systemBlock, character, persona, now);
 
   let postHistory = buildPostHistory(character, aiConfig, now, deviceContext);
@@ -492,7 +547,16 @@ export function assemblePrompt(input: PromptInput): PromptOutput {
   const { character, persona, aiConfig, worldBookChunk, now, deviceContext, availableStickers, formatOverride } = input;
 
   // Phase 1 — System block.
-  let systemBlock = buildSystemBlock(character, persona, aiConfig, worldBookChunk, availableStickers, formatOverride);
+  let systemBlock = buildSystemBlock(
+    character,
+    persona,
+    aiConfig,
+    worldBookChunk,
+    availableStickers,
+    formatOverride,
+    input.availableTools,
+    input.appSystemPromptSnapshot,
+  );
   systemBlock = expandMacros(systemBlock, character, persona, now);
 
   // Phase 3 — Post-history (built before Phase 2 so we can subtract its cost
