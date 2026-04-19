@@ -21,6 +21,9 @@ describe('getAppsWithUserInstalled', () => {
           iconDataUrl: 'data:image/png;base64,xxx',
           page: 1,
           perspectiveAware: false,
+          version: '1.0.0',
+          installedAt: 1_700_000_000_000,
+          sizeBytes: 0,
         },
       ],
     });
@@ -33,7 +36,16 @@ describe('getAppsWithUserInstalled', () => {
   it('uses default icon when user app has no iconDataUrl', () => {
     useInstalledUserAppsStore.setState({
       apps: [
-        { id: 'x', name: 'X', iconDataUrl: null, page: 1, perspectiveAware: false },
+        {
+          id: 'x',
+          name: 'X',
+          iconDataUrl: null,
+          page: 1,
+          perspectiveAware: false,
+          version: '1.0.0',
+          installedAt: 1_700_000_000_000,
+          sizeBytes: 0,
+        },
       ],
     });
     const apps = getAppsWithUserInstalled();

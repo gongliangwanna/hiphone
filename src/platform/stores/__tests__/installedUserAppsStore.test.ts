@@ -10,6 +10,9 @@ const sample: InstalledUserApp = {
   iconDataUrl: null,
   page: 1,
   perspectiveAware: false,
+  version: '1.0.0',
+  installedAt: 1_700_000_000_000,
+  sizeBytes: 512,
 };
 
 describe('installedUserAppsStore', () => {
@@ -49,5 +52,23 @@ describe('installedUserAppsStore', () => {
       { ...sample, id: 'b' },
     ]);
     expect(useInstalledUserAppsStore.getState().apps.map((a) => a.id)).toEqual(['a', 'b']);
+  });
+
+  it('exposes version, installedAt, sizeBytes on stored record', () => {
+    const app: InstalledUserApp = {
+      id: 'meta-rich',
+      name: 'Meta Rich',
+      iconDataUrl: null,
+      page: 1,
+      perspectiveAware: false,
+      version: '1.2.3',
+      installedAt: 1_700_000_000_000,
+      sizeBytes: 2_048,
+    };
+    useInstalledUserAppsStore.getState().add(app);
+    const stored = useInstalledUserAppsStore.getState().apps[0]!;
+    expect(stored.version).toBe('1.2.3');
+    expect(stored.installedAt).toBe(1_700_000_000_000);
+    expect(stored.sizeBytes).toBe(2_048);
   });
 });

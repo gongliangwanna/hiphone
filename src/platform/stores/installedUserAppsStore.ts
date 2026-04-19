@@ -7,6 +7,12 @@ export interface InstalledUserApp {
   iconDataUrl: string | null;
   page: number;
   perspectiveAware: boolean;
+  /** From manifest.version; fallback '1.0.0' for legacy records missing this field. */
+  version: string;
+  /** Unix ms when the app was installed (Date.now() at install time). */
+  installedAt: number;
+  /** Sum of compiled bundle byte lengths (UTF-8); 0 for legacy records. */
+  sizeBytes: number;
 }
 
 interface InstalledUserAppsState {
