@@ -294,7 +294,7 @@ export function AISettingsPage() {
         <ListSection title="生成参数">
           <SliderRow label="Temperature" value={temperature} min={0} max={2} step={0.05} onChange={setTemperature} />
           <SliderRow label="Top P" value={topP} min={0} max={1} step={0.05} onChange={setTopP} />
-          <SliderRow label="最大 Token" value={maxTokens} min={256} max={8192} step={256} onChange={setMaxTokens} />
+          <SliderRow label="最大 Token" value={maxTokens} min={1024} max={131072} step={1024} onChange={setMaxTokens} />
           <SliderRow label="频率惩罚" value={frequencyPenalty} min={0} max={2} step={0.05} onChange={setFrequencyPenalty} />
           <SliderRow label="存在惩罚" value={presencePenalty} min={0} max={2} step={0.05} onChange={setPresencePenalty} isLast />
         </ListSection>

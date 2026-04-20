@@ -100,7 +100,7 @@ export const useAIConfigStore = create<AIConfigState>()(
       modelListError: null,
 
       temperature: 0.8,
-      maxTokens: 2048,
+      maxTokens: 8192,
       topP: 0.9,
       frequencyPenalty: 0,
       presencePenalty: 0,
@@ -165,7 +165,7 @@ export const useAIConfigStore = create<AIConfigState>()(
       // ── Generation actions ──
 
       setTemperature: (v) => set({ temperature: Math.max(0, Math.min(2, v)) }),
-      setMaxTokens: (v) => set({ maxTokens: Math.max(1, Math.min(128000, v)) }),
+      setMaxTokens: (v) => set({ maxTokens: Math.max(1, Math.min(131072, v)) }),
       setTopP: (v) => set({ topP: Math.max(0, Math.min(1, v)) }),
       setFrequencyPenalty: (v) => set({ frequencyPenalty: Math.max(0, Math.min(2, v)) }),
       setPresencePenalty: (v) => set({ presencePenalty: Math.max(0, Math.min(2, v)) }),
