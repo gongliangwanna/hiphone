@@ -46,11 +46,25 @@ export function registerXingYuAi(): void {
       .packs.flatMap((pack) =>
         pack.stickers.map((s) => ({ id: s.id, description: s.description })),
       );
-    if (stickers.length === 0) return '';
-    return (
-      '当前可用表情：\n' +
-      stickers.map((s) => `${s.id}: ${s.description}`).join('\n')
-    );
+
+    const lines: string[] = [
+      '这是一场类似微信的即时聊天场景，请遵守以下风格：',
+      '- 用用户的语言回复，保持角色性格',
+      '- 每条消息简短自然，像真人聊微信——不要一次发很长的文本，拆成多条短消息更有活人感',
+      '- 不要使用动作描述（如 *叹气*、*微笑*）',
+      '- 不要使用 markdown 格式',
+    ];
+
+    if (stickers.length > 0) {
+      lines.push(
+        '- 表情包适度穿插在文字消息之间能提升活人感，不要每条都发；stickerId 必须从下方清单里选，不要编造',
+        '',
+        '当前可用表情：',
+        ...stickers.map((s) => `${s.id}: ${s.description}`),
+      );
+    }
+
+    return lines.join('\n');
   });
 }
 

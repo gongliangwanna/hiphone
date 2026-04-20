@@ -45,19 +45,29 @@ describe('xingYuRegister', () => {
     expect(getReplyRenderer('xingyu')).toBe(defaultXingYuRenderer);
   });
 
-  it('registered appSystemPrompt returns current sticker inventory', () => {
+  it('registered appSystemPrompt returns voice rules + current sticker inventory', () => {
     registerXingYuAi();
     const fn = getAppSystemPrompt('xingyu')!;
     const snapshot = fn();
+    // Voice rules (WeChat-style multi-bubble, no markdown, no *action*)
+    expect(snapshot).toContain('像真人聊微信');
+    expect(snapshot).toContain('不要使用动作描述');
+    expect(snapshot).toContain('不要使用 markdown');
+    // Sticker inventory + sticker usage tip
     expect(snapshot).toContain('当前可用表情');
     expect(snapshot).toContain('s1: 笑脸');
     expect(snapshot).toContain('s2: 哭脸');
+    expect(snapshot).toContain('表情包适度穿插');
   });
 
-  it('appSystemPrompt returns empty string when no stickers exist', () => {
+  it('appSystemPrompt still returns voice rules (but no sticker block) when no stickers exist', () => {
     useStickerStore.setState({ packs: [] } as never);
     registerXingYuAi();
-    expect(getAppSystemPrompt('xingyu')!()).toBe('');
+    const snapshot = getAppSystemPrompt('xingyu')!();
+    expect(snapshot).toContain('像真人聊微信');
+    expect(snapshot).toContain('不要使用 markdown');
+    expect(snapshot).not.toContain('当前可用表情');
+    expect(snapshot).not.toContain('表情包适度穿插');
   });
 
   it('registerXingYuAi is idempotent — second call does not duplicate tools', () => {
