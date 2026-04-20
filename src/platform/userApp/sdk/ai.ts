@@ -103,6 +103,10 @@ function buildErrorMessage(error: ParseError, knownTypes: string[]): string {
       return '[格式错误] 上条回复不符合 {type, param} 结构(有 item 缺少 type 或格式不对)。' +
              '请按 [回复格式] 要求重新输出 JSON 数组。';
     case 'unknown-type':
+      // Invariant: knownTypes is non-empty here. parseReply only returns
+      // 'unknown-type' when it's validating against a non-empty whitelist
+      // (see replyParser.ts — the type check is skipped entirely when the
+      // Set is empty). So `knownTypes.join(', ')` will never be blank.
       return `[格式错误] 你使用了未注册的 type "${error.badType}"。` +
              `当前可用 type 只有: ${knownTypes.join(', ')}。请只使用这些。`;
   }

@@ -367,6 +367,20 @@ function scheduleAICharacterReply(
   }
 
   const controller = new AbortController();
+
+  const showFailureBubble = (errText: string) => {
+    const s = useXYData.getState();
+    useXYData.setState({
+      messages: [
+        ...s.messages.filter((m) => m.id !== placeholderId),
+        { id: uid(), convId, senderId, type: 'text' as const, text: errText, timestamp: Date.now() },
+      ],
+      conversations: s.conversations.map((c) =>
+        c.id === convId ? { ...c, lastMsg: errText, lastTime: Date.now() } : c,
+      ),
+    });
+  };
+
   // Wrap session creation in withUserAppContext so the session captures
   // XingYu's appId — which in turn drives Tool Registry / Renderer /
   // AppSystemPrompt lookups frozen into the session for KV-cache
@@ -375,10 +389,12 @@ function scheduleAICharacterReply(
     chatWithCharacter(characterId, {
       persistent: true,
       signal: controller.signal,
-      // XingYu shows its own [AI 回复失败] bubble via the items.length===0
-      // branch below — suppress the platform's default toast so we don't
-      // double-notify the user.
-      onParseFailure: () => {},
+      // XingYu takes over the parse-exhaustion UX — show an inline chat
+      // bubble instead of the platform's default toast. Any callback
+      // (even `() => {}`) suppresses the toast; ours also shows the bubble.
+      onParseFailure: () => {
+        showFailureBubble('[AI 回复失败] 回复格式错误,已重试 3 次');
+      },
     }),
   );
   aiSessions.set(convId, { session: sessionInstance, controller });
@@ -400,20 +416,11 @@ function scheduleAICharacterReply(
         messages: s0.messages.filter((m) => m.id !== placeholderId),
       });
 
-      // M4.2.5: parse-exhausted path — session returns empty items.
-      // Show the same '[AI 回复失败]' bubble the catch-branch would show.
+      // Empty items can mean either (a) parse exhaustion — in which case
+      // onParseFailure already showed the failure bubble, OR (b) a
+      // legitimate LLM reply of `[]` (nothing to say). In either case
+      // there's nothing to render and no assistant entry to commit.
       if (reply.items.length === 0) {
-        const errText = '[AI 回复失败] 回复格式错误,已重试 3 次';
-        const s = useXYData.getState();
-        useXYData.setState({
-          messages: [
-            ...s.messages,
-            { id: uid(), convId, senderId, type: 'text' as const, text: errText, timestamp: Date.now() },
-          ],
-          conversations: s.conversations.map((c) =>
-            c.id === convId ? { ...c, lastMsg: errText, lastTime: Date.now() } : c,
-          ),
-        });
         return;
       }
 
