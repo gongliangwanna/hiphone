@@ -1,182 +1,135 @@
+// src/platform/ai/__tests__/replyParser.test.ts
 import { describe, it, expect } from 'vitest';
 import { parseReply } from '../replyParser';
 
-describe('parseReply', () => {
-  it('parses a valid JSON array of text items', () => {
-    const input = '[{"type":"text","content":"你好"},{"type":"text","content":"今天怎么样？"}]';
-    const result = parseReply(input);
-    expect(result).toEqual([
-      { type: 'text', content: '你好' },
-      { type: 'text', content: '今天怎么样？' },
+// Helper — the session always passes a populated Set in practice; tests
+// that don't care about type-whitelist use an empty Set (which disables
+// the check per the code).
+const ANY = new Set<string>();
+
+describe('parseReply — happy path', () => {
+  it('parses a valid array of text items', () => {
+    const input = '[{"type":"text","param":"你好"},{"type":"text","param":"今天怎样"}]';
+    const { items, error } = parseReply(input, ANY);
+    expect(error).toBeNull();
+    expect(items).toEqual([
+      { type: 'text', param: '你好' },
+      { type: 'text', param: '今天怎样' },
     ]);
   });
 
-  it('parses single-item array', () => {
-    const input = '[{"type":"text","content":"单条消息"}]';
-    const result = parseReply(input);
-    expect(result).toEqual([{ type: 'text', content: '单条消息' }]);
-  });
-
-  it('extracts JSON from ```json code block', () => {
-    const input = '```json\n[{"type":"text","content":"代码块里"}]\n```';
-    const result = parseReply(input);
-    expect(result).toEqual([{ type: 'text', content: '代码块里' }]);
-  });
-
-  it('extracts JSON from ``` code block without json tag', () => {
-    const input = '```\n[{"type":"text","content":"无标签"}]\n```';
-    const result = parseReply(input);
-    expect(result).toEqual([{ type: 'text', content: '无标签' }]);
-  });
-
-  it('extracts JSON from surrounding text', () => {
-    const input = '好的，这是我的回复：[{"type":"text","content":"嵌入文本中"}] 希望你喜欢';
-    const result = parseReply(input);
-    expect(result).toEqual([{ type: 'text', content: '嵌入文本中' }]);
-  });
-
-  it('falls back to single text message on invalid JSON', () => {
-    const input = '这不是JSON，只是普通文字回复';
-    const result = parseReply(input);
-    expect(result).toEqual([{ type: 'text', content: '这不是JSON，只是普通文字回复' }]);
-  });
-
-  it('falls back on empty array', () => {
-    const input = '[]';
-    const result = parseReply(input);
-    expect(result).toEqual([{ type: 'text', content: '[]' }]);
-  });
-
-  it('skips items with empty content', () => {
-    const input = '[{"type":"text","content":"有内容"},{"type":"text","content":""},{"type":"text","content":"也有"}]';
-    const result = parseReply(input);
-    expect(result).toEqual([
-      { type: 'text', content: '有内容' },
-      { type: 'text', content: '也有' },
+  it('parses items with object param', () => {
+    const input = '[{"type":"sticker","param":{"stickerId":"s1","content":"笑"}}]';
+    const { items, error } = parseReply(input, ANY);
+    expect(error).toBeNull();
+    expect(items).toEqual([
+      { type: 'sticker', param: { stickerId: 's1', content: '笑' } },
     ]);
   });
 
-  it('skips unknown types gracefully', () => {
-    const input = '[{"type":"text","content":"文字"},{"type":"sticker","emoji":"😂"},{"type":"text","content":"继续"}]';
-    const result = parseReply(input);
-    expect(result).toEqual([
-      { type: 'text', content: '文字' },
-      { type: 'text', content: '继续' },
-    ]);
+  it('parses items with array param', () => {
+    const input = '[{"type":"move","param":[3,5]}]';
+    const { items, error } = parseReply(input, ANY);
+    expect(error).toBeNull();
+    expect(items).toEqual([{ type: 'move', param: [3, 5] }]);
   });
 
-  it('trims content whitespace', () => {
-    const input = '[{"type":"text","content":"  有空格  "}]';
-    const result = parseReply(input);
-    expect(result).toEqual([{ type: 'text', content: '有空格' }]);
+  it('parses items with missing param (undefined)', () => {
+    const input = '[{"type":"pass"}]';
+    const { items, error } = parseReply(input, ANY);
+    expect(error).toBeNull();
+    expect(items).toEqual([{ type: 'pass', param: undefined }]);
   });
 
-  it('handles empty string input', () => {
-    const result = parseReply('');
-    expect(result).toEqual([{ type: 'text', content: '' }]);
-  });
-
-  it('handles whitespace-only input', () => {
-    const result = parseReply('   \n  ');
-    expect(result).toEqual([{ type: 'text', content: '' }]);
-  });
-
-  it('handles malformed items in array', () => {
-    const input = '[{"type":"text","content":"好的"},null,42,"string"]';
-    const result = parseReply(input);
-    expect(result).toEqual([{ type: 'text', content: '好的' }]);
-  });
-
-  it('parses single JSON object (not wrapped in array)', () => {
-    const input = '{"type":"sticker","stickerId":"stk-123"}';
-    const result = parseReply(input);
-    expect(result).toEqual([
-      { type: 'sticker', content: '[表情]', stickerId: 'stk-123' },
-    ]);
-  });
-
-  it('parses single text object (not wrapped in array)', () => {
-    const input = '{"type":"text","content":"单条消息"}';
-    const result = parseReply(input);
-    expect(result).toEqual([{ type: 'text', content: '单条消息' }]);
-  });
-
-  it('extracts single JSON object embedded in text', () => {
-    const input = '好的，给你发个表情 {"type":"sticker","stickerId":"stk-456"}';
-    const result = parseReply(input);
-    expect(result).toEqual([
-      { type: 'sticker', content: '[表情]', stickerId: 'stk-456' },
-    ]);
-  });
-
-  it('parses multiple JSON arrays separated by </string> tags', () => {
+  it('parses items with null / number / boolean param', () => {
     const input =
-      '[{"type":"text","content":"你问我？"}]</string>\n' +
-      '[{"type":"text","content":"而且你这问号什么意思"}]</string>\n' +
-      '[{"type":"text","content":"气得踢脚"}]</string>';
-    const result = parseReply(input);
-    expect(result).toEqual([
-      { type: 'text', content: '你问我？' },
-      { type: 'text', content: '而且你这问号什么意思' },
-      { type: 'text', content: '气得踢脚' },
+      '[{"type":"a","param":null},{"type":"b","param":42},{"type":"c","param":true}]';
+    const { items, error } = parseReply(input, ANY);
+    expect(error).toBeNull();
+    expect(items).toEqual([
+      { type: 'a', param: null },
+      { type: 'b', param: 42 },
+      { type: 'c', param: true },
     ]);
   });
 
-  it('parses multiple separate JSON arrays without tags', () => {
+  it('extracts from ```json code block', () => {
+    const input = '```json\n[{"type":"text","param":"hi"}]\n```';
+    const { items, error } = parseReply(input, ANY);
+    expect(error).toBeNull();
+    expect(items).toEqual([{ type: 'text', param: 'hi' }]);
+  });
+
+  it('extracts first [...] substring when surrounded by prose', () => {
+    const input = '好的:[{"type":"text","param":"hi"}] 就这样';
+    const { items, error } = parseReply(input, ANY);
+    expect(error).toBeNull();
+    expect(items).toEqual([{ type: 'text', param: 'hi' }]);
+  });
+});
+
+describe('parseReply — error cases', () => {
+  it('returns not-json when raw is plain text', () => {
+    const { items, error } = parseReply('我今天心情不错', ANY);
+    expect(items).toEqual([]);
+    expect(error).toEqual({ kind: 'not-json' });
+  });
+
+  it('returns not-json when raw is empty', () => {
+    const { items, error } = parseReply('', ANY);
+    expect(items).toEqual([]);
+    expect(error).toEqual({ kind: 'not-json' });
+  });
+
+  it('returns not-json when JSON parses but is not an array', () => {
+    const { items, error } = parseReply('{"type":"text","param":"hi"}', ANY);
+    expect(items).toEqual([]);
+    expect(error).toEqual({ kind: 'not-json' });
+  });
+
+  it('returns wrong-shape when an item lacks type', () => {
+    const { items, error } = parseReply('[{"param":"hi"}]', ANY);
+    expect(items).toEqual([]);
+    expect(error).toEqual({ kind: 'wrong-shape' });
+  });
+
+  it('returns wrong-shape when type is not a string', () => {
+    const { items, error } = parseReply('[{"type":42,"param":"hi"}]', ANY);
+    expect(items).toEqual([]);
+    expect(error).toEqual({ kind: 'wrong-shape' });
+  });
+
+  it('returns wrong-shape when an item is not an object (e.g., plain string)', () => {
+    const { items, error } = parseReply('["hi"]', ANY);
+    expect(items).toEqual([]);
+    expect(error).toEqual({ kind: 'wrong-shape' });
+  });
+
+  it('returns unknown-type when any type is outside the knownTypes set', () => {
+    const known = new Set(['text', 'sticker']);
     const input =
-      '[{"type":"text","content":"第一条"}]\n' +
-      '[{"type":"text","content":"第二条"}]';
-    const result = parseReply(input);
-    expect(result).toEqual([
-      { type: 'text', content: '第一条' },
-      { type: 'text', content: '第二条' },
-    ]);
+      '[{"type":"text","param":"hi"},{"type":"order_pizza","param":{}}]';
+    const { items, error } = parseReply(input, known);
+    expect(items).toEqual([]);
+    expect(error).toEqual({ kind: 'unknown-type', badType: 'order_pizza' });
   });
 
-  it('parses {type:"action",name,params} items with arbitrary params', () => {
-    const input = '[{"type":"action","name":"hammer_down","params":{"item":"vase","winner":"A","final":1200}}]';
-    const result = parseReply(input);
-    expect(result).toEqual([
-      { type: 'action', name: 'hammer_down', params: { item: 'vase', winner: 'A', final: 1200 } },
-    ]);
+  it('empty knownTypes set means no type check (for internal/renderer use)', () => {
+    const { items, error } = parseReply(
+      '[{"type":"any_type","param":"x"}]',
+      new Set(),
+    );
+    expect(error).toBeNull();
+    expect(items).toEqual([{ type: 'any_type', param: 'x' }]);
   });
 
-  it('parses mixed text + action items preserving order', () => {
+  it('mixed valid+invalid items → whole-array error (no partial commit)', () => {
+    const known = new Set(['text']);
     const input =
-      '[{"type":"text","content":"请出价"},{"type":"action","name":"bid_call","params":{"min":100}},{"type":"text","content":"有人加价吗"}]';
-    const result = parseReply(input);
-    expect(result).toEqual([
-      { type: 'text', content: '请出价' },
-      { type: 'action', name: 'bid_call', params: { min: 100 } },
-      { type: 'text', content: '有人加价吗' },
-    ]);
-  });
-
-  it('action items with missing params default to an empty object', () => {
-    const input = '[{"type":"action","name":"ready"}]';
-    const result = parseReply(input);
-    expect(result).toEqual([{ type: 'action', name: 'ready', params: {} }]);
-  });
-
-  it('action items with non-object params are rejected (dropped)', () => {
-    const input = '[{"type":"action","name":"x","params":"not-an-object"},{"type":"text","content":"after"}]';
-    const result = parseReply(input);
-    expect(result).toEqual([{ type: 'text', content: 'after' }]); // bad action dropped, text kept
-  });
-
-  it('action items with missing or non-string name are dropped', () => {
-    const input = '[{"type":"action","params":{}},{"type":"action","name":123,"params":{}}]';
-    const result = parseReply(input);
-    // both invalid → no action items; fall back to treating the whole string as text
-    expect(result).toEqual([{ type: 'text', content: input }]);
-  });
-
-  it('legacy sticker / signature items still parse correctly (backwards compat)', () => {
-    const input = '[{"type":"sticker","stickerId":"s1","content":"笑"},{"type":"signature","text":"新签名"}]';
-    const result = parseReply(input);
-    expect(result).toEqual([
-      { type: 'sticker', stickerId: 's1', content: '笑' },
-      { type: 'signature', text: '新签名' },
-    ]);
+      '[{"type":"text","param":"ok"},{"type":"unknown","param":"bad"}]';
+    const { items, error } = parseReply(input, known);
+    // integrity — any invalid item fails the whole array
+    expect(items).toEqual([]);
+    expect(error).toEqual({ kind: 'unknown-type', badType: 'unknown' });
   });
 });

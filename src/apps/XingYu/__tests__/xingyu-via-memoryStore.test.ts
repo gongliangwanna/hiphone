@@ -62,7 +62,7 @@ beforeEach(async () => {
 
 describe('XingYu sendMessage flow — memoryStore integration', () => {
   it('user send + AI reply → memoryStore has app-switch marker + user entry + ONE rendered assistant entry', async () => {
-    const rawJson = '[{"type":"text","content":"挺不错的呀"},{"type":"text","content":"阳光明媚"}]';
+    const rawJson = '[{"type":"text","param":"挺不错的呀"},{"type":"text","param":"阳光明媚"}]';
     vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue(rawJson);
 
     useXYData.getState().sendMessage('c-char-char-001', '今天天气怎么样');
@@ -129,7 +129,7 @@ describe('XingYu sendMessage flow — memoryStore integration', () => {
 
   it('sendImageMessage → memoryStore has "[图片 <url>]" user entry', async () => {
     vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue(
-      '[{"type":"text","content":"好可爱"}]',
+      '[{"type":"text","param":"好可爱"}]',
     );
 
     useXYData.getState().sendImageMessage(
@@ -157,7 +157,7 @@ describe('XingYu sendMessage flow — memoryStore integration', () => {
 
   it('sendStickerMessage → memoryStore has "[表情：desc]" user entry', async () => {
     vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue(
-      '[{"type":"text","content":"哈哈"}]',
+      '[{"type":"text","param":"哈哈"}]',
     );
 
     useXYData.getState().sendStickerMessage(

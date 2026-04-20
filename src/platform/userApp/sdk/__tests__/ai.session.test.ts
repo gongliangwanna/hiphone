@@ -146,7 +146,6 @@ describe('session.send (non-streaming)', () => {
     // text item; default renderer wraps with the speaker name.
     expect(reply.raw).toBe('reply A');
     expect(reply.rendered).toBe('小星: reply A');
-    expect(reply.text).toBe('reply A');
     expect(s.history.map((e) => e.content)).toEqual(['hello', '小星: reply A']);
     expect(useCharacterMemory.getState().getAll('char-001')).toHaveLength(0);
   });
@@ -305,7 +304,7 @@ describe('chatWithCharacter — app-switch system marker', () => {
 describe('chatWithCharacter — session captures registry snapshots at creation', () => {
   it('captures getTools(appId) + appSystemPromptRegistry.get(appId)() + appId once at creation time, passes through to assemblePrompt on every send', async () => {
     registerTools('ai-auction', [
-      { name: 'bid_call', description: '叫价', parameters: { min: 'number' } },
+      { type: 'bid_call', description: '叫价', param: '{min: number}' },
     ]);
     registerAppSystemPrompt('ai-auction', () => '你是拍卖会主持人');
 
@@ -321,7 +320,7 @@ describe('chatWithCharacter — session captures registry snapshots at creation'
     const input = spy.mock.calls[0]![0];
     expect(input.currentAppId).toBe('ai-auction');
     expect(input.availableTools).toEqual([
-      { name: 'bid_call', description: '叫价', parameters: { min: 'number' } },
+      { type: 'bid_call', description: '叫价', param: '{min: number}' },
     ]);
     expect(input.appSystemPromptSnapshot).toBe('你是拍卖会主持人');
 
@@ -366,9 +365,9 @@ describe('chatWithCharacter — session captures registry snapshots at creation'
   });
 });
 
-describe('chatWithCharacter — ChatReply shape (M4.2)', () => {
-  it('send returns ChatReply with raw + rendered + items + actions + text', async () => {
-    const rawJson = '[{"type":"text","content":"挺好"},{"type":"action","name":"bid_call","params":{"min":100}}]';
+describe('chatWithCharacter — ChatReply shape (M4.2.5)', () => {
+  it('send returns ChatReply with raw + rendered + items (unified {type, param})', async () => {
+    const rawJson = '[{"type":"text","param":"挺好"},{"type":"bid_call","param":{"min":100}}]';
     vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue(rawJson);
 
     const reply = await withUserAppContext('app-test', async () => {
@@ -378,19 +377,19 @@ describe('chatWithCharacter — ChatReply shape (M4.2)', () => {
 
     expect(reply.raw).toBe(rawJson);
     expect(reply.items).toEqual([
-      { type: 'text', content: '挺好' },
-      { type: 'action', name: 'bid_call', params: { min: 100 } },
+      { type: 'text', param: '挺好' },
+      { type: 'bid_call', param: { min: 100 } },
     ]);
-    expect(reply.actions).toEqual([
-      { type: 'action', name: 'bid_call', params: { min: 100 } },
-    ]);
-    expect(reply.text).toBe('挺好');
-    // Default renderer, no app-specific override → goes through defaultXingYuRenderer
-    expect(reply.rendered).toBe('小星: 挺好\n小星: 【bid_call】min=100');
+    const actions = reply.items.filter((i) => i.type !== 'text');
+    expect(actions).toEqual([{ type: 'bid_call', param: { min: 100 } }]);
+    const texts = reply.items.filter((i) => i.type === 'text').map((i) => i.param);
+    expect(texts).toEqual(['挺好']);
+    // Default renderer, no app-specific override → goes through defaultReplyRenderer
+    expect(reply.rendered).toBe('小星: 挺好\n小星: 【bid_call】{"min":100}');
   });
 
   it('mirror=true writes reply.rendered (not raw) into memoryStore', async () => {
-    const rawJson = '[{"type":"text","content":"你好"}]';
+    const rawJson = '[{"type":"text","param":"你好"}]';
     vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue(rawJson);
 
     await withUserAppContext('app-test', async () => {
@@ -404,7 +403,7 @@ describe('chatWithCharacter — ChatReply shape (M4.2)', () => {
   });
 
   it('session.history assistant entry also holds rendered text', async () => {
-    const rawJson = '[{"type":"text","content":"再见"}]';
+    const rawJson = '[{"type":"text","param":"再见"}]';
     vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue(rawJson);
 
     const s = await withUserAppContext('app-test', async () => {
@@ -420,11 +419,11 @@ describe('chatWithCharacter — ChatReply shape (M4.2)', () => {
   it('app-specific renderer (registered via replyRendererRegistry) drives rendered output', async () => {
     registerReplyRenderer('app-test', {
       render(raw, ctx) {
-        const items = parseReply(raw);
+        const { items } = parseReply(raw, new Set());
         return `[CUSTOM ${ctx.speakerName}] ${items.length} items`;
       },
     });
-    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue('[{"type":"text","content":"a"}]');
+    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue('[{"type":"text","param":"a"}]');
 
     const reply = await withUserAppContext('app-test', async () => {
       const s = chatWithCharacter('char-001', { persistent: true });
@@ -437,7 +436,7 @@ describe('chatWithCharacter — ChatReply shape (M4.2)', () => {
   });
 
   it('mirror=false: session.history + rendered shape still computed, but memoryStore NOT written', async () => {
-    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue('[{"type":"text","content":"x"}]');
+    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue('[{"type":"text","param":"x"}]');
 
     const { reply, historyAssistant } = await withUserAppContext('app-test', async () => {
       const s = chatWithCharacter('char-001', { persistent: true });
@@ -451,7 +450,7 @@ describe('chatWithCharacter — ChatReply shape (M4.2)', () => {
   });
 
   it('replyToLast returns ChatReply with the same shape semantics', async () => {
-    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue('[{"type":"text","content":"re-reply"}]');
+    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue('[{"type":"text","param":"re-reply"}]');
 
     const reply = await withUserAppContext('app-test', async () => {
       const s = chatWithCharacter('char-001', { persistent: true });
@@ -459,8 +458,9 @@ describe('chatWithCharacter — ChatReply shape (M4.2)', () => {
       return s.replyToLast();
     });
 
-    expect(reply.raw).toBe('[{"type":"text","content":"re-reply"}]');
+    expect(reply.raw).toBe('[{"type":"text","param":"re-reply"}]');
     expect(reply.rendered).toBe('小星: re-reply');
-    expect(reply.text).toBe('re-reply');
+    const texts = reply.items.filter((i) => i.type === 'text').map((i) => i.param);
+    expect(texts).toEqual(['re-reply']);
   });
 });

@@ -4,18 +4,18 @@
  *
  * The renderer runs after `session.send` completes; its output is what
  * memoryStore persists as the assistant entry's content. Renderers MUST
- * preserve every decision-relevant field (stickerId, action params) into
- * the rendered text so subsequent prompts still have full context. See
- * spec §2 + D2.
+ * preserve every decision-relevant field (type / param) into the
+ * rendered text so subsequent prompts still have full context.
+ * See spec §2 + D2.
  *
- * `DEFAULT_XINGYU_RENDERER` re-exports the lossless implementation in
- * `defaultXingYuRenderer.ts`. Consumers always go through the registry.
+ * `DEFAULT_REPLY_RENDERER` re-exports the platform-default implementation
+ * in `defaultReplyRenderer.ts`. Consumers always go through the registry.
  *
- * See docs/superpowers/specs/2026-04-19-m4.2-tool-registry-and-rendering-design.md §1 + §2
+ * See docs/superpowers/specs/2026-04-20-m4.2.5-unified-tool-wire-format-design.md §1 + §2
  */
 
 import type { ToolDefinition } from './toolRegistry';
-import { defaultXingYuRenderer } from './defaultXingYuRenderer';
+import { defaultReplyRenderer } from './defaultReplyRenderer';
 
 export interface ReplyRenderContext {
   /** Display name of the character whose reply this is. */
@@ -29,11 +29,10 @@ export interface ReplyRenderer {
 }
 
 /**
- * The canonical default renderer, used when no app-specific renderer is
- * registered. Implemented in `defaultXingYuRenderer.ts` — re-exported
- * here so the registry is the single entry point for consumers.
+ * `DEFAULT_REPLY_RENDERER` re-exports the platform-default implementation
+ * in `defaultReplyRenderer.ts`. Consumers always go through the registry.
  */
-export const DEFAULT_XINGYU_RENDERER: ReplyRenderer = defaultXingYuRenderer;
+export const DEFAULT_REPLY_RENDERER: ReplyRenderer = defaultReplyRenderer;
 
 const registry = new Map<string, ReplyRenderer>();
 
@@ -42,7 +41,7 @@ export function registerReplyRenderer(appId: string, renderer: ReplyRenderer): v
 }
 
 export function getReplyRenderer(appId: string): ReplyRenderer {
-  return registry.get(appId) ?? DEFAULT_XINGYU_RENDERER;
+  return registry.get(appId) ?? DEFAULT_REPLY_RENDERER;
 }
 
 export function unregisterApp(appId: string): void {

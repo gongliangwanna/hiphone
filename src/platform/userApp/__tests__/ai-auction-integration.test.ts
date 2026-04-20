@@ -78,11 +78,14 @@ beforeEach(async () => {
   } as never);
 
   // Simulate the auction app mounting + doing its top-level registrations.
+  // M4.2.5: include `text` in the knownTypes so parseReply accepts mixed
+  // text+action replies. Matches the fixture App.tsx's 4-tool shape.
   withUserAppContext(APP_ID, () => {
     registerTools(APP_ID, [
-      { name: 'bid_call', description: '叫价', parameters: { item: 'string', min: 'number' } },
-      { name: 'accept_bid', description: '接受', parameters: { bidder: 'string', amount: 'number' } },
-      { name: 'hammer_down', description: '落槌', parameters: { item: 'string', winner: 'string', final: 'number' } },
+      { type: 'text', description: '报幕', param: 'string' },
+      { type: 'bid_call', description: '叫价', param: '{item: string, min: number}' },
+      { type: 'accept_bid', description: '接受', param: '{bidder: string, amount: number}' },
+      { type: 'hammer_down', description: '落槌', param: '{item: string, winner: string, final: number}' },
     ]);
     registerReplyRenderer(APP_ID, {
       render: (raw, ctx) => `${ctx.speakerName}|custom|${raw}`,
@@ -114,7 +117,7 @@ describe('ai-auction integration', () => {
 
   it('custom renderer runs on the assistant reply — rendered text matches registered format', async () => {
     vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue(
-      '[{"type":"text","content":"拍品亮相"},{"type":"action","name":"bid_call","params":{"item":"lot-1","min":500}}]',
+      '[{"type":"text","param":"拍品亮相"},{"type":"bid_call","param":{"item":"lot-1","min":500}}]',
     );
     const reply = await withUserAppContext(APP_ID, async () => {
       const s = chatWithCharacter('char-mc', { persistent: true });
@@ -123,11 +126,12 @@ describe('ai-auction integration', () => {
 
     // Custom renderer prefixes the speaker + "|custom|" + raw JSON
     expect(reply.rendered).toBe(
-      '拍卖师|custom|[{"type":"text","content":"拍品亮相"},{"type":"action","name":"bid_call","params":{"item":"lot-1","min":500}}]',
+      '拍卖师|custom|[{"type":"text","param":"拍品亮相"},{"type":"bid_call","param":{"item":"lot-1","min":500}}]',
     );
-    // Actions still available (parseReply drives items, not the renderer)
-    expect(reply.actions).toEqual([
-      { type: 'action', name: 'bid_call', params: { item: 'lot-1', min: 500 } },
+    // reply.items now has both text and action items (no separate .actions field)
+    const actions = reply.items.filter((i) => i.type !== 'text');
+    expect(actions).toEqual([
+      { type: 'bid_call', param: { item: 'lot-1', min: 500 } },
     ]);
   });
 
@@ -165,16 +169,16 @@ describe('ai-auction integration', () => {
     expect(concatHistory).toContain('[拍卖] #lot-1 流拍');
   });
 
-  it('full bid → accept_bid → hammer_down cycle delivers three ChatReply.actions in order', async () => {
+  it('full bid → accept_bid → hammer_down cycle delivers three ChatReply items in order', async () => {
     vi.spyOn(chatCompleteMod, 'chatComplete')
       .mockResolvedValueOnce(
-        '[{"type":"action","name":"bid_call","params":{"item":"lot-1","min":500}}]',
+        '[{"type":"bid_call","param":{"item":"lot-1","min":500}}]',
       )
       .mockResolvedValueOnce(
-        '[{"type":"action","name":"accept_bid","params":{"bidder":"A","amount":600}}]',
+        '[{"type":"accept_bid","param":{"bidder":"A","amount":600}}]',
       )
       .mockResolvedValueOnce(
-        '[{"type":"action","name":"hammer_down","params":{"item":"lot-1","winner":"A","final":600}}]',
+        '[{"type":"hammer_down","param":{"item":"lot-1","winner":"A","final":600}}]',
       );
 
     const s = await withUserAppContext(APP_ID, async () => {
@@ -183,20 +187,20 @@ describe('ai-auction integration', () => {
     });
 
     const r1 = await withUserAppContext(APP_ID, () => s.send('开拍'));
-    expect(r1.actions[0]!.name).toBe('bid_call');
+    expect(r1.items[0]!.type).toBe('bid_call');
 
     const r2 = await withUserAppContext(APP_ID, () => s.send('我出 600'));
-    expect(r2.actions[0]!.name).toBe('accept_bid');
-    expect(r2.actions[0]!.params).toEqual({ bidder: 'A', amount: 600 });
+    expect(r2.items[0]!.type).toBe('accept_bid');
+    expect(r2.items[0]!.param).toEqual({ bidder: 'A', amount: 600 });
 
     const r3 = await withUserAppContext(APP_ID, () => s.send('一次二次'));
-    expect(r3.actions[0]!.name).toBe('hammer_down');
-    expect(r3.actions[0]!.params.final).toBe(600);
+    expect(r3.items[0]!.type).toBe('hammer_down');
+    expect((r3.items[0]!.param as { final: number }).final).toBe(600);
   });
 
   it('cleanup: registrations are queryable by appId', () => {
-    expect(getTools(APP_ID).map((t) => t.name).sort()).toEqual([
-      'accept_bid', 'bid_call', 'hammer_down',
+    expect(getTools(APP_ID).map((t) => t.type).sort()).toEqual([
+      'accept_bid', 'bid_call', 'hammer_down', 'text',
     ]);
     const rend = getReplyRenderer(APP_ID);
     expect(rend.render('test', { speakerName: 'X', tools: [] })).toBe(

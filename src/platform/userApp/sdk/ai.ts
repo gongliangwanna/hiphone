@@ -30,7 +30,7 @@ import {
 import { getTools, type ToolDefinition } from '@/platform/ai/toolRegistry';
 import { getAppSystemPrompt } from '@/platform/ai/appSystemPromptRegistry';
 import { getReplyRenderer } from '@/platform/ai/replyRendererRegistry';
-import { parseReply, type ReplyItem as ParseReplyItem } from '@/platform/ai/replyParser';
+import { parseReply, type ReplyItem } from '@/platform/ai/replyParser';
 import { getCurrentAppId } from './context';
 
 // ════════════════════════════════════════════════════════════════
@@ -215,34 +215,12 @@ export interface MirrorOption {
 }
 
 // ════════════════════════════════════════════════════════════════
-// M4.2 Chat reply shape
+// M4.2.5 Chat reply shape — unified {type, param}
 // ════════════════════════════════════════════════════════════════
 
-export interface ReplyItemText {
-  type: 'text';
-  content: string;
-}
-export interface ReplyItemAction {
-  type: 'action';
-  name: string;
-  params: Record<string, unknown>;
-}
-// Legacy types — used during XingYu's transition to tool-based actions.
-export interface ReplyItemSticker {
-  type: 'sticker';
-  stickerId: string;
-  content: string;
-}
-export interface ReplyItemSignature {
-  type: 'signature';
-  text: string;
-}
-
-export type ReplyItem =
-  | ReplyItemText
-  | ReplyItemAction
-  | ReplyItemSticker
-  | ReplyItemSignature;
+// Re-export the parser's ReplyItem so user apps have one import path:
+//   import type { ReplyItem } from '@hiphone/ai';
+export type { ReplyItem };
 
 export interface ChatReply {
   /** LLM output string, byte-identical to what the provider returned. */
@@ -251,10 +229,10 @@ export interface ChatReply {
   rendered: string;
   /** parseReply'd items from `raw`, in original order. */
   items: ReplyItem[];
-  /** Convenience: items.filter(i => i.type === 'action'). */
-  actions: ReplyItemAction[];
-  /** Convenience: items[type==='text'].map(i.content).join('\n'). */
-  text: string;
+  // Removed in M4.2.5: `actions` + `text` convenience fields.
+  // Apps can filter `items` themselves:
+  //   const texts = reply.items.filter((i) => i.type === 'text').map((i) => i.param as string);
+  //   const bids = reply.items.filter((i) => i.type === 'bid_call');
 }
 
 export interface ChatSession {
@@ -345,15 +323,13 @@ export function chatWithCharacter(
   // ── Internal helpers ──────────────────────────────────────────
 
   /**
-   * Runs parseReply + the app's registered renderer on a raw reply string.
-   * Exposed separately so future streaming paths can render incrementally
-   * without paying for the full items/actions/text expansion of buildChatReply.
+   * Build a ChatReply from a raw LLM output string. Used by the
+   * non-streaming send / replyToLast paths (S2's retry loop will call
+   * this on the FINAL successful raw only; failed attempts skip this).
    */
-  function renderAssistantReply(raw: string): {
-    rendered: string;
-    items: ParseReplyItem[];
-  } {
-    const items = parseReply(raw);
+  function buildChatReply(raw: string): ChatReply {
+    const knownTypes = new Set(frozenTools.map((t) => t.type));
+    const { items } = parseReply(raw, knownTypes);
     const renderer = capturedAppId
       ? getReplyRenderer(capturedAppId)
       : getReplyRenderer('');
@@ -361,29 +337,7 @@ export function chatWithCharacter(
       speakerName,
       tools: frozenTools,
     });
-    return { rendered, items };
-  }
-
-  /**
-   * Full ChatReply expansion from a raw reply string. Combines
-   * renderAssistantReply with parseReply-derived items + action/text
-   * conveniences. Used by the non-streaming send / replyToLast paths.
-   */
-  function buildChatReply(raw: string): ChatReply {
-    const { rendered, items } = renderAssistantReply(raw);
-    const actions = items.filter(
-      (i): i is ReplyItemAction => i.type === 'action',
-    );
-    const texts = items
-      .filter((i): i is ReplyItemText => i.type === 'text')
-      .map((i) => i.content);
-    return {
-      raw,
-      rendered,
-      items: items as ReplyItem[],
-      actions,
-      text: texts.join('\n'),
-    };
+    return { raw, rendered, items };
   }
 
   function doAppend(

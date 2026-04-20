@@ -3,7 +3,7 @@ import {
   registerReplyRenderer,
   getReplyRenderer,
   unregisterApp,
-  DEFAULT_XINGYU_RENDERER,
+  DEFAULT_REPLY_RENDERER,
   _resetReplyRendererRegistryForTests,
   type ReplyRenderer,
 } from '../replyRendererRegistry';
@@ -15,8 +15,8 @@ beforeEach(() => {
 });
 
 describe('replyRendererRegistry', () => {
-  it('getReplyRenderer returns DEFAULT_XINGYU_RENDERER when nothing registered', () => {
-    expect(getReplyRenderer('never-registered')).toBe(DEFAULT_XINGYU_RENDERER);
+  it('getReplyRenderer returns DEFAULT_REPLY_RENDERER when nothing registered', () => {
+    expect(getReplyRenderer('never-registered')).toBe(DEFAULT_REPLY_RENDERER);
   });
 
   it('register + get returns the registered renderer for that app', () => {
@@ -34,7 +34,7 @@ describe('replyRendererRegistry', () => {
   it('unregisterApp removes the renderer (falls back to default on next get)', () => {
     registerReplyRenderer('ai-auction', noop);
     unregisterApp('ai-auction');
-    expect(getReplyRenderer('ai-auction')).toBe(DEFAULT_XINGYU_RENDERER);
+    expect(getReplyRenderer('ai-auction')).toBe(DEFAULT_REPLY_RENDERER);
   });
 
   it('apps with different appIds are isolated', () => {
@@ -46,11 +46,11 @@ describe('replyRendererRegistry', () => {
     expect(getReplyRenderer('app-b')).toBe(b);
   });
 
-  it('DEFAULT_XINGYU_RENDERER renders JSON reply through defaultXingYuRenderer (lossless)', () => {
-    const out = DEFAULT_XINGYU_RENDERER.render(
-      '[{"type":"text","content":"hi"},{"type":"sticker","stickerId":"s1","content":"笑"}]',
+  it('DEFAULT_REPLY_RENDERER renders JSON reply through defaultReplyRenderer (unified {type,param})', () => {
+    const out = DEFAULT_REPLY_RENDERER.render(
+      '[{"type":"text","param":"hi"},{"type":"sticker","param":{"stickerId":"s1","content":"笑"}}]',
       { speakerName: '小星', tools: [] },
     );
-    expect(out).toBe('小星: hi\n小星: [表情 s1: 笑]');
+    expect(out).toBe('小星: hi\n小星: 【sticker】{"stickerId":"s1","content":"笑"}');
   });
 });

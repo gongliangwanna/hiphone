@@ -234,10 +234,10 @@ function scheduleIdolReply(
 
 
 /**
- * Sticker-lookup helper used by both the S7 Tool Registry action path
- * (`{type:'action', name:'sticker', params}`) and the legacy
- * `{type:'sticker'}` path during the transition. Keeps the lookup logic
- * in one place so the two dispatch branches can't drift apart.
+ * Sticker-lookup helper used by the unified {type:'sticker', param} path
+ * in the bubble dispatch below. Looks up the sticker by stickerId and
+ * builds the appropriate Message variant (real sticker when found, text
+ * fallback when the ID is unknown).
  */
 function buildStickerBubble(args: {
   convId: string;
@@ -296,8 +296,8 @@ function buildStickerBubble(args: {
  * 2. `session.replyToLast({ mirror: false })` 获取 ChatReply —— 用户轮
  *    已经由 `_appendMessage` 写进 memoryStore，session 直接复用。
  * 3. 移除 placeholder，手动向 memoryStore append 一条 rendered assistant
- * 4. 逐条投递消息（每条间隔 300-800ms），支持 action / legacy sticker /
- *    legacy signature / text 四种条目
+ * 4. 逐条投递消息（每条间隔 300-800ms），基于 M4.2.5 unified {type, param}
+ *    switch 派发: text / sticker / update_signature / 其他(降级文字)
  */
 function scheduleAICharacterReply(
   convId: string,
@@ -420,11 +420,30 @@ function scheduleAICharacterReply(
         let msg: Message | null = null;
         let lastMsgPreview = '';
 
-        if (item.type === 'action') {
-          // S7: unified action shape — dispatch by name.
-          if (item.name === 'sticker') {
-            const stickerId = String(item.params.stickerId ?? '');
-            const content = String(item.params.content ?? '');
+        // M4.2.5 unified {type, param} — exhaustive switch over item.type.
+        switch (item.type) {
+          case 'text': {
+            const paramText =
+              typeof item.param === 'string' ? item.param : '';
+            const text = filterReply(paramText) || '[空回复]';
+            msg = {
+              id: uid(),
+              convId,
+              senderId,
+              type: 'text',
+              text,
+              timestamp: ts,
+            };
+            lastMsgPreview = text.slice(0, 60);
+            break;
+          }
+          case 'sticker': {
+            const p = (item.param ?? {}) as {
+              stickerId?: unknown;
+              content?: unknown;
+            };
+            const stickerId = typeof p.stickerId === 'string' ? p.stickerId : '';
+            const content = typeof p.content === 'string' ? p.content : '';
             const built = buildStickerBubble({
               convId,
               senderId,
@@ -434,15 +453,21 @@ function scheduleAICharacterReply(
             });
             msg = built.msg;
             lastMsgPreview = built.preview;
-          } else if (item.name === 'update_signature') {
-            useXYData
-              .getState()
-              .updateCharacterSignature(characterId, String(item.params.text ?? ''));
-            continue; // silent
-          } else {
-            // Unknown tool — render the action verbatim so we don't
-            // silently drop information the model emitted.
-            const label = `[${item.name}] ${JSON.stringify(item.params)}`;
+            break;
+          }
+          case 'update_signature': {
+            const p = (item.param ?? {}) as { text?: unknown };
+            const text = typeof p.text === 'string' ? p.text : '';
+            if (text) {
+              useXYData
+                .getState()
+                .updateCharacterSignature(characterId, text);
+            }
+            continue; // silent — no bubble
+          }
+          default: {
+            // Unknown tool type — fallback to a text bubble with the raw info
+            const label = `[${item.type}] ${JSON.stringify(item.param)}`;
             msg = {
               id: uid(),
               convId,
@@ -453,33 +478,6 @@ function scheduleAICharacterReply(
             };
             lastMsgPreview = label.slice(0, 60);
           }
-        } else if (item.type === 'signature') {
-          // Legacy signature item — backward compat during transition.
-          useXYData.getState().updateCharacterSignature(characterId, item.text);
-          continue;
-        } else if (item.type === 'sticker') {
-          // Legacy sticker item — backward compat during transition.
-          const built = buildStickerBubble({
-            convId,
-            senderId,
-            stickerId: item.stickerId,
-            content: item.content,
-            ts,
-          });
-          msg = built.msg;
-          lastMsgPreview = built.preview;
-        } else {
-          // text
-          const text = filterReply(item.content) || '[空回复]';
-          msg = {
-            id: uid(),
-            convId,
-            senderId,
-            type: 'text',
-            text,
-            timestamp: ts,
-          };
-          lastMsgPreview = text.slice(0, 60);
         }
 
         if (!msg) continue;

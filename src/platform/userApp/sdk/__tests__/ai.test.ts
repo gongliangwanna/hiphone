@@ -18,7 +18,7 @@ import {
 import {
   _resetReplyRendererRegistryForTests,
   getReplyRenderer,
-  DEFAULT_XINGYU_RENDERER,
+  DEFAULT_REPLY_RENDERER,
 } from '@/platform/ai/replyRendererRegistry';
 import {
   _resetAppSystemPromptRegistryForTests,
@@ -211,10 +211,10 @@ describe('@hiphone/ai — M4.2 registry SDK exports', () => {
   it('exports registerTools', () => {
     expect(typeof aiSdk.registerTools).toBe('function');
     aiSdk.registerTools('ai-auction', [
-      { name: 'bid', description: 'd', parameters: { x: 'number' } },
+      { type: 'bid', description: 'd', param: '{x: number}' },
     ]);
     expect(getTools('ai-auction')).toEqual([
-      { name: 'bid', description: 'd', parameters: { x: 'number' } },
+      { type: 'bid', description: 'd', param: '{x: number}' },
     ]);
   });
 
@@ -223,7 +223,7 @@ describe('@hiphone/ai — M4.2 registry SDK exports', () => {
     const r = { render: () => 'x' };
     aiSdk.registerReplyRenderer('ai-auction', r);
     expect(getReplyRenderer('ai-auction')).toBe(r);
-    expect(getReplyRenderer('unused')).toBe(DEFAULT_XINGYU_RENDERER);
+    expect(getReplyRenderer('unused')).toBe(DEFAULT_REPLY_RENDERER);
   });
 
   it('exports registerAppSystemPrompt', () => {

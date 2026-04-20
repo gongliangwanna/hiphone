@@ -162,17 +162,24 @@ export async function runAIChat(opts: AIChatOptions): Promise<AIChatResult> {
       break;
     }
 
-    // Parse the structured reply, extract text messages
-    const items = parseReply(rawReply);
+    // Parse the structured reply, extract text messages.
+    // Pass an empty Set as knownTypes — AI-AI chat is lenient about types
+    // and handles its own branching over item.type below.
+    const { items } = parseReply(rawReply, new Set());
     const textParts: string[] = [];
     for (const item of items) {
       if (item.type === 'text') {
-        const filtered = filterReply(item.content);
+        const content = typeof item.param === 'string' ? item.param : '';
+        const filtered = filterReply(content);
         if (filtered) textParts.push(filtered);
       }
       // Signature updates from AI-AI chat are applied silently
-      if (item.type === 'signature') {
-        useXYData.getState().updateCharacterSignature(responderId!, item.text);
+      if (item.type === 'update_signature') {
+        const p = (item.param ?? {}) as { text?: unknown };
+        const text = typeof p.text === 'string' ? p.text : '';
+        if (text) {
+          useXYData.getState().updateCharacterSignature(responderId!, text);
+        }
       }
     }
 

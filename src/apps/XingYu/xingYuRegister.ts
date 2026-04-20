@@ -1,18 +1,20 @@
 /**
  * XingYu's AI-integration bootstrap.
  *
- * Registers the app's tools / reply renderer / app-system-prompt under
- * the appId "xingyu". Called once from xingYuDataStore at module import
- * time. Idempotent: multiple invocations are safe (registry Map.set
- * replaces rather than appends).
+ * Registers the app's tools + appSystemPrompt under appId "xingyu".
+ * Called once from xingYuDataStore at module import time. Idempotent.
  *
- * See docs/superpowers/specs/2026-04-19-m4.2-tool-registry-and-rendering-design.md §9
+ * M4.2.5: tools use the unified {type, param} shape. `text` is now an
+ * explicit app-registered tool (previously implicit via platform chunk 7).
+ * No custom renderer is registered — the platform-default renderer
+ * produces "<speaker>: <param>" for text and "<speaker>: 【<type>】JSON"
+ * for sticker/update_signature. XingYu accepts that cosmetic output.
+ *
+ * See docs/superpowers/specs/2026-04-20-m4.2.5-unified-tool-wire-format-design.md §XingYu 迁移对照
  */
 
 import { registerTools } from '@/platform/ai/toolRegistry';
-import { registerReplyRenderer } from '@/platform/ai/replyRendererRegistry';
 import { registerAppSystemPrompt } from '@/platform/ai/appSystemPromptRegistry';
-import { defaultXingYuRenderer } from '@/platform/ai/defaultXingYuRenderer';
 import { useStickerStore } from './stickerStore';
 
 export const XINGYU_APP_ID = 'xingyu';
@@ -25,20 +27,24 @@ export function registerXingYuAi(): void {
 
   registerTools(XINGYU_APP_ID, [
     {
-      name: 'sticker',
-      description:
-        '发一个表情包。stickerId 必须从 [当前任务] 中列出的可用表情里选，不要编造。content 是该表情的简短描述文案，用来让对话上下文仍然能读懂你发了什么表情。',
-      parameters: { stickerId: 'string', content: 'string' },
+      type: 'text',
+      description: '发一条聊天消息,像真人发微信',
+      param: 'string (消息内容)',
     },
     {
-      name: 'update_signature',
+      type: 'sticker',
       description:
-        '修改自己的个性签名。签名会显示在星球主页上。不要频繁更换，只有在心情或状态明显变化时才调用。',
-      parameters: { text: 'string' },
+        '发一个表情包。stickerId 必须从 [当前任务] 中列出的可用表情里选,不要编造',
+      param: '{stickerId: string, content: string (表情简短描述)}',
+    },
+    {
+      type: 'update_signature',
+      description: '修改个性签名,不要频繁更换,只有在心情或状态明显变化时才调用',
+      param: '{text: string}',
     },
   ]);
 
-  registerReplyRenderer(XINGYU_APP_ID, defaultXingYuRenderer);
+  // NOTE: no registerReplyRenderer — the platform default works fine.
 
   registerAppSystemPrompt(XINGYU_APP_ID, () => {
     const stickers = useStickerStore
@@ -48,18 +54,18 @@ export function registerXingYuAi(): void {
       );
 
     const lines: string[] = [
-      '这是一场类似微信的即时聊天场景，请遵守以下风格：',
-      '- 用用户的语言回复，保持角色性格',
-      '- 每条消息简短自然，像真人聊微信——不要一次发很长的文本，拆成多条短消息更有活人感',
-      '- 不要使用动作描述（如 *叹气*、*微笑*）',
+      '这是一场类似微信的即时聊天场景,请遵守以下风格:',
+      '- 用用户的语言回复,保持角色性格',
+      '- 每条消息简短自然,像真人聊微信——不要一次发很长的文本,拆成多条短消息更有活人感',
+      '- 不要使用动作描述(如 *叹气*、*微笑*)',
       '- 不要使用 markdown 格式',
     ];
 
     if (stickers.length > 0) {
       lines.push(
-        '- 表情包适度穿插在文字消息之间能提升活人感，不要每条都发；stickerId 必须从下方清单里选，不要编造',
+        '- 表情包适度穿插在文字消息之间能提升活人感,不要每条都发;stickerId 必须从下方清单里选,不要编造',
         '',
-        '当前可用表情：',
+        '当前可用表情:',
         ...stickers.map((s) => `${s.id}: ${s.description}`),
       );
     }

@@ -9,7 +9,7 @@ import {
 import {
   registerReplyRenderer,
   getReplyRenderer,
-  DEFAULT_XINGYU_RENDERER,
+  DEFAULT_REPLY_RENDERER,
   _resetReplyRendererRegistryForTests,
 } from '@/platform/ai/replyRendererRegistry';
 import {
@@ -41,18 +41,18 @@ beforeEach(() => {
 
 describe('installer.uninstall — AI registry cleanup', () => {
   it('unregisters tools / renderer / appSystemPrompt for the app', async () => {
-    registerTools(APP_ID, [{ name: 't', description: '', parameters: {} }]);
+    registerTools(APP_ID, [{ type: 't', description: '', param: '' }]);
     registerReplyRenderer(APP_ID, { render: () => 'x' });
     registerAppSystemPrompt(APP_ID, () => 'p');
 
     expect(getTools(APP_ID)).toHaveLength(1);
-    expect(getReplyRenderer(APP_ID)).not.toBe(DEFAULT_XINGYU_RENDERER);
+    expect(getReplyRenderer(APP_ID)).not.toBe(DEFAULT_REPLY_RENDERER);
     expect(getAppSystemPrompt(APP_ID)).not.toBeNull();
 
     await uninstall(APP_ID);
 
     expect(getTools(APP_ID)).toEqual([]);
-    expect(getReplyRenderer(APP_ID)).toBe(DEFAULT_XINGYU_RENDERER);
+    expect(getReplyRenderer(APP_ID)).toBe(DEFAULT_REPLY_RENDERER);
     expect(getAppSystemPrompt(APP_ID)).toBeNull();
   });
 

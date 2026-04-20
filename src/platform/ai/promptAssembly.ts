@@ -361,7 +361,7 @@ function buildSystemBlock(
       .join('\n');
     chunks.push(`[可用表情包]\n你可以发送以下表情：\n${stickerList}`);
   } else {
-    // Unified M4.2 path — default for M4.2-aware callers (and back-compat
+    // Unified M4.2.5 path — default for M4.2-aware callers (and back-compat
     // fallback when nothing triggers the legacy path).
 
     // 6.5 — app-specific "current task" snapshot (optional)
@@ -369,31 +369,26 @@ function buildSystemBlock(
       chunks.push(`[当前任务]\n${appSystemPromptSnapshot.trim()}`);
     }
 
-    // 7 — unified reply format
+    // 7 — unified wire-format template (M4.2.5+)
     chunks.push(
       [
         `[回复格式]`,
-        `你用 JSON 数组回复，每条消息是以下两类之一：`,
+        `你用 JSON 数组回复,每条是一个工具调用:`,
+        `{"type":"<type>","param":<param>}`,
         ``,
-        `1. 叙述 / 对白：`,
-        `   {"type":"text","content":"..."}`,
+        `param 的形状由每个工具决定,详见 [可用动作]。`,
         ``,
-        `2. 执行动作：`,
-        `   {"type":"action","name":"<动作名>","params":{...}}`,
+        `示例: [{"type":"text","param":"你好"},{"type":"sticker","param":{"stickerId":"s1","content":"笑"}}]`,
         ``,
-        `示例：[{"type":"text","content":"欢迎"},{"type":"action","name":"<动作>","params":{...}}]`,
-        ``,
-        `只输出 JSON 数组，不要其他内容。`,
+        `只输出 JSON 数组,不要其他内容。`,
       ].join('\n'),
     );
 
-    // 8 — Tool Registry derived list (optional)
+    // 8 — Tool Registry–derived list (optional)
     if (hasTools) {
       const toolLines = availableTools!.map((t) => {
-        const params = Object.entries(t.parameters)
-          .map(([k, v]) => `${k}: ${v}`)
-          .join(', ');
-        return `- ${t.name}: ${t.description}\n  参数: { ${params} }`;
+        const paramLine = t.param ? `\n  param: ${t.param}` : '';
+        return `- ${t.type}: ${t.description}${paramLine}`;
       });
       chunks.push(`[可用动作]\n${toolLines.join('\n')}`);
     }

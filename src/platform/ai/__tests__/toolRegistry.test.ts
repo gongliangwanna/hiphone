@@ -1,3 +1,4 @@
+// src/platform/ai/__tests__/toolRegistry.test.ts
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   registerTools,
@@ -8,8 +9,8 @@ import {
 } from '../toolRegistry';
 
 const SAMPLE: ToolDefinition[] = [
-  { name: 'bid_call', description: '宣布叫价', parameters: { item: 'string', min: 'number' } },
-  { name: 'hammer_down', description: '落槌', parameters: { item: 'string', final: 'number' } },
+  { type: 'bid_call', description: '宣布叫价', param: '{item: string, min: number}' },
+  { type: 'hammer_down', description: '落槌', param: '{item: string, final: number}' },
 ];
 
 beforeEach(() => {
@@ -28,8 +29,8 @@ describe('toolRegistry', () => {
 
   it('register replaces the previous registration for the same appId (not additive)', () => {
     registerTools('ai-auction', SAMPLE);
-    registerTools('ai-auction', [{ name: 'x', description: 'y', parameters: {} }]);
-    expect(getTools('ai-auction')).toEqual([{ name: 'x', description: 'y', parameters: {} }]);
+    registerTools('ai-auction', [{ type: 'x', description: 'y', param: '' }]);
+    expect(getTools('ai-auction')).toEqual([{ type: 'x', description: 'y', param: '' }]);
   });
 
   it('unregisterApp clears the slot', () => {
@@ -43,27 +44,25 @@ describe('toolRegistry', () => {
   });
 
   it('apps are isolated — one app’s tools do not leak into another', () => {
-    registerTools('app-a', [{ name: 'tool_a', description: '', parameters: {} }]);
-    registerTools('app-b', [{ name: 'tool_b', description: '', parameters: {} }]);
-    expect(getTools('app-a').map((t) => t.name)).toEqual(['tool_a']);
-    expect(getTools('app-b').map((t) => t.name)).toEqual(['tool_b']);
+    registerTools('app-a', [{ type: 'tool_a', description: '', param: '' }]);
+    registerTools('app-b', [{ type: 'tool_b', description: '', param: '' }]);
+    expect(getTools('app-a').map((t) => t.type)).toEqual(['tool_a']);
+    expect(getTools('app-b').map((t) => t.type)).toEqual(['tool_b']);
   });
 
   it('getTools returns a defensive copy (caller mutation must not affect registry)', () => {
     registerTools('app-a', SAMPLE);
     const retrieved = getTools('app-a');
-    retrieved.push({ name: 'injected', description: '', parameters: {} });
+    retrieved.push({ type: 'injected', description: '', param: '' });
     expect(getTools('app-a')).toEqual(SAMPLE); // unchanged
   });
 
   it('register defensive-copies the input array (caller push after register does not affect registry)', () => {
-    const input: ToolDefinition[] = [
-      { name: 'a', description: '', parameters: {} },
-    ];
+    const input: ToolDefinition[] = [{ type: 'a', description: '', param: '' }];
     registerTools('app-a', input);
-    input.push({ name: 'injected', description: '', parameters: {} });
+    input.push({ type: 'injected', description: '', param: '' });
     const retrieved = getTools('app-a');
     expect(retrieved).toHaveLength(1);
-    expect(retrieved[0]!.name).toBe('a');
+    expect(retrieved[0]!.type).toBe('a');
   });
 });

@@ -1,196 +1,111 @@
+// src/platform/ai/replyParser.ts
 /**
- * Parse structured AI reply JSON into an array of message items.
+ * Parse the LLM's raw reply string into a unified `ReplyItem[]` shape.
  *
- * Expected format from LLM:
- * ```json
- * [
- *   { "type": "text", "content": "你好呀" },
- *   { "type": "text", "content": "今天过得怎么样？" }
- * ]
- * ```
+ * Wire format (M4.2.5+):
+ *   [
+ *     { "type": "<tool-type>", "param": <any JSON value> },
+ *     ...
+ *   ]
  *
- * Includes fallback logic: if JSON parsing fails, treats the raw text
- * as a single text message.
+ * `parseReply` validates:
+ *   1. The outer value is a JSON array (or extractable from code block).
+ *   2. Each item is an object with a string `type` field.
+ *   3. Each item's `type` is in the `knownTypes` whitelist.
  *
- * See docs/plan/2026-04-12-1700-m3-structured-output.md
+ * It does NOT validate `param` shape against any schema — that's the
+ * tool handler's responsibility (see spec D5).
+ *
+ * Returns `{ items, error }`:
+ *   - error === null → all items valid; `items` is the parsed array
+ *   - error !== null → parsing or validation failed; `items` is `[]`
+ *     (caller — session retry loop — decides whether to retry)
+ *
+ * See docs/superpowers/specs/2026-04-20-m4.2.5-unified-tool-wire-format-design.md §3
  */
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-export interface ReplyTextItem {
-  type: 'text';
-  content: string;
+export interface ReplyItem {
+  /** Tool identifier (matches ToolDefinition.type). */
+  type: string;
+  /** Tool-specific parameter; shape determined by the tool. */
+  param: unknown;
 }
 
-export interface ReplyStickerItem {
-  type: 'sticker';
-  content: string; // sticker description (for lastMsg preview)
-  stickerId: string;
+export type ParseError =
+  | { kind: 'not-json' }
+  | { kind: 'wrong-shape' }
+  | { kind: 'unknown-type'; badType: string };
+
+export interface ParseReplyResult {
+  items: ReplyItem[];
+  error: ParseError | null;
 }
-
-export interface ReplySignatureItem {
-  type: 'signature';
-  text: string;
-}
-
-export interface ReplyActionItem {
-  type: 'action';
-  name: string;
-  params: Record<string, unknown>;
-}
-
-export type ReplyItem =
-  | ReplyTextItem
-  | ReplyStickerItem
-  | ReplySignatureItem
-  | ReplyActionItem;
-
-// ---------------------------------------------------------------------------
-// Parser
-// ---------------------------------------------------------------------------
 
 /**
  * Try to extract a JSON array from the raw LLM response.
- * Attempts in order:
- * 1. Direct JSON.parse on the full string
- * 2. Extract from ```json ... ``` code block
- * 3. Extract first [...] substring
- * Falls back to single text message on failure.
+ * Fallback chain: direct parse → ```json code block → first [...] substring.
  */
-export function parseReply(raw: string): ReplyItem[] {
+export function parseReply(
+  raw: string,
+  knownTypes: ReadonlySet<string>,
+): ParseReplyResult {
   const trimmed = raw.trim();
-  if (!trimmed) return [{ type: 'text', content: '' }];
+  if (!trimmed) return { items: [], error: { kind: 'not-json' } };
 
-  // Attempt 1: direct parse
-  const direct = tryParseItems(trimmed);
+  const parsed = tryExtractArray(trimmed);
+  if (parsed === null) return { items: [], error: { kind: 'not-json' } };
+
+  const items: ReplyItem[] = [];
+  for (const entry of parsed) {
+    if (
+      typeof entry !== 'object' ||
+      entry === null ||
+      typeof (entry as { type?: unknown }).type !== 'string'
+    ) {
+      return { items: [], error: { kind: 'wrong-shape' } };
+    }
+    const record = entry as { type: string; param?: unknown };
+    const type = record.type;
+    if (knownTypes.size > 0 && !knownTypes.has(type)) {
+      return { items: [], error: { kind: 'unknown-type', badType: type } };
+    }
+    items.push({ type, param: record.param });
+  }
+  return { items, error: null };
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+function tryExtractArray(trimmed: string): unknown[] | null {
+  // Attempt 1 — direct parse
+  const direct = tryParseArray(trimmed);
   if (direct) return direct;
 
-  // Attempt 2: extract from ```json ... ``` code block
+  // Attempt 2 — ```json ... ``` code block
   const codeBlockMatch = trimmed.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
   if (codeBlockMatch) {
-    const inner = tryParseItems(codeBlockMatch[1]!.trim());
+    const inner = tryParseArray(codeBlockMatch[1]!.trim());
     if (inner) return inner;
   }
 
-  // Attempt 3: find first [...] in the string
+  // Attempt 3 — first [...] substring
   const bracketStart = trimmed.indexOf('[');
   const bracketEnd = trimmed.lastIndexOf(']');
   if (bracketStart >= 0 && bracketEnd > bracketStart) {
-    const inner = tryParseItems(trimmed.slice(bracketStart, bracketEnd + 1));
+    const inner = tryParseArray(trimmed.slice(bracketStart, bracketEnd + 1));
     if (inner) return inner;
   }
 
-  // Attempt 4: find first {...} (AI returned a single object instead of array)
-  const braceStart = trimmed.indexOf('{');
-  const braceEnd = trimmed.lastIndexOf('}');
-  if (braceStart >= 0 && braceEnd > braceStart) {
-    const inner = tryParseItems(trimmed.slice(braceStart, braceEnd + 1));
-    if (inner) return inner;
-  }
-
-  // Attempt 5: multiple JSON arrays/objects scattered in the text
-  // e.g. [{"type":"text","content":"A"}]</string>\n[{"type":"text","content":"B"}]
-  const jsonBlocks = extractJsonBlocks(trimmed);
-  if (jsonBlocks.length > 1) {
-    const merged: ReplyItem[] = [];
-    for (const block of jsonBlocks) {
-      const items = tryParseItems(block);
-      if (items) merged.push(...items);
-    }
-    if (merged.length > 0) return merged;
-  }
-
-  // Fallback: treat entire raw text as a single text message
-  return [{ type: 'text', content: trimmed }];
+  return null;
 }
 
-/**
- * Extract top-level JSON blocks ([...] or {...}) from text using bracket depth tracking.
- * Handles cases where multiple JSON fragments are separated by non-JSON text like `</string>`.
- */
-function extractJsonBlocks(text: string): string[] {
-  const blocks: string[] = [];
-  let i = 0;
-  while (i < text.length) {
-    if (text[i] === '[' || text[i] === '{') {
-      const open = text[i]!;
-      const close = open === '[' ? ']' : '}';
-      let depth = 1;
-      let j = i + 1;
-      let inString = false;
-      let escape = false;
-      while (j < text.length && depth > 0) {
-        const ch = text[j]!;
-        if (escape) { escape = false; }
-        else if (ch === '\\' && inString) { escape = true; }
-        else if (ch === '"') { inString = !inString; }
-        else if (!inString) {
-          if (ch === open) depth++;
-          else if (ch === close) depth--;
-        }
-        j++;
-      }
-      if (depth === 0) {
-        blocks.push(text.slice(i, j));
-        i = j;
-        continue;
-      }
-    }
-    i++;
-  }
-  return blocks;
-}
-
-function tryParseItems(text: string): ReplyItem[] | null {
+function tryParseArray(text: string): unknown[] | null {
   try {
     const parsed = JSON.parse(text);
-
-    // Normalise: single object → array of one
-    const arr = Array.isArray(parsed) ? parsed : [parsed];
-    if (arr.length === 0) return null;
-
-    const items: ReplyItem[] = [];
-    for (const item of arr) {
-      if (typeof item !== 'object' || item === null) continue;
-      if (item.type === 'text' && typeof item.content === 'string' && item.content.trim()) {
-        items.push({ type: 'text', content: item.content.trim() });
-      } else if (
-        item.type === 'sticker' &&
-        typeof item.stickerId === 'string' &&
-        item.stickerId.trim()
-      ) {
-        items.push({
-          type: 'sticker',
-          content: typeof item.content === 'string' ? item.content.trim() : '[表情]',
-          stickerId: item.stickerId.trim(),
-        });
-      } else if (
-        item.type === 'signature' &&
-        typeof item.text === 'string' &&
-        item.text.trim()
-      ) {
-        items.push({ type: 'signature', text: item.text.trim() });
-      } else if (
-        item.type === 'action' &&
-        typeof item.name === 'string' &&
-        item.name.trim()
-      ) {
-        const rawParams = item.params;
-        // Accept `undefined` / missing → {}; reject non-object scalars + arrays.
-        const params =
-          rawParams === undefined || rawParams === null
-            ? {}
-            : typeof rawParams === 'object' && !Array.isArray(rawParams)
-              ? (rawParams as Record<string, unknown>)
-              : null;
-        if (params !== null) {
-          items.push({ type: 'action', name: item.name.trim(), params });
-        }
-      }
-    }
-    return items.length > 0 ? items : null;
+    if (!Array.isArray(parsed)) return null;
+    return parsed;
   } catch {
     return null;
   }

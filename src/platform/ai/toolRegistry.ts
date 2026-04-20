@@ -12,12 +12,25 @@
  */
 
 export interface ToolDefinition {
-  /** Identifier the LLM will emit in `{"type":"action","name":"..."}`. */
-  name: string;
-  /** Human/LLM-readable description of what the action does. */
+  /**
+   * Tool identifier — matches the `type` field in the wire-format
+   * `{type, param}` shape emitted by the LLM. Must be unique within
+   * a single app's registered tool list.
+   */
+  type: string;
+  /** Human/LLM-readable description of what the tool does. */
   description: string;
-  /** Lightweight JSON-Schema-lite: `{ paramName: typeHint }`. */
-  parameters: Record<string, string>;
+  /**
+   * Prose hint describing the shape of `param`. Freeform — rendered
+   * verbatim into the [可用动作] prompt chunk so the LLM knows what
+   * to emit. Empty string `''` means the tool takes no parameters.
+   *
+   * Examples:
+   *   'string (消息内容)'
+   *   '{stickerId: string, content: string}'
+   *   '[x: number, y: number]'
+   */
+  param: string;
 }
 
 const registry = new Map<string, ToolDefinition[]>();

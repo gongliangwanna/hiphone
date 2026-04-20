@@ -3,14 +3,12 @@ import {
   chatWithCharacter,
   getCharacters,
   registerTools,
-  registerReplyRenderer,
   registerAppSystemPrompt,
   injectSystemEvent,
   AIUnavailableError,
   type CharacterInfo,
   type ChatSession,
   type ChatReply,
-  type ReplyRenderContext,
 } from '@hiphone/ai';
 import { Gavel } from 'lucide-react';
 
@@ -86,54 +84,28 @@ function pushAnnouncement(t: string): void {
 // ── Register AI surface at module top level ───────────────────────
 registerTools(APP_ID, [
   {
-    name: 'bid_call',
-    description: '宣布叫价。item 是拍品名，min 是起拍价。',
-    parameters: { item: 'string', min: 'number' },
+    type: 'text',
+    description: '报幕——对观众说话,描述拍卖会的进行',
+    param: 'string (报幕文案)',
   },
   {
-    name: 'accept_bid',
-    description: '接受一位买家的出价。bidder 是买家名字/ID，amount 是出价金额。',
-    parameters: { bidder: 'string', amount: 'number' },
+    type: 'bid_call',
+    description: '宣布叫价。item 是拍品名,min 是起拍价',
+    param: '{item: string, min: number}',
   },
   {
-    name: 'hammer_down',
-    description: '落槌成交。item 是拍品，winner 是赢家，final 是成交价。',
-    parameters: { item: 'string', winner: 'string', final: 'number' },
+    type: 'accept_bid',
+    description: '接受一位买家的出价',
+    param: '{bidder: string, amount: number}',
+  },
+  {
+    type: 'hammer_down',
+    description: '落槌成交',
+    param: '{item: string, winner: string, final: number}',
   },
 ]);
 
-registerReplyRenderer(APP_ID, {
-  render(raw: string, ctx: ReplyRenderContext): string {
-    try {
-      const parsed: unknown = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return `${ctx.speakerName}: ${raw}`;
-      return parsed
-        .map((item) => {
-          if (!item || typeof item !== 'object') return '';
-          const it = item as Record<string, unknown>;
-          if (it.type === 'text' && typeof it.content === 'string') {
-            return `${ctx.speakerName}: ${it.content}`;
-          }
-          if (
-            it.type === 'action' &&
-            typeof it.name === 'string' &&
-            it.params &&
-            typeof it.params === 'object'
-          ) {
-            const ps = Object.entries(it.params as Record<string, unknown>)
-              .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
-              .join(' ');
-            return `${ctx.speakerName}: 【${it.name}】${ps}`;
-          }
-          return '';
-        })
-        .filter((s) => s.length > 0)
-        .join('\n');
-    } catch {
-      return `${ctx.speakerName}: ${raw}`;
-    }
-  },
-});
+// NOTE: no registerReplyRenderer — the platform default works fine.
 
 registerAppSystemPrompt(APP_ID, () => {
   const items = state.items;
@@ -167,33 +139,39 @@ export default function AuctionApp() {
   };
 
   const dispatchActions = (reply: ChatReply) => {
-    for (const a of reply.actions) {
-      if (a.name === 'bid_call') {
-        const item = String(a.params.item ?? '');
-        setActive(item);
-        setLog((l) => [...l, `🔨 叫价 ${item}`]);
-      } else if (a.name === 'accept_bid') {
-        acceptBid({
-          bidder: String(a.params.bidder ?? ''),
-          amount: Number(a.params.amount ?? 0),
-        });
-        setLog((l) => [
-          ...l,
-          `✅ 接受出价：${a.params.bidder} @ ${a.params.amount}`,
-        ]);
-      } else if (a.name === 'hammer_down') {
-        hammerDown({
-          item: String(a.params.item ?? ''),
-          winner: String(a.params.winner ?? ''),
-          final: Number(a.params.final ?? 0),
-        });
-        setLog((l) => [
-          ...l,
-          `🏆 落槌：${a.params.item} → ${a.params.winner} @ ${a.params.final}`,
-        ]);
+    for (const item of reply.items) {
+      const p = (item.param ?? {}) as Record<string, unknown>;
+      switch (item.type) {
+        case 'text': {
+          const t = typeof item.param === 'string' ? item.param : '';
+          if (t) setLog((l) => [...l, `🗣️ ${t}`]);
+          break;
+        }
+        case 'bid_call': {
+          const lot = String(p.item ?? '');
+          setActive(lot);
+          setLog((l) => [...l, `🔨 叫价 ${lot}`]);
+          break;
+        }
+        case 'accept_bid': {
+          acceptBid({
+            bidder: String(p.bidder ?? ''),
+            amount: Number(p.amount ?? 0),
+          });
+          setLog((l) => [...l, `✅ 接受出价:${p.bidder} @ ${p.amount}`]);
+          break;
+        }
+        case 'hammer_down': {
+          hammerDown({
+            item: String(p.item ?? ''),
+            winner: String(p.winner ?? ''),
+            final: Number(p.final ?? 0),
+          });
+          setLog((l) => [...l, `🏆 落槌:${p.item} → ${p.winner} @ ${p.final}`]);
+          break;
+        }
       }
     }
-    if (reply.text) setLog((l) => [...l, `🗣️ ${reply.text}`]);
   };
 
   const sendBid = async (amount: number) => {
