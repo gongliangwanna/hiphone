@@ -28,6 +28,7 @@ import {
   _resetReplyRendererRegistryForTests,
 } from '@/platform/ai/replyRendererRegistry';
 import { parseReply } from '@/platform/ai/replyParser';
+import * as toastMod from '../toast';
 
 beforeEach(() => {
   _resetCharacterAppStateForTests();
@@ -138,26 +139,30 @@ describe('chatWithCharacter — append rules', () => {
 
 describe('session.send (non-streaming)', () => {
   it('persistent=false: appends user+assistant to buffer, does NOT touch memoryStore', async () => {
-    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue('reply A');
+    // M4.2.5 S2: send/replyToLast now require valid {type,param} JSON —
+    // non-JSON triggers the 3-attempt retry loop. Use a well-formed mock.
+    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue(
+      '[{"type":"text","param":"reply A"}]',
+    );
     const s = chatWithCharacter('char-001');
     const reply = await s.send('hello');
 
-    // Mocked 'reply A' is non-JSON → parseReply fallback yields a single
-    // text item; default renderer wraps with the speaker name.
-    expect(reply.raw).toBe('reply A');
+    expect(reply.raw).toBe('[{"type":"text","param":"reply A"}]');
     expect(reply.rendered).toBe('小星: reply A');
     expect(s.history.map((e) => e.content)).toEqual(['hello', '小星: reply A']);
     expect(useCharacterMemory.getState().getAll('char-001')).toHaveLength(0);
   });
 
   it('persistent=true + mirror:true: writes both user and reply to memoryStore', async () => {
-    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue('reply B');
+    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue(
+      '[{"type":"text","param":"reply B"}]',
+    );
     const s = withUserAppContext('app-demo', () =>
       chatWithCharacter('char-001', { persistent: true }),
     );
     const reply = await withUserAppContext('app-demo', () => s.send('hello'));
 
-    expect(reply.raw).toBe('reply B');
+    expect(reply.raw).toBe('[{"type":"text","param":"reply B"}]');
     expect(reply.rendered).toBe('小星: reply B');
     // mem[0] is the session-creation [上下文切换] marker, then user + reply.
     const mem = useCharacterMemory.getState().getAll('char-001');
@@ -170,13 +175,15 @@ describe('session.send (non-streaming)', () => {
   });
 
   it('persistent=true + mirror:false: buffer updated, memoryStore gets only the creation marker', async () => {
-    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue('reply C');
+    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue(
+      '[{"type":"text","param":"reply C"}]',
+    );
     const s = withUserAppContext('app-demo', () =>
       chatWithCharacter('char-001', { persistent: true }),
     );
     const reply = await withUserAppContext('app-demo', () => s.send('hello', { mirror: false }));
 
-    expect(reply.raw).toBe('reply C');
+    expect(reply.raw).toBe('[{"type":"text","param":"reply C"}]');
     expect(reply.rendered).toBe('小星: reply C');
     // Creation still injects one [上下文切换] marker; mirror:false keeps the
     // actual user/assistant turns out of memoryStore.
@@ -189,12 +196,14 @@ describe('session.send (non-streaming)', () => {
 
 describe('session.replyToLast', () => {
   it('triggers a reply to current buffer state (persistent=false keeps it local)', async () => {
-    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue('reply D');
+    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue(
+      '[{"type":"text","param":"reply D"}]',
+    );
     const s = chatWithCharacter('char-001');
     s.append({ role: 'user', content: 'hi' });
     const reply = await s.replyToLast();
 
-    expect(reply.raw).toBe('reply D');
+    expect(reply.raw).toBe('[{"type":"text","param":"reply D"}]');
     expect(reply.rendered).toBe('小星: reply D');
     expect(s.history.map((e) => e.content)).toEqual(['hi', '小星: reply D']);
     expect(useCharacterMemory.getState().getAll('char-001')).toHaveLength(0);
@@ -462,5 +471,157 @@ describe('chatWithCharacter — ChatReply shape (M4.2.5)', () => {
     expect(reply.rendered).toBe('小星: re-reply');
     const texts = reply.items.filter((i) => i.type === 'text').map((i) => i.param);
     expect(texts).toEqual(['re-reply']);
+  });
+});
+
+describe('chatWithCharacter — parse-error retry (M4.2.5 S2)', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('retries up to 3 times on parse failure, succeeds on 3rd', async () => {
+    // First two responses invalid, third valid
+    vi.spyOn(chatCompleteMod, 'chatComplete')
+      .mockResolvedValueOnce('not json at all')
+      .mockResolvedValueOnce('[{"bad":"shape"}]')
+      .mockResolvedValueOnce('[{"type":"text","param":"finally ok"}]');
+
+    const reply = await withUserAppContext('app-test', async () => {
+      const s = chatWithCharacter('char-001', { persistent: true });
+      return s.send('hi');
+    });
+
+    expect(reply.raw).toBe('[{"type":"text","param":"finally ok"}]');
+    expect(reply.items).toEqual([{ type: 'text', param: 'finally ok' }]);
+
+    const mem = useCharacterMemory.getState().getAll('char-001');
+    // Expect in memory:
+    //   [0] switch marker (from S2 M4.2)
+    //   [1] user 'hi'
+    //   [2] assistant 'not json at all' (raw of attempt 1)
+    //   [3] system [格式错误] not-json
+    //   [4] assistant '[{"bad":"shape"}]' (raw of attempt 2)
+    //   [5] system [格式错误] wrong-shape
+    //   [6] assistant '小星: finally ok' (rendered of attempt 3)
+    expect(mem).toHaveLength(7);
+    expect(mem[2]!.role).toBe('assistant');
+    expect(mem[2]!.content).toBe('not json at all');
+    expect(mem[3]!.role).toBe('system');
+    expect(mem[3]!.content).toMatch(/不是合法 JSON/);
+    expect(mem[4]!.role).toBe('assistant');
+    expect(mem[4]!.content).toBe('[{"bad":"shape"}]');
+    expect(mem[5]!.role).toBe('system');
+    expect(mem[5]!.content).toMatch(/不符合 \{type, param\} 结构/);
+    expect(mem[6]!.role).toBe('assistant');
+    expect(mem[6]!.content).toBe('小星: finally ok');
+  });
+
+  it('3 consecutive failures → returns empty-items ChatReply + default toast', async () => {
+    const toastSpy = vi.spyOn(toastMod, 'show').mockImplementation(() => {});
+    vi.spyOn(chatCompleteMod, 'chatComplete')
+      .mockResolvedValue('total garbage non json');
+
+    const reply = await withUserAppContext('app-test', async () => {
+      const s = chatWithCharacter('char-001', { persistent: true });
+      return s.send('please');
+    });
+
+    expect(reply.items).toEqual([]);
+    expect(reply.rendered).toBe('[生成失败]');
+
+    // Memory has 3 rounds of (bad assistant + system error) + final system summary
+    const mem = useCharacterMemory.getState().getAll('char-001');
+    // [0] switch marker, [1] user, then 3 × (assistant + system) = 6, then final system summary
+    expect(mem).toHaveLength(9);
+    expect(mem[mem.length - 1]!.role).toBe('system');
+    expect(mem[mem.length - 1]!.content).toMatch(/已放弃重试/);
+
+    // Default toast fired once with the M4.2.5 message.
+    expect(toastSpy).toHaveBeenCalledWith('AI 回复格式错误');
+  });
+
+  it('unknown-type error gets a message listing the valid types', async () => {
+    vi.spyOn(chatCompleteMod, 'chatComplete')
+      .mockResolvedValueOnce('[{"type":"order_pizza","param":{}}]')
+      .mockResolvedValueOnce('[{"type":"text","param":"sorry"}]');
+
+    // Register two tools so knownTypes has content
+    registerTools('app-test', [
+      { type: 'text', description: '', param: 'string' },
+      { type: 'sticker', description: '', param: '{}' },
+    ]);
+
+    await withUserAppContext('app-test', async () => {
+      const s = chatWithCharacter('char-001', { persistent: true });
+      await s.send('hi');
+    });
+
+    const mem = useCharacterMemory.getState().getAll('char-001');
+    const systemErr = mem.find(
+      (e) => e.role === 'system' && e.content.includes('未注册的 type'),
+    );
+    expect(systemErr).toBeDefined();
+    expect(systemErr!.content).toMatch(/order_pizza/);
+    expect(systemErr!.content).toMatch(/text, sticker/); // knownTypes list
+  });
+
+  it('onParseFailure callback suppresses default toast', async () => {
+    const toastSpy = vi.spyOn(toastMod, 'show').mockImplementation(() => {});
+    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue('bad');
+    const callback = vi.fn();
+
+    await withUserAppContext('app-test', async () => {
+      const s = chatWithCharacter('char-001', {
+        persistent: true,
+        onParseFailure: callback,
+      });
+      return s.send('hi');
+    });
+
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(callback).toHaveBeenCalledWith(
+      expect.objectContaining({ raw: 'bad', attempts: 3 }),
+    );
+    expect(toastSpy).not.toHaveBeenCalled();
+  });
+
+  it('failed attempts persist to memoryStore regardless of mirror flag', async () => {
+    vi.spyOn(chatCompleteMod, 'chatComplete')
+      .mockResolvedValueOnce('bad1')
+      .mockResolvedValueOnce('[{"type":"text","param":"ok"}]');
+
+    await withUserAppContext('app-test', async () => {
+      const s = chatWithCharacter('char-001', { persistent: true });
+      // mirror:false → success path would NOT mirror, but failure must still persist
+      await s.send('hi', { mirror: false });
+    });
+
+    const mem = useCharacterMemory.getState().getAll('char-001');
+    // Expect: [0] switch marker, [1] bad assistant, [2] system err
+    // NO user (mirror:false skipped the user append), NO success assistant (mirror:false)
+    const failureRaws = mem.filter(
+      (e) => e.role === 'assistant' && e.content === 'bad1',
+    );
+    expect(failureRaws).toHaveLength(1);
+    const systemErrs = mem.filter(
+      (e) => e.role === 'system' && e.content.includes('[格式错误]'),
+    );
+    expect(systemErrs).toHaveLength(1);
+  });
+
+  it('replyToLast also respects the retry loop + onParseFailure', async () => {
+    vi.spyOn(chatCompleteMod, 'chatComplete')
+      .mockResolvedValueOnce('bad1')
+      .mockResolvedValueOnce('bad2')
+      .mockResolvedValueOnce('[{"type":"text","param":"third time lucky"}]');
+
+    const reply = await withUserAppContext('app-test', async () => {
+      const s = chatWithCharacter('char-001', { persistent: true });
+      s.append({ role: 'user', content: 'context' });
+      return s.replyToLast();
+    });
+
+    expect(reply.raw).toBe('[{"type":"text","param":"third time lucky"}]');
+    expect(reply.items).toEqual([{ type: 'text', param: 'third time lucky' }]);
   });
 });

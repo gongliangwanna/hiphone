@@ -30,7 +30,12 @@ import {
 import { getTools, type ToolDefinition } from '@/platform/ai/toolRegistry';
 import { getAppSystemPrompt } from '@/platform/ai/appSystemPromptRegistry';
 import { getReplyRenderer } from '@/platform/ai/replyRendererRegistry';
-import { parseReply, type ReplyItem } from '@/platform/ai/replyParser';
+import {
+  parseReply,
+  type ReplyItem,
+  type ParseError,
+} from '@/platform/ai/replyParser';
+import { show as showPlatformToast } from './toast';
 import { getCurrentAppId } from './context';
 
 // ════════════════════════════════════════════════════════════════
@@ -77,6 +82,29 @@ export class AIAbortedError extends Error {
   constructor(message = 'AI call was aborted') {
     super(message);
     this.name = 'AIAbortedError';
+  }
+}
+
+// ════════════════════════════════════════════════════════════════
+// Internal helper — build LLM-facing correction after parse failure
+// ════════════════════════════════════════════════════════════════
+
+/**
+ * Build the system-role correction message written into memoryStore
+ * after a parse failure. Shown to the LLM on the next retry so it can
+ * self-correct.
+ */
+function buildErrorMessage(error: ParseError, knownTypes: string[]): string {
+  switch (error.kind) {
+    case 'not-json':
+      return '[格式错误] 上条回复不是合法 JSON。你必须只输出 JSON 数组,形如 ' +
+             '[{"type":"<type>","param":<param>}],不要任何其他文字。';
+    case 'wrong-shape':
+      return '[格式错误] 上条回复不符合 {type, param} 结构(有 item 缺少 type 或格式不对)。' +
+             '请按 [回复格式] 要求重新输出 JSON 数组。';
+    case 'unknown-type':
+      return `[格式错误] 你使用了未注册的 type "${error.badType}"。` +
+             `当前可用 type 只有: ${knownTypes.join(', ')}。请只使用这些。`;
   }
 }
 
@@ -206,6 +234,18 @@ export function extractPlainText(raw: string): string {
 export interface ChatOptions {
   persistent?: boolean;
   signal?: AbortSignal;
+  /**
+   * Called when `send` / `replyToLast` exhausts all 3 parse-error retries.
+   *
+   * - Not provided → platform shows a default toast: "AI 回复格式错误"
+   * - Provided (even as `() => {}`) → platform suppresses the toast,
+   *   app is fully responsible for UX. Return value ignored.
+   *
+   * Streaming methods (`streamSend` / `streamReplyToLast`) do NOT use
+   * retries in M4.2.5 — they yield the single raw and commit rendered
+   * fallback as before.
+   */
+  onParseFailure?: (info: { raw: string; attempts: number }) => void;
 }
 
 export interface SessionEntry {
@@ -457,6 +497,87 @@ export function chatWithCharacter(
 
   // ── Public methods ────────────────────────────────────────────
 
+  /**
+   * Shared retry engine for send / replyToLast.
+   *
+   * 3 attempts max. On parse failure: write the raw assistant reply +
+   * a system error entry to memoryStore (ALWAYS — regardless of
+   * `mirror`, because otherwise the retry sees an identical prompt).
+   * On success: write the rendered assistant entry (mirror-gated).
+   * On exhaustion: write a final system summary, call onParseFailure
+   * (or fall back to platform toast), return an empty ChatReply.
+   */
+  async function runWithRetries(
+    controller: AbortController,
+    mirror: boolean,
+  ): Promise<ChatReply> {
+    const knownTypes = new Set(frozenTools.map((t) => t.type));
+    const knownTypesArr = [...knownTypes];
+    let lastRaw = '';
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const raw = await callLLM(controller);
+      if (controller.signal.aborted) throw new AIAbortedError();
+      lastRaw = raw;
+
+      const { items, error } = parseReply(raw, knownTypes);
+
+      if (error === null) {
+        // Success path — build reply, render once, mirror success.
+        const renderer = capturedAppId
+          ? getReplyRenderer(capturedAppId)
+          : getReplyRenderer('');
+        const rendered = renderer.render(raw, {
+          speakerName,
+          tools: frozenTools,
+        });
+        doAppend(
+          { role: 'assistant', content: rendered, speakerId: characterId },
+          mirror,
+        );
+        return { raw, rendered, items };
+      }
+
+      // Failure path — ALWAYS persist to memoryStore (mirror-independent).
+      // Otherwise the retry sees an identical prompt and repeats the same
+      // mistake.
+      useCharacterMemory.getState().append(characterId, {
+        role: 'assistant',
+        speakerId: characterId,
+        content: raw,
+        source,
+      });
+      useCharacterMemory.getState().append(characterId, {
+        role: 'system',
+        speakerId: 'system',
+        content: buildErrorMessage(error, knownTypesArr),
+        source: 'system',
+      });
+      // Loop — next callLLM will pick up the fresh memoryStore state.
+    }
+
+    // Exhausted all 3 attempts — give up.
+    useCharacterMemory.getState().append(characterId, {
+      role: 'system',
+      speakerId: 'system',
+      source: 'system',
+      content: '[格式错误] AI 3 次回复格式均不合法,已放弃重试',
+    });
+
+    if (options.onParseFailure) {
+      options.onParseFailure({ raw: lastRaw, attempts: 3 });
+    } else {
+      // Default platform UX — toast.
+      showPlatformToast('AI 回复格式错误');
+    }
+
+    return {
+      raw: lastRaw,
+      rendered: '[生成失败]',
+      items: [],
+    };
+  }
+
   async function send(
     content: string,
     opts: MirrorOption = {},
@@ -469,31 +590,25 @@ export function chatWithCharacter(
     controllers.add(controller);
     try {
       doAppend({ role: 'user', content }, mirror);
-      const raw = await callLLM(controller);
-      if (controller.signal.aborted) throw new AIAbortedError();
-      const reply = buildChatReply(raw);
-      // Buffer + memoryStore always get the RENDERED content (the shape
-      // consumers see as "what the character said"). memoryStore only
-      // receives it when mirror is true.
-      doAppend(
-        { role: 'assistant', content: reply.rendered, speakerId: characterId },
-        mirror,
-      );
-      return reply;
+      return await runWithRetries(controller, mirror);
     } finally {
       controllers.delete(controller);
     }
   }
 
   /**
-   * M4.1 / M4.2 behavior: callLLM currently resolves the full reply before
-   * yielding. The assistant `doAppend` runs before `yield raw` so the
-   * post-stream session state matches the non-streaming path.
+   * M4.1 / M4.2 / M4.2.5 behavior: callLLM currently resolves the full
+   * reply before yielding. The assistant `doAppend` runs before `yield raw`
+   * so the post-stream session state matches the non-streaming path.
+   *
+   * M4.2.5 note: streaming methods do NOT use the parse-error retry loop
+   * (send/replyToLast do). Callers that need format guarantees should use
+   * the non-streaming variants. If streaming returns a malformed reply,
+   * the default renderer's fallback branch produces "<speaker>: <raw>".
    *
    * TODO(M4.3): once provider-native streaming lands, flip to "yield
-   * deltas → commit rendered on close" — the current ordering will produce
-   * a stale-then-final history view if consumers read session.history
-   * mid-iteration.
+   * deltas → commit rendered on close" AND consider retry semantics for
+   * streaming.
    */
   async function* streamSend(
     content: string,
@@ -535,28 +650,25 @@ export function chatWithCharacter(
     }
     controllers.add(controller);
     try {
-      const raw = await callLLM(controller);
-      if (controller.signal.aborted) throw new AIAbortedError();
-      const reply = buildChatReply(raw);
-      doAppend(
-        { role: 'assistant', content: reply.rendered, speakerId: characterId },
-        mirror,
-      );
-      return reply;
+      return await runWithRetries(controller, mirror);
     } finally {
       controllers.delete(controller);
     }
   }
 
   /**
-   * M4.1 / M4.2 behavior: callLLM currently resolves the full reply before
-   * yielding. The assistant `doAppend` runs before `yield raw` so the
-   * post-stream session state matches the non-streaming path.
+   * M4.1 / M4.2 / M4.2.5 behavior: callLLM currently resolves the full
+   * reply before yielding. The assistant `doAppend` runs before `yield raw`
+   * so the post-stream session state matches the non-streaming path.
+   *
+   * M4.2.5 note: streaming methods do NOT use the parse-error retry loop
+   * (send/replyToLast do). Callers that need format guarantees should use
+   * the non-streaming variants. If streaming returns a malformed reply,
+   * the default renderer's fallback branch produces "<speaker>: <raw>".
    *
    * TODO(M4.3): once provider-native streaming lands, flip to "yield
-   * deltas → commit rendered on close" — the current ordering will produce
-   * a stale-then-final history view if consumers read session.history
-   * mid-iteration.
+   * deltas → commit rendered on close" AND consider retry semantics for
+   * streaming.
    */
   async function* streamReplyToLast(opts: MirrorOption = {}): AsyncIterable<string> {
     const mirror = opts.mirror !== false;

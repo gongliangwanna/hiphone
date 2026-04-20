@@ -179,4 +179,24 @@ describe('XingYu sendMessage flow — memoryStore integration', () => {
       content: '小星: 哈哈',
     });
   }, 10_000);
+
+  it('AI parse exhaustion → [AI 回复失败] bubble lands in UI, no toast', async () => {
+    const toastMod = await import('@/platform/userApp/sdk/toast');
+    const toastSpy = vi.spyOn(toastMod, 'show').mockImplementation(() => {});
+
+    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue('total garbage');
+
+    useXYData.getState().sendMessage('c-char-char-001', '你好');
+
+    await new Promise((r) => setTimeout(r, 500));
+
+    const msgs = useXYData.getState().messages.filter((m) => !m.streaming);
+    const errMsg = msgs.find(
+      (m) => m.type === 'text' && m.text.startsWith('[AI 回复失败]'),
+    );
+    expect(errMsg).toBeDefined();
+
+    // Platform toast must NOT fire — XingYu suppressed it via onParseFailure
+    expect(toastSpy).not.toHaveBeenCalled();
+  }, 10_000);
 });

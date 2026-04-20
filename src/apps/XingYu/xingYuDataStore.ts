@@ -375,6 +375,10 @@ function scheduleAICharacterReply(
     chatWithCharacter(characterId, {
       persistent: true,
       signal: controller.signal,
+      // XingYu shows its own [AI 回复失败] bubble via the items.length===0
+      // branch below — suppress the platform's default toast so we don't
+      // double-notify the user.
+      onParseFailure: () => {},
     }),
   );
   aiSessions.set(convId, { session: sessionInstance, controller });
@@ -395,6 +399,23 @@ function scheduleAICharacterReply(
       useXYData.setState({
         messages: s0.messages.filter((m) => m.id !== placeholderId),
       });
+
+      // M4.2.5: parse-exhausted path — session returns empty items.
+      // Show the same '[AI 回复失败]' bubble the catch-branch would show.
+      if (reply.items.length === 0) {
+        const errText = '[AI 回复失败] 回复格式错误,已重试 3 次';
+        const s = useXYData.getState();
+        useXYData.setState({
+          messages: [
+            ...s.messages,
+            { id: uid(), convId, senderId, type: 'text' as const, text: errText, timestamp: Date.now() },
+          ],
+          conversations: s.conversations.map((c) =>
+            c.id === convId ? { ...c, lastMsg: errText, lastTime: Date.now() } : c,
+          ),
+        });
+        return;
+      }
 
       // Assistant memory entry — rendered (natural-language) form. The
       // renderer preserves every decision-relevant identifier (stickerId,

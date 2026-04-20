@@ -44,9 +44,11 @@ beforeEach(() => {
 
 describe('M4.1 E2E — persistent vs clone across session lifetimes', () => {
   it('persistent=true: two sessions opened at different times share memory', async () => {
+    // M4.2.5: mocks must return valid {type,param} JSON — the send path
+    // now retries on parse errors.
     vi.spyOn(chatCompleteMod, 'chatComplete')
-      .mockResolvedValueOnce('first reply')
-      .mockResolvedValueOnce('second reply');
+      .mockResolvedValueOnce('[{"type":"text","param":"first reply"}]')
+      .mockResolvedValueOnce('[{"type":"text","param":"second reply"}]');
 
     // First session — chat once
     await withUserAppContext('app-test', async () => {
@@ -62,9 +64,8 @@ describe('M4.1 E2E — persistent vs clone across session lifetimes', () => {
       // memoryStore retains the previous exchange plus a leading
       // [上下文切换] marker from the first session's creation (null → app-test).
       // The second session is in the SAME app, so no additional marker fires.
-      // Under M4.2 the assistant entry stores the RENDERED form — the mock
-      // returns 'first reply' (non-JSON) → parseReply fallback → default
-      // renderer wraps to '小星: first reply'.
+      // Assistant entry stores the RENDERED form — default renderer wraps
+      // the {type:'text'} item as '小星: first reply'.
       const mem = useCharacterMemory.getState().getAll('char-001');
       expect(mem).toHaveLength(3);
       expect(mem[0]!.role).toBe('system');
@@ -84,7 +85,9 @@ describe('M4.1 E2E — persistent vs clone across session lifetimes', () => {
   });
 
   it('persistent=false: clone is isolated; memoryStore only sees the creation marker', async () => {
-    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue('clone reply');
+    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue(
+      '[{"type":"text","param":"clone reply"}]',
+    );
 
     await withUserAppContext('app-test', async () => {
       const s1 = chatWithCharacter('char-001', { persistent: false });
@@ -109,7 +112,9 @@ describe('M4.1 E2E — persistent vs clone across session lifetimes', () => {
   });
 
   it('mixed: persistent=false side conversation does not leak into persistent=true', async () => {
-    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue('reply');
+    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue(
+      '[{"type":"text","param":"reply"}]',
+    );
 
     await withUserAppContext('app-test', async () => {
       const clone = chatWithCharacter('char-001', { persistent: false });
@@ -126,8 +131,7 @@ describe('M4.1 E2E — persistent vs clone across session lifetimes', () => {
     // character-scoped, not session-scoped); the clone's user/assistant turns
     // do NOT leak. The subsequent persistent=true session in the same app does
     // not inject a second marker. The assistant entry is stored in its
-    // RENDERED form (M4.2) — 'reply' is non-JSON so the default renderer
-    // wraps it as '小星: reply'.
+    // RENDERED form — the {type:'text'} item renders as '小星: reply'.
     expect(mem.map((e) => e.content)).toEqual([
       '[上下文切换] 用户打开了 app-test',
       'main topic',
