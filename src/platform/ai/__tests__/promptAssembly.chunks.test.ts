@@ -85,14 +85,11 @@ describe('promptAssembly chunks 7 / 8 (M4.2.5 unified)', () => {
   });
 
   it('chunk 8 omitted entirely when availableTools is empty or undefined', () => {
-    // NOTE: the chunk-7 template prose mentions "详见 [可用动作]" in its
-    // body, so we check for the chunk-8 HEADER specifically (at start of a
-    // line or block) rather than a bare string presence.
     const outNone = systemBlock(BASE); // no availableTools
-    expect(outNone).not.toMatch(/(^|\n\n)\[可用动作\]\n/);
+    expect(outNone).not.toContain('[可用动作]');
 
     const outEmpty = systemBlock({ ...BASE, availableTools: [] });
-    expect(outEmpty).not.toMatch(/(^|\n\n)\[可用动作\]\n/);
+    expect(outEmpty).not.toContain('[可用动作]');
   });
 
   it('chunk 7 still fires even when no tools — unified path is the default', () => {
@@ -103,8 +100,7 @@ describe('promptAssembly chunks 7 / 8 (M4.2.5 unified)', () => {
     });
     expect(out).toContain('[回复格式]');
     expect(out).toContain('{"type":"<type>","param":<param>}');
-    // Chunk-8 header absent (prose mention of [可用动作] inside chunk 7 is OK)
-    expect(out).not.toMatch(/(^|\n\n)\[可用动作\]\n/);
+    expect(out).not.toContain('[可用动作]');
   });
 
   it('ordering: 6.5 [当前任务] → 7 [回复格式] → 8 [可用动作]', () => {
@@ -137,8 +133,7 @@ describe('promptAssembly chunks 7 / 8 (M4.2.5 unified)', () => {
     expect(out).toContain('[Heartbeat ReAct format]');
     expect(out).not.toContain('[当前任务]');
     expect(out).not.toContain('[回复格式]');
-    // Chunk-8 header absent (prose mention of [可用动作] inside chunk 7 is irrelevant since chunk 7 is also gated out here)
-    expect(out).not.toMatch(/(^|\n\n)\[可用动作\]\n/);
+    expect(out).not.toContain('[可用动作]');
   });
 
   it('legacy availableStickers path: emits old [可用表情包] block when neither appPrompt nor tools set', () => {

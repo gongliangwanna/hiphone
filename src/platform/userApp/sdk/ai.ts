@@ -164,14 +164,19 @@ export function getCharacters(): CharacterInfo[] {
 
 interface TextItem {
   type: 'text';
-  content: string;
+  param: string;
 }
 
 /**
  * For user apps that receive a raw reply string which may be either
- * plain text OR a XingYu-style JSON array of items, extract just the
- * text. Non-JSON input returns unchanged. Arrays return the concatenated
- * text items joined by newline; sticker / signature items are dropped.
+ * plain text OR an M4.2.5 unified JSON array of `{type, param}` items,
+ * extract just the text. Non-JSON input returns unchanged. Arrays return
+ * the concatenated text items joined by newline; non-text items are
+ * dropped.
+ *
+ * NOTE: returns empty string when the array has no text items (e.g. a
+ * bid_call-only reply). Callers that want a "raw fallback" should use
+ * `extractPlainText(raw) || raw`.
  */
 export function extractPlainText(raw: string): string {
   const trimmed = raw.trim();
@@ -185,9 +190,9 @@ export function extractPlainText(raw: string): string {
           typeof x === 'object' &&
           x !== null &&
           (x as { type?: unknown }).type === 'text' &&
-          typeof (x as { content?: unknown }).content === 'string',
+          typeof (x as { param?: unknown }).param === 'string',
       )
-      .map((x) => x.content);
+      .map((x) => x.param);
     return texts.join('\n');
   } catch {
     return raw;

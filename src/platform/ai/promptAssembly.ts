@@ -376,7 +376,7 @@ function buildSystemBlock(
         `你用 JSON 数组回复,每条是一个工具调用:`,
         `{"type":"<type>","param":<param>}`,
         ``,
-        `param 的形状由每个工具决定,详见 [可用动作]。`,
+        `param 的形状由每个工具决定,详见下方的动作清单。`,
         ``,
         `示例: [{"type":"text","param":"你好"},{"type":"sticker","param":{"stickerId":"s1","content":"笑"}}]`,
         ``,

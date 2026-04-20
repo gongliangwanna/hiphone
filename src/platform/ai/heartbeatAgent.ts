@@ -310,7 +310,14 @@ async function runHeartbeat(
     // Collect thought for activity log
     if (parsed.thought) thoughts.push(parsed.thought);
 
-    // Execute all actions in this turn, collect observations
+    // Execute all actions in this turn, collect observations.
+    //
+    // NOTE: `parsed.actions` here is the HEARTBEAT ReAct shape
+    // (ParsedReactOutput — see parseReactOutput above), NOT the
+    // M4.2.5 unified `ReplyItem[]` shape produced by parseReply.
+    // Heartbeat uses `formatOverride` to bypass the unified format and
+    // has its own parser, so the M4.2.5 field-rename (content → param)
+    // does not affect this iteration.
     const observations: string[] = [];
     let hitDone = false;
 

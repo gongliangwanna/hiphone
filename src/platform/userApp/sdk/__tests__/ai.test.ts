@@ -178,9 +178,9 @@ describe('@hiphone/ai — extractPlainText', () => {
     expect(extractPlainText('hello')).toBe('hello');
   });
 
-  it('XingYu-style JSON → text items joined with newline', () => {
+  it('M4.2.5 unified JSON → text items joined with newline', () => {
     const raw =
-      '[{"type":"text","content":"你好呀"},{"type":"text","content":"今天怎么样"},{"type":"sticker","stickerId":"x","content":"笑"}]';
+      '[{"type":"text","param":"你好呀"},{"type":"text","param":"今天怎么样"},{"type":"sticker","param":{"stickerId":"x","content":"笑"}}]';
     expect(extractPlainText(raw)).toBe('你好呀\n今天怎么样');
   });
 
@@ -188,15 +188,24 @@ describe('@hiphone/ai — extractPlainText', () => {
     expect(extractPlainText('[{broken')).toBe('[{broken');
   });
 
-  it('JSON with only non-text items → empty string', () => {
-    const raw = '[{"type":"sticker","stickerId":"x","content":"笑"}]';
+  it('JSON with only non-text items → empty string (caller decides fallback)', () => {
+    const raw = '[{"type":"sticker","param":{"stickerId":"x","content":"笑"}}]';
     expect(extractPlainText(raw)).toBe('');
   });
 
   it('non-array JSON top-level → returns raw unchanged', () => {
-    expect(extractPlainText('{"type":"text","content":"hi"}')).toBe(
-      '{"type":"text","content":"hi"}',
+    expect(extractPlainText('{"type":"text","param":"hi"}')).toBe(
+      '{"type":"text","param":"hi"}',
     );
+  });
+
+  it('old-format {type:"text",content} items are dropped (no content fallback)', () => {
+    // Pre-M4.2.5 wire format is no longer supported; these items should be
+    // filtered out. The caller's `extractPlainText(raw) || raw` pattern
+    // then displays the raw JSON, which is the expected behaviour for a
+    // stale LLM reply from an unmigrated deployment.
+    const raw = '[{"type":"text","content":"old format"}]';
+    expect(extractPlainText(raw)).toBe('');
   });
 });
 
