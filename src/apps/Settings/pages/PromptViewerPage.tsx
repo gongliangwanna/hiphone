@@ -6,8 +6,13 @@ import { usePersonaStore } from '@/platform/stores/personaStore';
 import { useWorldBookStore } from '@/platform/stores/worldBookStore';
 import { useXYData } from '@/apps/XingYu/xingYuDataStore';
 import { useStickerStore } from '@/apps/XingYu/stickerStore';
-import { useCharacterMemory } from '@/platform/ai/characterMemoryStore';
+import { useCharacterMemory, type MemoryEntry } from '@/platform/ai/characterMemoryStore';
 import { runCompressionIfNeeded } from '@/platform/ai/characterMemoryCompression';
+
+// Stable empty reference for the no-entries case. Returning a fresh `[]`
+// from the selector on every call breaks useSyncExternalStore's snapshot
+// stability contract and triggers "Maximum update depth exceeded".
+const EMPTY_ENTRIES: readonly MemoryEntry[] = [];
 import { buildDeviceContext } from '@/platform/ai/deviceContext';
 import { inspectPrompt, type PromptSection } from '@/platform/ai/promptAssembly';
 
@@ -209,7 +214,9 @@ export function PromptViewerPage() {
 
   const convId = char ? `c-char-${char.id}` : '';
   const msgCount = useXYData((s) => s.messages.filter((m) => m.convId === convId).length);
-  const memoryEntriesForChar = useCharacterMemory((s) => (char ? s.entries[char.id] ?? [] : []));
+  const memoryEntriesForChar = useCharacterMemory((s) =>
+    char ? (s.entries[char.id] ?? EMPTY_ENTRIES) : EMPTY_ENTRIES,
+  );
   const latestSummary = useMemo(
     () => [...memoryEntriesForChar].reverse().find((e) => e.compressed) ?? null,
     [memoryEntriesForChar],
