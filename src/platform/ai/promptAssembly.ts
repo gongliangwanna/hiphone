@@ -148,6 +148,90 @@ export interface MemoryRenderContext {
   personaName: string;
 }
 
+// ---------------------------------------------------------------------------
+// Transcript rendering (history-as-system-transcript refactor, 2026-04-22)
+// ---------------------------------------------------------------------------
+
+export interface TranscriptRenderResult {
+  /** system #2 内容；含 `[长期记忆]\n...` 前缀。无压缩 entry 时为 null。 */
+  longTermMemory: string | null;
+  /** system #3 内容；含 `[历史记录]\n` 首行 + N 行 entry。无活 entry 时为 null。 */
+  transcriptBlock: string | null;
+  /** 最后一条活 entry 是 role=user 时非 null。 */
+  userTurn: ChatMessage | null;
+}
+
+function formatHHMM(ts: number): string {
+  const d = new Date(ts);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function resolveTranscriptSpeaker(
+  entry: MemoryEntry,
+  ctx: MemoryRenderContext,
+): string | null {
+  if (entry.role === 'system') return null;
+  if (entry.role === 'assistant') return '我';
+  // role === 'user'
+  if (entry.speakerId === 'me') return ctx.personaName;
+  const byFull = ctx.charactersById.get(entry.speakerId);
+  if (byFull) return byFull.name;
+  const stripped = entry.speakerId.startsWith('char-')
+    ? entry.speakerId.slice('char-'.length)
+    : entry.speakerId;
+  const byStripped = ctx.charactersById.get(stripped);
+  if (byStripped) return byStripped.name;
+  return entry.speakerId;
+}
+
+function renderTranscriptLine(entry: MemoryEntry, ctx: MemoryRenderContext): string {
+  const time = formatHHMM(entry.createdAt);
+  const speaker = resolveTranscriptSpeaker(entry, ctx);
+  if (speaker === null) return `[${time}] ${entry.content}`;
+  return `[${time}] ${speaker}：${entry.content}`;
+}
+
+export function renderMemoryToTranscript(
+  entries: readonly MemoryEntry[],
+  ctx: MemoryRenderContext,
+): TranscriptRenderResult {
+  // Latest compressed entry → long-term memory block (raw content, prefix already baked in).
+  const latestCompressed = [...entries].reverse().find((e) => e.compressed);
+  const longTermMemory = latestCompressed ? latestCompressed.content : null;
+
+  const live = entries.filter((e) => !e.compressed);
+  if (live.length === 0) {
+    return { longTermMemory, transcriptBlock: null, userTurn: null };
+  }
+
+  const last = live[live.length - 1]!;
+
+  let transcriptEntries: readonly MemoryEntry[];
+  let userTurn: ChatMessage | null;
+
+  if (last.role === 'user') {
+    transcriptEntries = live.slice(0, -1);
+    const speaker = resolveTranscriptSpeaker(last, ctx);
+    userTurn = {
+      role: 'user',
+      content: speaker ? `${speaker}：${last.content}` : last.content,
+    };
+  } else {
+    transcriptEntries = live;
+    userTurn = null;
+  }
+
+  let transcriptBlock: string | null;
+  if (transcriptEntries.length === 0) {
+    transcriptBlock = null;
+  } else {
+    const lines = transcriptEntries.map((e) => renderTranscriptLine(e, ctx));
+    transcriptBlock = ['[历史记录]', ...lines].join('\n');
+  }
+
+  return { longTermMemory, transcriptBlock, userTurn };
+}
+
 /**
  * Convert a character's memoryStore entries directly into chat messages,
  * preserving raw assistant content (JSON passthrough) and prefixing every
