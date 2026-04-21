@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from 'react';
-import { ChevronRight, Brain, Cpu, MessageSquare, Clock, FileText, Archive, Loader2 } from 'lucide-react';
+import { ChevronRight, Brain, Cpu, MessageSquare, Clock, FileText, Archive, Loader2, Send } from 'lucide-react';
 import { useCharacterStore } from '@/platform/stores/characterStore';
 import { useAIConfigStore } from '@/platform/stores/aiConfigStore';
 import { usePersonaStore } from '@/platform/stores/personaStore';
@@ -22,12 +22,13 @@ import { inspectPrompt, type PromptSection } from '@/platform/ai/promptAssembly'
 
 const SECTION_ICONS: Record<string, typeof Brain> = {
   'System 提示词': Brain,
-  '历史摘要': FileText,
+  '长期记忆': FileText,
+  '历史记录': MessageSquare,
   'Post-history 指令': Clock,
+  '当前输入': Send,
 };
 
 function getSectionIcon(label: string) {
-  if (label.startsWith('聊天历史')) return MessageSquare;
   return SECTION_ICONS[label] ?? Cpu;
 }
 

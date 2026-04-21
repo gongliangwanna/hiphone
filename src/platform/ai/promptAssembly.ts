@@ -224,34 +224,8 @@ export function renderMemoryToTranscript(
   return { longTermMemory, transcriptBlock, userTurn };
 }
 
-/**
- * Convert a character's memoryStore entries directly into chat messages,
- * preserving raw assistant content (JSON passthrough) and prefixing every
- * user-role entry with the speaker's display name so the LLM can
- * disambiguate multi-party contexts without a custom labeled narration.
- */
-export function renderMemoryToChatMessages(
-  entries: readonly MemoryEntry[],
-  ctx: MemoryRenderContext,
-): ChatMessage[] {
-  const out: ChatMessage[] = [];
-  for (const e of entries) {
-    if (e.role === 'system') {
-      out.push({ role: 'system', content: e.content });
-      continue;
-    }
-    if (e.role === 'assistant') {
-      out.push({ role: 'assistant', content: e.content });
-      continue;
-    }
-    // role === 'user' — prefix with speaker display name
-    const name = resolveSpeakerName(e.speakerId, ctx);
-    out.push({ role: 'user', content: `${name}：${e.content}` });
-  }
-  return out;
-}
-
-// Shared by both renderMemoryToChatMessages (legacy) and resolveTranscriptSpeaker (new).
+// Shared by resolveTranscriptSpeaker (for user entries) — resolves a speakerId
+// to its display name, with fallbacks for stripped vs prefixed conventions.
 function resolveSpeakerName(speakerId: string, ctx: MemoryRenderContext): string {
   if (speakerId === 'me') return ctx.personaName;
   // Try the full speakerId as key first, then stripped (defensive against
@@ -565,49 +539,48 @@ export function inspectPrompt(input: PromptInput): PromptInspection {
   const historyBudget = Math.max(0, totalBudget - aiConfig.maxTokens - systemTokens - postTokens - overhead);
 
   const trimmed = trimMemoryToFit(input.memoryEntries, historyBudget, aiConfig.keepRecentMessages);
-  const historyMessages = renderMemoryToChatMessages(trimmed, {
+  const { longTermMemory, transcriptBlock, userTurn } = renderMemoryToTranscript(trimmed, {
     currentCharId: input.currentCharId,
     charactersById: input.charactersById,
     personaName: persona.name,
   });
-  const historyTokens = historyMessages.reduce((s, m) => s + estimateContentTokens(m.content), 0);
 
   const sections: PromptSection[] = [
     { label: 'System 提示词', content: systemBlock, tokens: systemTokens },
   ];
 
-  // Split into summary (role=system, compressed) vs chat (role=user/assistant)
-  const summaryMsg = historyMessages.find(
-    (m) => m.role === 'system' && typeof m.content === 'string' && m.content.startsWith('[之前的对话摘要]'),
-  );
-  const chatMsgs = historyMessages.filter((m) => m !== summaryMsg);
-
-  if (summaryMsg) {
-    const summaryText = contentToText(summaryMsg.content);
+  if (longTermMemory) {
     sections.push({
-      label: '历史摘要',
-      content: summaryText,
-      tokens: estimateContentTokens(summaryMsg.content),
+      label: '长期记忆',
+      content: longTermMemory,
+      tokens: estimateTokens(longTermMemory),
     });
   }
 
-  if (chatMsgs.length > 0) {
-    const chatContent = chatMsgs
-      .map((m) => {
-        const text = contentToText(m.content);
-        return `[${m.role === 'user' ? '用户' : '助手'}] ${text}`;
-      })
-      .join('\n');
+  if (transcriptBlock) {
     sections.push({
-      label: `聊天历史 (${chatMsgs.length} 条)`,
-      content: chatContent,
-      tokens: chatMsgs.reduce((s, m) => s + estimateContentTokens(m.content), 0),
+      label: '历史记录',
+      content: transcriptBlock,
+      tokens: estimateTokens(transcriptBlock),
     });
   }
 
   if (postHistory) {
     sections.push({ label: 'Post-history 指令', content: postHistory, tokens: postTokens });
   }
+
+  if (userTurn) {
+    sections.push({
+      label: '当前输入',
+      content: typeof userTurn.content === 'string' ? userTurn.content : contentToText(userTurn.content),
+      tokens: estimateContentTokens(userTurn.content),
+    });
+  }
+
+  const historyTokens =
+    (longTermMemory ? estimateTokens(longTermMemory) : 0) +
+    (transcriptBlock ? estimateTokens(transcriptBlock) : 0) +
+    (userTurn ? estimateContentTokens(userTurn.content) : 0);
 
   return {
     sections,
@@ -665,28 +638,36 @@ export function assemblePrompt(input: PromptInput): PromptOutput {
     historyBudget,
     aiConfig.keepRecentMessages,
   );
-  const historyMessages = renderMemoryToChatMessages(trimmed, {
-    currentCharId: input.currentCharId,
-    charactersById: input.charactersById,
-    personaName: persona.name,
-  });
+  const { longTermMemory, transcriptBlock, userTurn } = renderMemoryToTranscript(
+    trimmed,
+    {
+      currentCharId: input.currentCharId,
+      charactersById: input.charactersById,
+      personaName: persona.name,
+    },
+  );
 
-  // Assemble final message array.
-  const messages: ChatMessage[] = [
-    { role: 'system', content: systemBlock },
-    ...historyMessages,
-  ];
-
-  // Inject post-history as a trailing system message (highest attention weight).
+  // Assemble final message array: system #1, optional system #2/#3, system #4, optional user turn.
+  const messages: ChatMessage[] = [{ role: 'system', content: systemBlock }];
+  if (longTermMemory) {
+    messages.push({ role: 'system', content: longTermMemory });
+  }
+  if (transcriptBlock) {
+    messages.push({ role: 'system', content: transcriptBlock });
+  }
   if (postHistory) {
     messages.push({ role: 'system', content: postHistory });
   }
+  if (userTurn) {
+    messages.push(userTurn);
+  }
 
-  const tokenEstimate =
-    systemTokens +
-    historyMessages.reduce((s, m) => s + estimateContentTokens(m.content), 0) +
-    postTokens +
-    overhead;
+  const historyTokens =
+    (longTermMemory ? estimateTokens(longTermMemory) : 0) +
+    (transcriptBlock ? estimateTokens(transcriptBlock) : 0) +
+    (userTurn ? estimateContentTokens(userTurn.content) : 0);
+
+  const tokenEstimate = systemTokens + historyTokens + postTokens + overhead;
 
   // Ratio: how much of the history budget is consumed by raw history tokens.
   const historyTokenRatio = historyBudget > 0 ? preTrimTokens / historyBudget : 0;

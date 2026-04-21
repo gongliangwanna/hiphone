@@ -165,13 +165,14 @@ describe('M4.2.5 E2E — unified {type, param} across apps', () => {
     expect(auctionSys).not.toContain('- sticker:');
     expect(auctionSys).not.toContain('- update_signature:');
 
-    // History carried across: Auction prompt should include XingYu's earlier exchange
-    const auctionHistory = auctionMessages
-      .filter((m) => m.role === 'user' || m.role === 'assistant')
-      .map((m) => (typeof m.content === 'string' ? m.content : ''))
-      .join('\n');
-    expect(auctionHistory).toContain('小米：早上好');
-    expect(auctionHistory).toContain('你好呀');
+    // History carried across: Auction prompt should include XingYu's earlier exchange.
+    // The new layout puts mid-history entries inside a single [历史记录] system block,
+    // and the last user entry of this round ("开始") becomes the trailing user turn.
+    const auctionTranscript = auctionMessages.find(
+      (m) => m.role === 'system' && typeof m.content === 'string' && m.content.startsWith('[历史记录]'),
+    );
+    expect(auctionTranscript?.content).toContain('小米：早上好');
+    expect(auctionTranscript?.content).toContain('你好呀');
 
     // ── Round 3: back to XingYu
     chatSpy.mockResolvedValueOnce('[{"type":"text","param":"聊聊刚刚的拍卖吧"}]');
