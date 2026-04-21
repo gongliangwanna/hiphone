@@ -71,7 +71,6 @@ async function doCompression(characterId: string): Promise<void> {
   // Always start from index 0 so any prior compressed entry is replaced,
   // preventing accumulation of long-term memory entries.
   const compressStartIdx = 0;
-  if (compressStartIdx > compressEndIdx) return;
 
   const slice = entries.slice(compressStartIdx, compressEndIdx + 1);
   if (slice.length === 0) return;
