@@ -115,6 +115,30 @@ describe('renderMemoryToTranscript — row formatting', () => {
     expect(out.transcriptBlock).toBe('[历史记录]\n[03:05] 我：a');
     expect(out.userTurn).toEqual({ role: 'user', content: '小米：b' });
   });
+
+  it('multi-party alternation preserves order and labels every turn', () => {
+    const out = renderMemoryToTranscript(
+      [
+        mem({ role: 'user', speakerId: 'me', content: '你们谁去拿快递', createdAt: tsAt(10, 0) }),
+        mem({ role: 'user', speakerId: 'char-002', content: '我', createdAt: tsAt(10, 1) }),
+        mem({ role: 'user', speakerId: 'char-002', content: '等下就去', createdAt: tsAt(10, 2) }),
+        mem({ role: 'assistant', speakerId: 'char-001', content: '辛苦你啦', createdAt: tsAt(10, 3) }),
+        mem({ role: 'user', speakerId: 'me', content: '谢谢小月', createdAt: tsAt(10, 4) }),
+      ],
+      ctx,
+    );
+    // last is user(me) → transcript holds the first 4 entries, userTurn holds the 5th
+    expect(out.transcriptBlock).toBe(
+      [
+        '[历史记录]',
+        '[10:00] 小米：你们谁去拿快递',
+        '[10:01] 小月：我',
+        '[10:02] 小月：等下就去',
+        '[10:03] 我：辛苦你啦',
+      ].join('\n'),
+    );
+    expect(out.userTurn).toEqual({ role: 'user', content: '小米：谢谢小月' });
+  });
 });
 
 describe('renderMemoryToTranscript — userTurn dispatch', () => {

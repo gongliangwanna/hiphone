@@ -489,12 +489,10 @@ function buildPostHistory(
 }
 
 // ---------------------------------------------------------------------------
-// Main entry
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
 // Inspection (for prompt viewer UI)
 // ---------------------------------------------------------------------------
+
+const SAFETY_MARGIN = 0.9; // 10% safety buffer for token estimation inaccuracy
 
 export interface PromptSection {
   label: string;
@@ -594,8 +592,6 @@ export function inspectPrompt(input: PromptInput): PromptInspection {
 // ---------------------------------------------------------------------------
 // Main entry
 // ---------------------------------------------------------------------------
-
-const SAFETY_MARGIN = 0.9; // 10% safety buffer for token estimation inaccuracy
 
 export function assemblePrompt(input: PromptInput): PromptOutput {
   const { character, persona, aiConfig, worldBookChunk, now, deviceContext, availableStickers, formatOverride } = input;
