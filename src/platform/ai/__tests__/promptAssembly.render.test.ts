@@ -68,7 +68,7 @@ describe('renderMemoryToChatMessages', () => {
         mem({
           role: 'system',
           speakerId: 'system',
-          content: '[之前的对话摘要] 小米和小星聊了吃饭',
+          content: '[长期记忆] 小米和小星聊了吃饭',
           source: 'system',
           compressed: true,
         }),
@@ -76,7 +76,7 @@ describe('renderMemoryToChatMessages', () => {
       ctx,
     );
     expect(out).toEqual([
-      { role: 'system', content: '[之前的对话摘要] 小米和小星聊了吃饭' },
+      { role: 'system', content: '[长期记忆] 小米和小星聊了吃饭' },
     ]);
   });
 

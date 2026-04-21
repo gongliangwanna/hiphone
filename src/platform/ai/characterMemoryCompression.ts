@@ -68,8 +68,10 @@ async function doCompression(characterId: string): Promise<void> {
   const compressEndIdx = entries.length - keepRecent - 1;
   if (compressEndIdx < 0) return;
 
-  const compressStartIdx = entries.findIndex((e) => !e.compressed);
-  if (compressStartIdx < 0 || compressStartIdx > compressEndIdx) return;
+  // Always start from index 0 so any prior compressed entry is replaced,
+  // preventing accumulation of long-term memory entries.
+  const compressStartIdx = 0;
+  if (compressStartIdx > compressEndIdx) return;
 
   const slice = entries.slice(compressStartIdx, compressEndIdx + 1);
   if (slice.length === 0) return;
@@ -111,7 +113,7 @@ async function doCompression(characterId: string): Promise<void> {
     characterId,
     role: 'system',
     speakerId: 'system',
-    content: `[之前的对话摘要]\n${summaryText}`,
+    content: `[长期记忆]\n${summaryText}`,
     source: 'system',
     createdAt: endEntry.createdAt + 1,
     compressed: true,

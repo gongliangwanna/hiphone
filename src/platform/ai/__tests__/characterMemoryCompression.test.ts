@@ -105,6 +105,50 @@ describe('runCompressionIfNeeded', () => {
     expect(spy).toHaveBeenCalledOnce();
     spy.mockRestore();
   });
+
+  it('second compression replaces the prior long-term memory entry (bug fix)', async () => {
+    useAIConfigStore.setState({
+      apiKey: 'sk', model: 'x', provider: 'openrouter', apiEndpoint: '',
+      contextWindow: 1000, maxTokens: 100,
+      summarizeThreshold: 0.5, keepRecentMessages: 2,
+    } as never);
+    const api = useCharacterMemory.getState();
+    const long = 'x'.repeat(2000);
+
+    // Round 1: fill up beyond threshold.
+    api.append('char-001', { role: 'user', speakerId: 'me', content: long, source: 'xingyu' });
+    api.append('char-001', { role: 'assistant', speakerId: 'char-001', content: long, source: 'xingyu' });
+    api.append('char-001', { role: 'user', speakerId: 'me', content: long, source: 'xingyu' });
+    api.append('char-001', { role: 'assistant', speakerId: 'char-001', content: 'recent1', source: 'xingyu' });
+    api.append('char-001', { role: 'user', speakerId: 'me', content: 'recent2', source: 'xingyu' });
+
+    const spy = vi
+      .spyOn(summarizer, 'compressHistory')
+      .mockResolvedValueOnce('round1-summary')
+      .mockResolvedValueOnce('round2-summary');
+
+    await runCompressionIfNeeded('char-001');
+
+    // After round 1: should have 1 compressed + 2 recent.
+    let remaining = useCharacterMemory.getState().getAll('char-001');
+    expect(remaining.filter((e) => e.compressed)).toHaveLength(1);
+
+    // Round 2: append more and trigger again.
+    api.append('char-001', { role: 'user', speakerId: 'me', content: long, source: 'xingyu' });
+    api.append('char-001', { role: 'assistant', speakerId: 'char-001', content: long, source: 'xingyu' });
+    api.append('char-001', { role: 'user', speakerId: 'me', content: 'recent3', source: 'xingyu' });
+
+    await runCompressionIfNeeded('char-001');
+
+    remaining = useCharacterMemory.getState().getAll('char-001');
+    // Critical: ≤1 compressed entry ever, even after multiple rounds.
+    expect(remaining.filter((e) => e.compressed)).toHaveLength(1);
+    // And the one we have is the latest (round2-summary is in content).
+    const latest = remaining.find((e) => e.compressed)!;
+    expect(latest.content).toContain('round2-summary');
+
+    spy.mockRestore();
+  });
 });
 
 describe('installAutoCompression — post-append hook wiring', () => {
