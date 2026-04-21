@@ -145,3 +145,56 @@ describe('promptAssembly chunks 7 / 8 (M4.2.5 unified)', () => {
     expect(out).toContain('s1：笑');
   });
 });
+
+describe('PromptInput.sceneHint', () => {
+  it('sceneHint is appended to the post-history system message', () => {
+    const out = assemblePrompt({
+      character: {
+        name: '小星', description: '', personality: '', scenario: '',
+        systemPrompt: '', postHistoryInstructions: '', messageExamples: '',
+      },
+      persona: { name: '小米', description: '' },
+      aiConfig: {
+        systemPrompt: '', postHistoryInstructions: '',
+        contextWindow: 10000, maxTokens: 500,
+        keepRecentMessages: 5, worldInfoBudgetPercent: 30,
+      },
+      worldBookChunk: '',
+      memoryEntries: [],
+      currentCharId: 'char-001',
+      charactersById: new Map([['char-001', { id: 'char-001', name: '小星' }]]),
+      now: new Date(2026, 3, 22, 10, 30),
+      sceneHint: '[当前场景] 你正在和小月私聊。请直接回复小月。',
+    });
+
+    const postHistory = out.messages[out.messages.length - 1]!;
+    expect(postHistory.role).toBe('system');
+    expect(postHistory.content).toContain('[当前场景] 你正在和小月私聊');
+    // Time anchor must still come first in post-history
+    expect((postHistory.content as string).indexOf('[当前时间'))
+      .toBeLessThan((postHistory.content as string).indexOf('[当前场景]'));
+  });
+
+  it('absent sceneHint → post-history unchanged', () => {
+    const out = assemblePrompt({
+      character: {
+        name: '小星', description: '', personality: '', scenario: '',
+        systemPrompt: '', postHistoryInstructions: '', messageExamples: '',
+      },
+      persona: { name: '小米', description: '' },
+      aiConfig: {
+        systemPrompt: '', postHistoryInstructions: '',
+        contextWindow: 10000, maxTokens: 500,
+        keepRecentMessages: 5, worldInfoBudgetPercent: 30,
+      },
+      worldBookChunk: '',
+      memoryEntries: [],
+      currentCharId: 'char-001',
+      charactersById: new Map([['char-001', { id: 'char-001', name: '小星' }]]),
+      now: new Date(2026, 3, 22, 10, 30),
+    });
+
+    const postHistory = out.messages[out.messages.length - 1]!;
+    expect(postHistory.content).not.toContain('[当前场景]');
+  });
+});

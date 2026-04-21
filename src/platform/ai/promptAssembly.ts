@@ -80,6 +80,8 @@ export interface PromptInput {
   availableTools?: ToolDefinition[];
   /** appSystemPromptRegistry snapshot; drives chunk 6.5 [当前任务]. */
   appSystemPromptSnapshot?: string;
+  /** 场景级提示词（AI-AI 用来传 `[当前场景]`）；拼在 post-history 末尾。 */
+  sceneHint?: string;
 }
 
 // Multimodal content parts (OpenAI Vision format)
@@ -481,6 +483,7 @@ function buildPostHistory(
   aiConfig: PromptAIConfig,
   now: Date,
   deviceContext?: string,
+  sceneHint?: string,
 ): string {
   const parts: string[] = [];
 
@@ -500,9 +503,12 @@ function buildPostHistory(
   const wd = ZH_WEEKDAYS[now.getDay()] ?? '?';
   parts.push(`[当前时间：${yyyy}年${mo}月${dd}日 星期${wd} ${hh}:${mm}]`);
 
-  // Device context — active app, weather, etc.
   if (deviceContext?.trim()) {
     parts.push(deviceContext.trim());
+  }
+
+  if (sceneHint?.trim()) {
+    parts.push(sceneHint.trim());
   }
 
   return parts.join('\n\n');
@@ -549,7 +555,7 @@ export function inspectPrompt(input: PromptInput): PromptInspection {
   );
   systemBlock = expandMacros(systemBlock, character, persona, now);
 
-  let postHistory = buildPostHistory(character, aiConfig, now, deviceContext);
+  let postHistory = buildPostHistory(character, aiConfig, now, deviceContext, input.sceneHint);
   postHistory = expandMacros(postHistory, character, persona, now);
 
   const systemTokens = estimateTokens(systemBlock);
@@ -636,7 +642,7 @@ export function assemblePrompt(input: PromptInput): PromptOutput {
 
   // Phase 3 — Post-history (built before Phase 2 so we can subtract its cost
   // from the history budget).
-  let postHistory = buildPostHistory(character, aiConfig, now, deviceContext);
+  let postHistory = buildPostHistory(character, aiConfig, now, deviceContext, input.sceneHint);
   postHistory = expandMacros(postHistory, character, persona, now);
 
   // Compute token budgets.
