@@ -172,16 +172,7 @@ function resolveTranscriptSpeaker(
 ): string | null {
   if (entry.role === 'system') return null;
   if (entry.role === 'assistant') return '我';
-  // role === 'user'
-  if (entry.speakerId === 'me') return ctx.personaName;
-  const byFull = ctx.charactersById.get(entry.speakerId);
-  if (byFull) return byFull.name;
-  const stripped = entry.speakerId.startsWith('char-')
-    ? entry.speakerId.slice('char-'.length)
-    : entry.speakerId;
-  const byStripped = ctx.charactersById.get(stripped);
-  if (byStripped) return byStripped.name;
-  return entry.speakerId;
+  return resolveSpeakerName(entry.speakerId, ctx);
 }
 
 function renderTranscriptLine(entry: MemoryEntry, ctx: MemoryRenderContext): string {
@@ -211,11 +202,10 @@ export function renderMemoryToTranscript(
 
   if (last.role === 'user') {
     transcriptEntries = live.slice(0, -1);
-    const speaker = resolveTranscriptSpeaker(last, ctx);
-    userTurn = {
-      role: 'user',
-      content: speaker ? `${speaker}：${last.content}` : last.content,
-    };
+    // speaker is non-null for user entries (resolveTranscriptSpeaker only returns
+    // null for role=system, and falls back to raw speakerId for unknown ids).
+    const speaker = resolveTranscriptSpeaker(last, ctx)!;
+    userTurn = { role: 'user', content: `${speaker}：${last.content}` };
   } else {
     transcriptEntries = live;
     userTurn = null;
@@ -259,6 +249,7 @@ export function renderMemoryToChatMessages(
   return out;
 }
 
+// Shared by both renderMemoryToChatMessages (legacy) and resolveTranscriptSpeaker (new).
 function resolveSpeakerName(speakerId: string, ctx: MemoryRenderContext): string {
   if (speakerId === 'me') return ctx.personaName;
   // Try the full speakerId as key first, then stripped (defensive against
