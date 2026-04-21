@@ -140,12 +140,7 @@ export async function runAIChat(opts: AIChatOptions): Promise<AIChatResult> {
       charactersById,
       now: new Date(),
       deviceContext: buildDeviceContext(),
-    });
-
-    // Inject current chat scene context
-    chatMessages.push({
-      role: 'system',
-      content: `[当前场景] 你正在和${other.name}私聊。请直接回复${other.name}。`,
+      sceneHint: `[当前场景] 你正在和${other.name}私聊。请直接回复${other.name}。`,
     });
 
     let rawReply: string;
