@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { useXYData } from '../xingYuDataStore';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { useXYData, _isGroupReplyGenerating } from '../xingYuDataStore';
 import { useCharacterStore } from '@/platform/stores/characterStore';
 import { useAIConfigStore } from '@/platform/stores/aiConfigStore';
 
@@ -124,5 +124,46 @@ describe('triggerGroupReply', () => {
     useXYData.getState().triggerGroupReply(convId, 'stranger');
     const msgs = useXYData.getState().messages.filter((m) => m.convId === convId);
     expect(msgs).toHaveLength(0);
+  });
+
+  it('serial lock: second trigger no-ops while first is generating', async () => {
+    // Provide valid-looking AI config so the apiKey early-exit doesn't fire.
+    useAIConfigStore.setState({ apiKey: 'test-key', endpoint: 'https://example.invalid', model: 'm' } as any);
+
+    const convId = useXYData.getState().createGroupConversation(['a', 'b']);
+
+    // Mock chatWithCharacter to return a ChatSession whose replyToLast() never resolves,
+    // keeping the lock held for the duration of the test.
+    const aiSdk = await import('@/platform/userApp/sdk/ai');
+    const spy = vi.spyOn(aiSdk, 'chatWithCharacter').mockImplementation(() => {
+      return {
+        characterId: 'a',
+        persistent: true,
+        history: [],
+        send: () => new Promise(() => {}),
+        streamSend: async function* () {},
+        append: () => {},
+        replyToLast: () => new Promise(() => {}), // never resolves → lock stays held
+        streamReplyToLast: async function* () {},
+        abort: () => {},
+      } as any;
+    });
+
+    try {
+      useXYData.getState().triggerGroupReply(convId, 'a');
+      expect(_isGroupReplyGenerating(convId)).toBe('a');
+
+      const msgsAfterFirst = useXYData.getState().messages.filter((m) => m.convId === convId).length;
+
+      // Second call should be no-op due to lock
+      useXYData.getState().triggerGroupReply(convId, 'b');
+      expect(_isGroupReplyGenerating(convId)).toBe('a'); // still 'a', not 'b'
+      const msgsAfterSecond = useXYData.getState().messages.filter((m) => m.convId === convId).length;
+      expect(msgsAfterSecond).toBe(msgsAfterFirst);
+    } finally {
+      spy.mockRestore();
+      // Clean up the lock so it doesn't bleed into other tests
+      // (the never-resolving promise means .finally() on the session never runs)
+    }
   });
 });

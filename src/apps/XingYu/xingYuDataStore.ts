@@ -438,7 +438,10 @@ function scheduleAICharacterReply(
         const names = conv.groupMemberIds
           .map((id) => chars.find((c) => c.id === id)?.name ?? '未知')
           .join('、');
-        return `你正在群聊「${conv.groupName ?? names}」中，群成员包含：${names}。请以你自己的身份发言，可以回应其他成员说的话。`;
+        const title = conv.groupName && conv.groupName !== names
+          ? `你正在群聊「${conv.groupName}」中，群成员包含：${names}。`
+          : `你正在群聊中，群成员包含：${names}。`;
+        return `${title}请以你自己的身份发言，可以回应其他成员说的话。`;
       })()
     : undefined;
 
