@@ -23,6 +23,7 @@ import {
   type MemoryEntry,
 } from '@/platform/ai/characterMemoryStore';
 import { injectSystemEvent } from '@/platform/ai/contextEvents';
+import { getAppDisplayName } from '@/platform/appRegistry';
 import {
   getLastActiveAppId,
   setLastActiveAppId,
@@ -329,21 +330,13 @@ export function chatWithCharacter(
   const source: MemoryEntry['source'] = `app:${sessionAppId}`;
 
   // M4.2 §4 — auto app-switch system marker.
-  // Only triggers when we have a real app id (not the 'unknown' fallback) AND
-  // the character's lastActiveAppId is either null (first contact) or
-  // different from the current. Using capturedAppId (not sessionAppId) so
-  // the fallback 'unknown' never fires markers — that would spam test
-  // fixtures that run outside withUserAppContext.
+  // Only triggers when we have a real app id (not the 'unknown' fallback).
+  // See ensureAppSwitchMarker for the shared implementation; host apps that
+  // write user entries to memoryStore BEFORE creating a session (e.g. XingYu)
+  // should call ensureAppSwitchMarker directly so the marker lands ahead of
+  // the user turn in the transcript.
   if (capturedAppId !== null) {
-    const previousAppId = getLastActiveAppId(characterId);
-    if (previousAppId !== capturedAppId) {
-      const message =
-        previousAppId === null
-          ? `[上下文切换] 用户打开了 ${capturedAppId}`
-          : `[上下文切换] 用户从 ${previousAppId} 切到了 ${capturedAppId}`;
-      injectSystemEvent(characterId, message);
-      setLastActiveAppId(characterId, capturedAppId);
-    }
+    ensureAppSwitchMarker(characterId, capturedAppId);
   }
 
   // M4.2 §5/§8 — freeze registry snapshots at session creation.
@@ -740,3 +733,33 @@ export {
 } from '@/platform/ai/appSystemPromptRegistry';
 
 export { injectSystemEvent } from '@/platform/ai/contextEvents';
+
+/**
+ * Write a `[上下文切换]` system entry into the character's memory the first
+ * time (or after a gap) they're addressed from `appId`. Idempotent: no-op
+ * when the character's lastActiveAppId already equals `appId`.
+ *
+ * Callers that write a user memory entry BEFORE creating a ChatSession
+ * (e.g. XingYu's sendMessage → _appendMessage → scheduleAICharacterReply
+ * pattern) should call this up-front so the switch marker lands before the
+ * user turn rather than after. `chatWithCharacter` also calls it internally,
+ * so SDK-only callers don't need to double up.
+ *
+ * `appId` is resolved to a display name via `getAppDisplayName`; this keeps
+ * transcripts reading `用户打开了 可爱信` rather than leaking internal ids
+ * like `xingyu`.
+ */
+export function ensureAppSwitchMarker(
+  characterId: string,
+  appId: string,
+): void {
+  const previousAppId = getLastActiveAppId(characterId);
+  if (previousAppId === appId) return;
+  const currentName = getAppDisplayName(appId);
+  const message =
+    previousAppId === null
+      ? `[上下文切换] 用户打开了 ${currentName}`
+      : `[上下文切换] 用户从 ${getAppDisplayName(previousAppId)} 切到了 ${currentName}`;
+  injectSystemEvent(characterId, message);
+  setLastActiveAppId(characterId, appId);
+}

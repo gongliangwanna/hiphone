@@ -274,6 +274,7 @@ export async function install(
     const component = buildUserAppComponent(manifest, compiledMap);
     appRegistry.register({
       id: manifest.id,
+      name: manifest.name,
       type: 'user',
       component,
       perspectiveAware: manifest.perspectiveAware,
@@ -376,6 +377,7 @@ export async function loadInstalledApps(): Promise<void> {
     const component = buildUserAppComponent(meta.manifest, src.compiledMap);
     appRegistry.register({
       id,
+      name: meta.manifest.name,
       type: 'user',
       component,
       perspectiveAware: meta.manifest.perspectiveAware,

@@ -180,8 +180,19 @@ function resolveTranscriptSpeaker(
 function renderTranscriptLine(entry: MemoryEntry, ctx: MemoryRenderContext): string {
   const time = formatHHMM(entry.createdAt);
   const speaker = resolveTranscriptSpeaker(entry, ctx);
-  if (speaker === null) return `[${time}] ${entry.content}`;
-  return `[${time}] ${speaker}：${entry.content}`;
+  const lines = entry.content.split('\n');
+  // System entries (speaker === null) get one timestamp, no speaker label.
+  // Multi-line content stays untouched on continuation lines.
+  if (speaker === null) {
+    return `[${time}] ${lines.join('\n')}`;
+  }
+  // User / assistant entries: first line carries `[HH:MM] speaker：`,
+  // continuation lines carry `speaker：` only. This is the format a reader
+  // encountering multi-tool replies (e.g. text + sticker) expects.
+  const first = `[${time}] ${speaker}：${lines[0] ?? ''}`;
+  if (lines.length === 1) return first;
+  const rest = lines.slice(1).map((l) => `${speaker}：${l}`);
+  return [first, ...rest].join('\n');
 }
 
 export function renderMemoryToTranscript(

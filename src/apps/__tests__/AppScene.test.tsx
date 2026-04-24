@@ -17,6 +17,7 @@ function registerStub(opts: {
 }) {
   appRegistry.register({
     id: opts.id,
+    name: opts.label,
     type: 'builtin',
     component: makeStub(opts.label),
     perspectiveAware: opts.perspectiveAware,

@@ -107,6 +107,7 @@ describe('installer.install — single file', () => {
     function Stub() { return null; }
     appRegistry.register({
       id: 'settings',
+      name: '设置',
       type: 'builtin',
       component: Stub,
       perspectiveAware: false,
@@ -270,6 +271,7 @@ describe('installer.uninstall', () => {
     function Stub() { return null; }
     appRegistry.register({
       id: 'settings',
+      name: '设置',
       type: 'builtin',
       component: Stub,
       perspectiveAware: false,

@@ -26,6 +26,7 @@ describe('@hiphone/nav', () => {
     it('writes params to openParams and activates the target app', () => {
       appRegistry.register({
         id: '__test-target__',
+        name: 'Test Target',
         type: 'user',
         component: () => null,
         perspectiveAware: false,
@@ -42,6 +43,7 @@ describe('@hiphone/nav', () => {
     it('defaults params to an empty object when not provided', () => {
       appRegistry.register({
         id: '__test-target__',
+        name: 'Test Target',
         type: 'user',
         component: () => null,
         perspectiveAware: false,
@@ -67,6 +69,7 @@ describe('@hiphone/nav', () => {
     it('subsequent open() on the same app replaces the previous params', () => {
       appRegistry.register({
         id: '__test-target__',
+        name: 'Test Target',
         type: 'user',
         component: () => null,
         perspectiveAware: false,
@@ -80,6 +83,7 @@ describe('@hiphone/nav', () => {
     it('works for builtin apps too', () => {
       appRegistry.register({
         id: '__test-target__',
+        name: 'Test Target',
         type: 'builtin',
         component: () => null,
         perspectiveAware: false,

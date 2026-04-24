@@ -34,6 +34,7 @@ import { useAIConfigStore } from '@/platform/stores/aiConfigStore';
 import { filterReply } from '@/platform/ai/replyFilters';
 import {
   chatWithCharacter,
+  ensureAppSwitchMarker,
   type ChatReply,
   type ChatSession,
 } from '@/platform/userApp/sdk/ai';
@@ -54,6 +55,24 @@ registerXingYuAi();
  */
 function isChatActive(convId: string): boolean {
   return useXYNav.getState().activeChatId === convId;
+}
+
+/**
+ * Fire `[上下文切换] 用户打开了 可爱信` into the character's memory BEFORE
+ * the user turn is written. XingYu writes user memory entries inline via
+ * `_appendMessage`, then creates the ChatSession lazily inside
+ * `scheduleAICharacterReply` — if we relied on `chatWithCharacter`'s own
+ * marker injection, the marker would land AFTER the user entry. This
+ * helper restores the expected "system event → user turn" order.
+ *
+ * Idempotent (ensureAppSwitchMarker is a no-op when lastActiveAppId ===
+ * appId). Safe to invoke on every send action.
+ */
+function fireAppSwitchMarker(convId: string, get: () => XingYuDataState): void {
+  const conv = get().conversations.find((c) => c.id === convId);
+  if (conv?.characterId) {
+    ensureAppSwitchMarker(conv.characterId, XINGYU_APP_ID);
+  }
 }
 
 
@@ -648,6 +667,7 @@ export const useXYData = create<XingYuDataState>()(
           timestamp: Date.now(),
           ...(quoteRef ? { quoteRef } : {}),
         };
+        fireAppSwitchMarker(convId, get);
         _appendMessage(msg, 'xingyu');
         scheduleIdolReply(convId, get);
       },
@@ -656,6 +676,7 @@ export const useXYData = create<XingYuDataState>()(
         const previewTitle = noteRef.title || '无标题';
         const text = `[备忘录分享] ${previewTitle}\n${noteRef.body}`;
         const msg: Message = { id: uid(), convId, senderId: 'me', type: 'text', text, noteRef, timestamp: Date.now() };
+        fireAppSwitchMarker(convId, get);
         _appendMessage(msg, 'xingyu');
         scheduleIdolReply(convId, get);
       },
@@ -665,18 +686,21 @@ export const useXYData = create<XingYuDataState>()(
         if (lyricsText) parts.push(`\n歌词:\n${lyricsText}`);
         const text = parts.join('');
         const msg: Message = { id: uid(), convId, senderId: 'me', type: 'text', text, songRef, timestamp: Date.now() };
+        fireAppSwitchMarker(convId, get);
         _appendMessage(msg, 'xingyu');
         scheduleIdolReply(convId, get);
       },
 
       sendImageMessage: (convId, imageUrl) => {
         const msg: Message = { id: uid(), convId, senderId: 'me', type: 'image', imageUrl, timestamp: Date.now() };
+        fireAppSwitchMarker(convId, get);
         _appendMessage(msg, 'xingyu');
         scheduleIdolReply(convId, get);
       },
 
       sendStickerMessage: (convId, stickerUrl, stickerDesc) => {
         const msg: Message = { id: uid(), convId, senderId: 'me', type: 'sticker', stickerUrl, stickerDesc, timestamp: Date.now() };
+        fireAppSwitchMarker(convId, get);
         _appendMessage(msg, 'xingyu');
         scheduleIdolReply(convId, get);
       },

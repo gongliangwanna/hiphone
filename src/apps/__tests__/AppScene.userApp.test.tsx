@@ -33,6 +33,7 @@ describe('AppScene — user app perspective behavior', () => {
   it('renders user app normally when perspectiveAware=true in char view', () => {
     appRegistry.register({
       id: 'aware',
+      name: 'Aware',
       type: 'user',
       component: TodoStub,
       perspectiveAware: true,
@@ -47,6 +48,7 @@ describe('AppScene — user app perspective behavior', () => {
   it('shows read-only placeholder when perspectiveAware=false in char view', () => {
     appRegistry.register({
       id: 'unaware',
+      name: 'Unaware',
       type: 'user',
       component: TodoStub,
       perspectiveAware: false,
@@ -63,6 +65,7 @@ describe('AppScene — user app perspective behavior', () => {
   it('renders user app regardless of perspectiveAware in player view', () => {
     appRegistry.register({
       id: 'unaware-player',
+      name: 'Unaware Player',
       type: 'user',
       component: TodoStub,
       perspectiveAware: false,

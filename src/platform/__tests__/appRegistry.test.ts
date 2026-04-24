@@ -11,6 +11,7 @@ describe('appRegistry', () => {
   it('register + get returns the registered entry', () => {
     appRegistry.register({
       id: 'foo',
+      name: 'Foo',
       type: 'builtin',
       component: Stub,
       perspectiveAware: false,
@@ -23,7 +24,7 @@ describe('appRegistry', () => {
   it('has returns true after register, false after unregister', () => {
     expect(appRegistry.has('foo')).toBe(false);
     appRegistry.register({
-      id: 'foo', type: 'builtin', component: Stub,
+      id: 'foo', name: 'Foo', type: 'builtin', component: Stub,
       perspectiveAware: false, globalData: false,
     });
     expect(appRegistry.has('foo')).toBe(true);
@@ -33,11 +34,11 @@ describe('appRegistry', () => {
 
   it('list returns all registered entries', () => {
     appRegistry.register({
-      id: 'a', type: 'builtin', component: Stub,
+      id: 'a', name: 'A', type: 'builtin', component: Stub,
       perspectiveAware: false, globalData: false,
     });
     appRegistry.register({
-      id: 'b', type: 'user', component: Stub,
+      id: 'b', name: 'B', type: 'user', component: Stub,
       perspectiveAware: true, globalData: false,
     });
     expect(appRegistry.list().map((e) => e.id).sort()).toEqual(['a', 'b']);
@@ -51,11 +52,11 @@ describe('appRegistry', () => {
     function A() { return null; }
     function B() { return null; }
     appRegistry.register({
-      id: 'foo', type: 'builtin', component: A,
+      id: 'foo', name: 'Foo', type: 'builtin', component: A,
       perspectiveAware: false, globalData: false,
     });
     appRegistry.register({
-      id: 'foo', type: 'user', component: B,
+      id: 'foo', name: 'Foo v2', type: 'user', component: B,
       perspectiveAware: true, globalData: false,
     });
     expect(appRegistry.get('foo')?.component).toBe(B);

@@ -116,11 +116,12 @@ describe('M4.2.5 E2E — unified {type, param} across apps', () => {
     expect(mem1[0]!.content).toMatch(/上下文切换/);
     expect(mem1[0]!.content).toMatch(/xingyu/);
     expect(mem1[1]!).toMatchObject({ role: 'user', content: '早上好' });
-    // Default renderer output: text uses "<speaker>: <param>"; sticker uses
-    // "<speaker>: 【sticker】<JSON.stringify(param)>".
+    // Default renderer output (M1 post-fix): plain text for text items; sticker
+    // renders as `发送表情包 "<content>" (stickerId=<id>)`. The transcript
+    // layer owns the `[HH:MM] speaker：` prefix, not the renderer.
     expect(mem1[2]!.role).toBe('assistant');
     expect(mem1[2]!.content).toBe(
-      '小星: 你好呀\n小星: 【sticker】{"stickerId":"s1","content":"笑脸"}',
+      '你好呀\n发送表情包 "笑脸" (stickerId=s1)',
     );
 
     // Confirm XingYu prompt had ONLY XingYu's tools in chunk 8
@@ -256,7 +257,7 @@ describe('M4.2.5 E2E — unified {type, param} across apps', () => {
     expect(mem[3]!.content).toMatch(/不是合法 JSON/);
     expect(mem[5]!.content).toMatch(/未注册的 type/);
     expect(mem[5]!.content).toMatch(/unknown_tool/);
-    expect(mem[6]!.content).toBe('小星: sorry, recovered');
+    expect(mem[6]!.content).toBe('sorry, recovered');
   });
 
   it('parse exhaustion in Auction → platform toast fires (no onParseFailure set)', async () => {

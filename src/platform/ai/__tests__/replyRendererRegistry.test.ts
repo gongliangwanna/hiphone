@@ -51,6 +51,6 @@ describe('replyRendererRegistry', () => {
       '[{"type":"text","param":"hi"},{"type":"sticker","param":{"stickerId":"s1","content":"笑"}}]',
       { speakerName: '小星', tools: [] },
     );
-    expect(out).toBe('小星: hi\n小星: 【sticker】{"stickerId":"s1","content":"笑"}');
+    expect(out).toBe('hi\n发送表情包 "笑" (stickerId=s1)');
   });
 });

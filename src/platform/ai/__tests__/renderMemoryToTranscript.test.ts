@@ -85,22 +85,44 @@ describe('renderMemoryToTranscript — row formatting', () => {
     expect(out.transcriptBlock).toBe('[历史记录]\n[01:02] char-ghost：?\n[01:03] 我：ok');
   });
 
-  it('multi-line content occupies multiple lines; next [HH:MM] bounds it', () => {
+  it('multi-line assistant content: first line has [HH:MM] speaker, continuations keep speaker only', () => {
     const out = renderMemoryToTranscript(
       [
         mem({
           role: 'assistant',
           speakerId: 'char-001',
-          content: '[自主活动记录]\n在房间里走了一圈',
+          content: '你好呀\n发送表情包 "笑脸" (stickerId=s1)',
           createdAt: tsAt(2, 0),
         }),
         mem({ role: 'user', speakerId: 'me', content: '好的', createdAt: tsAt(2, 1) }),
       ],
       ctx,
     );
-    // last is user → transcript excludes the final entry, userTurn holds it
-    expect(out.transcriptBlock).toBe('[历史记录]\n[02:00] 我：[自主活动记录]\n在房间里走了一圈');
+    // Each content-line needs a speaker label so the next prompt can tell text
+    // turns from sticker turns when the reply contains multiple tool items.
+    expect(out.transcriptBlock).toBe(
+      '[历史记录]\n[02:00] 我：你好呀\n我：发送表情包 "笑脸" (stickerId=s1)',
+    );
     expect(out.userTurn).toEqual({ role: 'user', content: '小米：好的' });
+  });
+
+  it('multi-line system entry keeps [HH:MM] only (no speaker prefix on any line)', () => {
+    const out = renderMemoryToTranscript(
+      [
+        mem({
+          role: 'system',
+          speakerId: 'system',
+          source: 'system',
+          content: '[多行事件]\nline1\nline2',
+          createdAt: tsAt(2, 0),
+        }),
+        mem({ role: 'assistant', speakerId: 'char-001', content: 'ok', createdAt: tsAt(2, 5) }),
+      ],
+      ctx,
+    );
+    expect(out.transcriptBlock).toBe(
+      '[历史记录]\n[02:00] [多行事件]\nline1\nline2\n[02:05] 我：ok',
+    );
   });
 
   it('HH and MM are zero-padded', () => {

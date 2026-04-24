@@ -32,6 +32,7 @@ beforeEach(() => {
   // "uninstall-builtin" guard.
   appRegistry.register({
     id: APP_ID,
+    name: APP_ID,
     type: 'user',
     component: () => null,
     perspectiveAware: false,

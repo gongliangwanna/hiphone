@@ -76,24 +76,25 @@ describe('XingYu sendMessage flow — memoryStore integration', () => {
     console.log('[t=1500ms]', useCharacterMemory.getState().getAll('char-001').length);
     await new Promise((r) => setTimeout(r, 1000));
     const mem = useCharacterMemory.getState().getAll('char-001');
-    // S7: order is [user, marker, assistant] — _appendMessage writes the
-    // user turn to memoryStore BEFORE scheduleAICharacterReply calls
-    // chatWithCharacter under withUserAppContext('xingyu'), which then
-    // injects the [上下文切换] marker on first contact. Assistant entry
-    // is the RENDERED form (spec D1), not raw JSON.
+    // Order: [marker, user, assistant] — XingYu's sendMessage now calls
+    // fireAppSwitchMarker BEFORE _appendMessage so the [上下文切换] system
+    // event lands ahead of the first user turn in the transcript (bug fix
+    // for the session creator racing the user entry). Assistant entry is
+    // the RENDERED form (spec D1), which after the renderer cleanup no
+    // longer carries a speaker prefix — transcript rendering owns that.
     expect(mem).toHaveLength(3);
-    expect(mem[0]!).toMatchObject({
+    expect(mem[0]!.role).toBe('system');
+    expect(mem[0]!.content).toMatch(/上下文切换/);
+    expect(mem[1]!).toMatchObject({
       role: 'user',
       speakerId: 'me',
       content: '今天天气怎么样',
       source: 'xingyu',
     });
-    expect(mem[1]!.role).toBe('system');
-    expect(mem[1]!.content).toMatch(/上下文切换/);
     expect(mem[2]!).toMatchObject({
       role: 'assistant',
       speakerId: 'char-001',
-      content: '小星: 挺不错的呀\n小星: 阳光明媚', // ← rendered form
+      content: '挺不错的呀\n阳光明媚', // ← rendered form, no speaker prefix
       source: 'xingyu',
     });
 
@@ -113,14 +114,14 @@ describe('XingYu sendMessage flow — memoryStore integration', () => {
     await new Promise((r) => setTimeout(r, 100));
 
     const mem = useCharacterMemory.getState().getAll('char-001');
-    // S7: user message (written by _appendMessage) + [上下文切换] marker
-    // (injected by chatWithCharacter on session create). No assistant
-    // entry — XingYu's catch path does not append on failure, and the
-    // [AI 回复失败] UI bubble isn't routed through memoryStore either.
+    // [上下文切换] marker (written by fireAppSwitchMarker pre-user) + user
+    // entry. No assistant entry — XingYu's catch path does not append on
+    // failure, and the [AI 回复失败] UI bubble isn't routed through
+    // memoryStore either.
     expect(mem).toHaveLength(2);
-    expect(mem[0]!.role).toBe('user');
-    expect(mem[1]!.role).toBe('system');
-    expect(mem[1]!.content).toMatch(/上下文切换/);
+    expect(mem[0]!.role).toBe('system');
+    expect(mem[0]!.content).toMatch(/上下文切换/);
+    expect(mem[1]!.role).toBe('user');
 
     const xyMsgs = useXYData.getState().messages.filter((m) => !m.streaming);
     const errMsg = xyMsgs.find((m) => m.type === 'text' && m.text.startsWith('[AI 回复失败]'));
@@ -140,18 +141,18 @@ describe('XingYu sendMessage flow — memoryStore integration', () => {
     await new Promise((r) => setTimeout(r, 2500));
 
     const mem = useCharacterMemory.getState().getAll('char-001');
-    // S7: user + marker + rendered assistant
+    // Order: marker + user + rendered assistant (marker lands first now).
     expect(mem).toHaveLength(3);
-    expect(mem[0]!).toMatchObject({
+    expect(mem[0]!.role).toBe('system');
+    expect(mem[0]!.content).toMatch(/上下文切换/);
+    expect(mem[1]!).toMatchObject({
       role: 'user',
       speakerId: 'me',
       content: '[图片 https://example.com/cat.jpg]',
     });
-    expect(mem[1]!.role).toBe('system');
-    expect(mem[1]!.content).toMatch(/上下文切换/);
     expect(mem[2]!).toMatchObject({
       role: 'assistant',
-      content: '小星: 好可爱',
+      content: '好可爱',
     });
   }, 10_000);
 
@@ -169,14 +170,14 @@ describe('XingYu sendMessage flow — memoryStore integration', () => {
     await new Promise((r) => setTimeout(r, 2500));
 
     const mem = useCharacterMemory.getState().getAll('char-001');
-    // S7: user + marker + rendered assistant
+    // Order: marker + user + rendered assistant.
     expect(mem).toHaveLength(3);
-    expect(mem[0]!.content).toBe('[表情：笑脸]');
-    expect(mem[1]!.role).toBe('system');
-    expect(mem[1]!.content).toMatch(/上下文切换/);
+    expect(mem[0]!.role).toBe('system');
+    expect(mem[0]!.content).toMatch(/上下文切换/);
+    expect(mem[1]!.content).toBe('[表情：笑脸]');
     expect(mem[2]!).toMatchObject({
       role: 'assistant',
-      content: '小星: 哈哈',
+      content: '哈哈',
     });
   }, 10_000);
 

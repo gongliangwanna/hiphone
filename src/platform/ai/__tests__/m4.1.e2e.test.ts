@@ -64,22 +64,23 @@ describe('M4.1 E2E — persistent vs clone across session lifetimes', () => {
       // memoryStore retains the previous exchange plus a leading
       // [上下文切换] marker from the first session's creation (null → app-test).
       // The second session is in the SAME app, so no additional marker fires.
-      // Assistant entry stores the RENDERED form — default renderer wraps
-      // the {type:'text'} item as '小星: first reply'.
+      // Assistant entry stores the RENDERED form. After the renderer cleanup
+      // the `<speaker>:` prefix no longer appears in the stored content —
+      // transcript rendering owns that.
       const mem = useCharacterMemory.getState().getAll('char-001');
       expect(mem).toHaveLength(3);
       expect(mem[0]!.role).toBe('system');
       expect(mem[0]!.content).toMatch(/上下文切换/);
       expect(mem[0]!.content).toMatch(/app-test/);
       expect(mem[1]!.content).toBe('hello');
-      expect(mem[2]!.content).toBe('小星: first reply');
+      expect(mem[2]!.content).toBe('first reply');
 
       // Next send layers on top; memoryStore ends with marker + all four turns.
       await s2.send('are you still there');
       const finalMem = useCharacterMemory.getState().getAll('char-001');
       expect(finalMem).toHaveLength(5);
       expect(finalMem.map((e) => e.content).slice(1)).toEqual([
-        'hello', '小星: first reply', 'are you still there', '小星: second reply',
+        'hello', 'first reply', 'are you still there', 'second reply',
       ]);
     });
   });
@@ -135,7 +136,7 @@ describe('M4.1 E2E — persistent vs clone across session lifetimes', () => {
     expect(mem.map((e) => e.content)).toEqual([
       '[上下文切换] 用户打开了 app-test',
       'main topic',
-      '小星: reply',
+      'reply',
     ]);
   });
 });

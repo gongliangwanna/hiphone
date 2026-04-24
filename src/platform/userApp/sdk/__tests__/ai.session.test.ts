@@ -148,8 +148,8 @@ describe('session.send (non-streaming)', () => {
     const reply = await s.send('hello');
 
     expect(reply.raw).toBe('[{"type":"text","param":"reply A"}]');
-    expect(reply.rendered).toBe('小星: reply A');
-    expect(s.history.map((e) => e.content)).toEqual(['hello', '小星: reply A']);
+    expect(reply.rendered).toBe('reply A');
+    expect(s.history.map((e) => e.content)).toEqual(['hello', 'reply A']);
     expect(useCharacterMemory.getState().getAll('char-001')).toHaveLength(0);
   });
 
@@ -163,7 +163,7 @@ describe('session.send (non-streaming)', () => {
     const reply = await withUserAppContext('app-demo', () => s.send('hello'));
 
     expect(reply.raw).toBe('[{"type":"text","param":"reply B"}]');
-    expect(reply.rendered).toBe('小星: reply B');
+    expect(reply.rendered).toBe('reply B');
     // mem[0] is the session-creation [上下文切换] marker, then user + reply.
     const mem = useCharacterMemory.getState().getAll('char-001');
     expect(mem).toHaveLength(3);
@@ -171,7 +171,7 @@ describe('session.send (non-streaming)', () => {
     expect(mem[0]!.content).toMatch(/上下文切换/);
     expect(mem[1]!).toMatchObject({ role: 'user', speakerId: 'me', content: 'hello', source: 'app:app-demo' });
     // Assistant entry now stores the RENDERED form, not the raw string.
-    expect(mem[2]!).toMatchObject({ role: 'assistant', speakerId: 'char-001', content: '小星: reply B', source: 'app:app-demo' });
+    expect(mem[2]!).toMatchObject({ role: 'assistant', speakerId: 'char-001', content: 'reply B', source: 'app:app-demo' });
   });
 
   it('persistent=true + mirror:false: buffer updated, memoryStore gets only the creation marker', async () => {
@@ -184,7 +184,7 @@ describe('session.send (non-streaming)', () => {
     const reply = await withUserAppContext('app-demo', () => s.send('hello', { mirror: false }));
 
     expect(reply.raw).toBe('[{"type":"text","param":"reply C"}]');
-    expect(reply.rendered).toBe('小星: reply C');
+    expect(reply.rendered).toBe('reply C');
     // Creation still injects one [上下文切换] marker; mirror:false keeps the
     // actual user/assistant turns out of memoryStore.
     const mem = useCharacterMemory.getState().getAll('char-001');
@@ -204,8 +204,8 @@ describe('session.replyToLast', () => {
     const reply = await s.replyToLast();
 
     expect(reply.raw).toBe('[{"type":"text","param":"reply D"}]');
-    expect(reply.rendered).toBe('小星: reply D');
-    expect(s.history.map((e) => e.content)).toEqual(['hi', '小星: reply D']);
+    expect(reply.rendered).toBe('reply D');
+    expect(s.history.map((e) => e.content)).toEqual(['hi', 'reply D']);
     expect(useCharacterMemory.getState().getAll('char-001')).toHaveLength(0);
   });
 });
@@ -221,7 +221,7 @@ describe('session.streamSend', () => {
     expect(chunks).toEqual(['hello world']);
     // Buffer records the RENDERED form (non-JSON input falls back to a
     // single text item, which the default renderer wraps).
-    expect(s.history.map((e) => e.content)).toEqual(['hi', '小星: hello world']);
+    expect(s.history.map((e) => e.content)).toEqual(['hi', 'hello world']);
   });
 
   it('abort() mid-stream → throws AIAbortedError', async () => {
@@ -394,7 +394,7 @@ describe('chatWithCharacter — ChatReply shape (M4.2.5)', () => {
     const texts = reply.items.filter((i) => i.type === 'text').map((i) => i.param);
     expect(texts).toEqual(['挺好']);
     // Default renderer, no app-specific override → goes through defaultReplyRenderer
-    expect(reply.rendered).toBe('小星: 挺好\n小星: 【bid_call】{"min":100}');
+    expect(reply.rendered).toBe('挺好\n【bid_call】{"min":100}');
   });
 
   it('mirror=true writes reply.rendered (not raw) into memoryStore', async () => {
@@ -408,7 +408,7 @@ describe('chatWithCharacter — ChatReply shape (M4.2.5)', () => {
 
     const mem = useCharacterMemory.getState().getAll('char-001');
     const assistantEntry = mem.find((e) => e.role === 'assistant')!;
-    expect(assistantEntry.content).toBe('小星: 你好'); // rendered, not raw JSON
+    expect(assistantEntry.content).toBe('你好'); // rendered, not raw JSON
   });
 
   it('session.history assistant entry also holds rendered text', async () => {
@@ -422,7 +422,7 @@ describe('chatWithCharacter — ChatReply shape (M4.2.5)', () => {
     });
 
     const assistantInBuffer = s.history.find((h) => h.role === 'assistant')!;
-    expect(assistantInBuffer.content).toBe('小星: 再见');
+    expect(assistantInBuffer.content).toBe('再见');
   });
 
   it('app-specific renderer (registered via replyRendererRegistry) drives rendered output', async () => {
@@ -453,8 +453,8 @@ describe('chatWithCharacter — ChatReply shape (M4.2.5)', () => {
       return { reply: r, historyAssistant: s.history.find((h) => h.role === 'assistant')! };
     });
 
-    expect(reply.rendered).toBe('小星: x');
-    expect(historyAssistant.content).toBe('小星: x'); // buffer always rendered
+    expect(reply.rendered).toBe('x');
+    expect(historyAssistant.content).toBe('x'); // buffer always rendered
     expect(useCharacterMemory.getState().getAll('char-001')).toHaveLength(1); // only the [上下文切换] marker from S2; no assistant
   });
 
@@ -468,7 +468,7 @@ describe('chatWithCharacter — ChatReply shape (M4.2.5)', () => {
     });
 
     expect(reply.raw).toBe('[{"type":"text","param":"re-reply"}]');
-    expect(reply.rendered).toBe('小星: re-reply');
+    expect(reply.rendered).toBe('re-reply');
     const texts = reply.items.filter((i) => i.type === 'text').map((i) => i.param);
     expect(texts).toEqual(['re-reply']);
   });
@@ -502,7 +502,7 @@ describe('chatWithCharacter — parse-error retry (M4.2.5 S2)', () => {
     //   [3] system [格式错误] not-json
     //   [4] assistant '[{"bad":"shape"}]' (raw of attempt 2)
     //   [5] system [格式错误] wrong-shape
-    //   [6] assistant '小星: finally ok' (rendered of attempt 3)
+    //   [6] assistant 'finally ok' (rendered of attempt 3)
     expect(mem).toHaveLength(7);
     expect(mem[2]!.role).toBe('assistant');
     expect(mem[2]!.content).toBe('not json at all');
@@ -513,7 +513,7 @@ describe('chatWithCharacter — parse-error retry (M4.2.5 S2)', () => {
     expect(mem[5]!.role).toBe('system');
     expect(mem[5]!.content).toMatch(/不符合 \{type, param\} 结构/);
     expect(mem[6]!.role).toBe('assistant');
-    expect(mem[6]!.content).toBe('小星: finally ok');
+    expect(mem[6]!.content).toBe('finally ok');
   });
 
   it('3 consecutive failures → returns empty-items ChatReply + default toast', async () => {

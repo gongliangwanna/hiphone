@@ -3,7 +3,7 @@ import { compileTsx } from './compiler';
 import { executeSandboxed } from './sandbox';
 import { resolveModule } from './sdk';
 import { wrapUserComponent } from './sdk/wrap';
-import { FAKE_USER_APP_ID, FAKE_USER_APP_SOURCE } from './fakeUserApp';
+import { FAKE_USER_APP_ID, FAKE_USER_APP_NAME, FAKE_USER_APP_SOURCE } from './fakeUserApp';
 
 /**
  * Run the full user-app pipeline on the hardcoded fake source, and
@@ -23,6 +23,7 @@ export async function mountFakeUserApp(): Promise<void> {
 
   appRegistry.register({
     id: FAKE_USER_APP_ID,
+    name: FAKE_USER_APP_NAME,
     type: 'user',
     component: WrappedComponent,
     perspectiveAware: false,

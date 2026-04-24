@@ -2,6 +2,8 @@ import type { ComponentType } from 'react';
 
 export interface AppRegistryEntry {
   id: string;
+  /** Human-readable display name (e.g. "设置", "可爱信"). Falls back to id in consumers when missing. */
+  name: string;
   type: 'builtin' | 'user';
   component: ComponentType;
   /** True if the app natively handles "view another's phone" perspective switching. */
@@ -35,3 +37,12 @@ class AppRegistry {
 }
 
 export const appRegistry = new AppRegistry();
+
+/**
+ * Resolve an app id to its human-readable display name. Falls back to the id
+ * itself for apps that haven't been registered (e.g. stale references in
+ * persisted state after uninstall).
+ */
+export function getAppDisplayName(id: string): string {
+  return appRegistry.get(id)?.name ?? id;
+}
