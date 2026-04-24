@@ -1,4 +1,5 @@
 import { motion } from 'motion/react';
+import { Loader2 } from 'lucide-react';
 import { useCharacterStore } from '@/platform/stores/characterStore';
 import { Avatar } from './Avatar';
 import { T } from '../theme';
@@ -48,10 +49,10 @@ export function GroupMemberStrip({ memberIds, generatingId, onTapMember }: Props
                 {isGenerating && (
                   <motion.div
                     className="absolute -right-1 -bottom-1 flex items-center justify-center rounded-full"
-                    style={{ width: 16, height: 16, backgroundColor: T.accent, color: '#fff', fontSize: 10 }}
+                    style={{ width: 16, height: 16, backgroundColor: T.accent, color: '#fff' }}
                     initial={{ scale: 0 }} animate={{ scale: 1 }}
                   >
-                    …
+                    <Loader2 size={10} strokeWidth={2.5} className="animate-spin" />
                   </motion.div>
                 )}
               </div>
