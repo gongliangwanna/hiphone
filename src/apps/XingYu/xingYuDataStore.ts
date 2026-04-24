@@ -11,6 +11,7 @@ import {
 import { installAutoCompression } from '@/platform/ai/characterMemoryCompression';
 import { _appendMessage } from '@/platform/ai/memoryWriter';
 import { uid } from '@/platform/utils/uid';
+import { stripCharPrefix } from '@/platform/utils/characterId';
 import type {
   Conversation,
   Favorite,
@@ -172,6 +173,15 @@ interface XingYuDataState {
   updateConversationSettings: (convId: string, patch: Partial<Pick<Conversation, 'backgroundUrl' | 'remarkName'>>) => void;
   /** 创建用户自建群聊（裸 characterId 数组；无需传群名，自动派生），返回 convId */
   createGroupConversation: (memberIds: string[]) => string;
+  /** 更新群头像 / 公告 / 名称（任意子集） */
+  updateGroupSettings: (
+    convId: string,
+    patch: Partial<Pick<Conversation, 'groupAvatar' | 'groupAnnouncement' | 'groupName'>>,
+  ) => void;
+  /** 追加群成员（去重） */
+  addGroupMembers: (convId: string, memberIds: string[]) => void;
+  /** 移除单个群成员；群成员 < 2 时抛错 */
+  removeGroupMember: (convId: string, memberId: string) => void;
   /** 清除角色的对话记忆（消息+摘要），保留会话并重注入开场白 */
   clearCharacterMemory: (characterId: string) => void;
   /**
@@ -891,9 +901,7 @@ export const useXYData = create<XingYuDataState>()(
       },
 
       createGroupConversation: (memberIds) => {
-        const stripped = memberIds.map((id) =>
-          id.startsWith('char-') ? id.slice('char-'.length) : id,
-        );
+        const stripped = memberIds.map(stripCharPrefix);
         const name = deriveGroupName(stripped);
         const convId = `c-group-${uid()}`;
         const conv: Conversation = {
@@ -907,6 +915,40 @@ export const useXYData = create<XingYuDataState>()(
         };
         set({ conversations: [conv, ...get().conversations] });
         return convId;
+      },
+
+      updateGroupSettings: (convId, patch) => {
+        set({
+          conversations: get().conversations.map((c) =>
+            c.id === convId && c.groupMemberIds ? { ...c, ...patch } : c,
+          ),
+        });
+      },
+
+      addGroupMembers: (convId, newIds) => {
+        const stripped = newIds.map(stripCharPrefix);
+        set({
+          conversations: get().conversations.map((c) => {
+            if (c.id !== convId || !c.groupMemberIds) return c;
+            const merged = Array.from(new Set([...c.groupMemberIds, ...stripped]));
+            return { ...c, groupMemberIds: merged };
+          }),
+        });
+      },
+
+      removeGroupMember: (convId, memberId) => {
+        const conv = get().conversations.find((c) => c.id === convId);
+        if (!conv?.groupMemberIds) return;
+        if (conv.groupMemberIds.length <= 2) {
+          throw new Error('至少需保留 2 名成员');
+        }
+        set({
+          conversations: get().conversations.map((c) =>
+            c.id === convId && c.groupMemberIds
+              ? { ...c, groupMemberIds: c.groupMemberIds.filter((id) => id !== memberId) }
+              : c,
+          ),
+        });
       },
 
       ensureCharacterConversation: (characterId) => {

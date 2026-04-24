@@ -19,6 +19,7 @@ import type {
   MemorySource,
   MemoryRole,
 } from './characterMemoryStore';
+import { stripCharPrefix } from '@/platform/utils/characterId';
 
 export interface BuildMemoryContext {
   /** The character whose memoryStore receives this entry; defines role mapping. */
@@ -59,10 +60,6 @@ function resolveSpeaker(
     return { role: 'assistant', speakerId: senderId };
   }
   return { role: 'user', speakerId: senderId };
-}
-
-function stripCharPrefix(id: string): string {
-  return id.startsWith('char-') ? id.slice('char-'.length) : id;
 }
 
 function messageToRawContent(msg: Message, ctx: BuildMemoryContext): string | null {
@@ -107,8 +104,7 @@ function resolveQuoteSenderName(senderId: string, ctx: BuildMemoryContext): stri
   // shape) or by the bare 'xxx' form. Check both to tolerate either convention.
   const byFull = ctx.charactersById.get(senderId);
   if (byFull) return byFull.name;
-  const stripped = senderId.startsWith('char-') ? senderId.slice('char-'.length) : senderId;
-  const byStripped = ctx.charactersById.get(stripped);
+  const byStripped = ctx.charactersById.get(stripCharPrefix(senderId));
   if (byStripped) return byStripped.name;
   return senderId;
 }

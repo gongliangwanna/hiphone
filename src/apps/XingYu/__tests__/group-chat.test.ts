@@ -45,3 +45,51 @@ describe('createGroupConversation', () => {
     expect(conv.groupMemberIds).toEqual(['xiaoxing', 'yueyue']);
   });
 });
+
+describe('group settings mutations', () => {
+  let convId: string;
+  beforeEach(() => {
+    useCharacterStore.setState({
+      characters: [
+        { id: 'a', name: 'A', avatar: '', description: '', personality: '', scenario: '', systemPrompt: '', postHistoryInstructions: '', messageExamples: [], firstMessage: '' },
+        { id: 'b', name: 'B', avatar: '', description: '', personality: '', scenario: '', systemPrompt: '', postHistoryInstructions: '', messageExamples: [], firstMessage: '' },
+        { id: 'c', name: 'C', avatar: '', description: '', personality: '', scenario: '', systemPrompt: '', postHistoryInstructions: '', messageExamples: [], firstMessage: '' },
+      ],
+    } as any);
+    useXYData.setState({ conversations: [], messages: [] });
+    convId = useXYData.getState().createGroupConversation(['a', 'b']);
+  });
+
+  it('updateGroupSettings changes avatar / announcement / name', () => {
+    useXYData.getState().updateGroupSettings(convId, {
+      groupAvatar: 'data:image/png;base64,xxx',
+      groupAnnouncement: '今天开会',
+      groupName: '技术组',
+    });
+    const conv = useXYData.getState().conversations.find((c) => c.id === convId)!;
+    expect(conv.groupAvatar).toBe('data:image/png;base64,xxx');
+    expect(conv.groupAnnouncement).toBe('今天开会');
+    expect(conv.groupName).toBe('技术组');
+  });
+
+  it('addGroupMembers appends new ids and dedupes', () => {
+    useXYData.getState().addGroupMembers(convId, ['c', 'a']); // 'a' already member
+    const conv = useXYData.getState().conversations.find((c) => c.id === convId)!;
+    expect(conv.groupMemberIds).toEqual(['a', 'b', 'c']);
+  });
+
+  it('removeGroupMember strips an id', () => {
+    useXYData.getState().addGroupMembers(convId, ['c']);
+    useXYData.getState().removeGroupMember(convId, 'b');
+    const conv = useXYData.getState().conversations.find((c) => c.id === convId)!;
+    expect(conv.groupMemberIds).toEqual(['a', 'c']);
+  });
+
+  it('removeGroupMember refuses to drop below 2 members', () => {
+    expect(() => useXYData.getState().removeGroupMember(convId, 'a')).toThrow(
+      /至少/,
+    );
+    const conv = useXYData.getState().conversations.find((c) => c.id === convId)!;
+    expect(conv.groupMemberIds).toEqual(['a', 'b']); // unchanged
+  });
+});
