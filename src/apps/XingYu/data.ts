@@ -133,6 +133,10 @@ export interface Conversation {
   groupMemberIds?: string[];
   /** AI-to-AI 会话：两个参与者的 characterId */
   aiChatParticipants?: [string, string];
+  /** 群头像（data URL，压缩后 base64） */
+  groupAvatar?: string;
+  /** 群公告文本 */
+  groupAnnouncement?: string;
 }
 
 export interface Moment {
