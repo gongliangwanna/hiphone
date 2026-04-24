@@ -328,13 +328,14 @@ function GroupPicker({
   const characters = useCharacterStore((s) => s.characters);
 
   const contacts = useMemo(() => {
+    const q = query.trim().toLowerCase();
     return characters
       .map((c) => ({
         id: c.id,
         name: c.name,
         avatar: c.avatar?.trim() || CHAR_FALLBACK_AVATAR,
       }))
-      .filter((c) => !query.trim() || c.name.toLowerCase().includes(query.trim().toLowerCase()));
+      .filter((c) => !q || c.name.toLowerCase().includes(q));
   }, [characters, query]);
 
   const toggle = (id: string) => {
