@@ -7,6 +7,7 @@ import { getIdol } from '../data';
 import { useCharacterStore } from '@/platform/stores/characterStore';
 import { Avatar } from '../components/Avatar';
 import { T, springs } from '../theme';
+import { GroupSettings } from '../components/GroupSettings';
 
 const CHAR_FALLBACK_AVATAR = '/resource/avatars/preset-01.jpg';
 
@@ -17,7 +18,7 @@ export function ChatSettings() {
   const openChat = useXYNav((s) => s.openChat);
   const conversations = useXYData((s) => s.conversations);
   const updateConvSettings = useXYData((s) => s.updateConversationSettings);
-  const createGroup = useXYData((s) => s.createGroupConversation);
+  const createGroupConversation = useXYData((s) => s.createGroupConversation);
   const characters = useCharacterStore((s) => s.characters);
 
   const conv = useMemo(
@@ -41,6 +42,17 @@ export function ChatSettings() {
   const bgFileRef = useRef<HTMLInputElement>(null);
 
   if (!conv) return null;
+
+  // Group conversations get a completely different settings page.
+  if (conv.groupMemberIds && conv.groupMemberIds.length > 0) {
+    return (
+      <GroupSettings
+        conv={conv}
+        onOpenPicker={() => setShowGroupPicker(true)}
+        onCompressImage={compressBgImage}
+      />
+    );
+  }
 
   const handleBgUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -255,9 +267,10 @@ export function ChatSettings() {
       <AnimatePresence>
         {showGroupPicker && (
           <GroupPicker
+            preselectCharacterId={conv.characterId}
             onClose={() => setShowGroupPicker(false)}
-            onCreate={(name, memberIds) => {
-              const convId = createGroup(name, memberIds);
+            onCreate={(memberIds) => {
+              const convId = createGroupConversation(memberIds);
               setShowGroupPicker(false);
               openChat(convId);
             }}
@@ -302,96 +315,98 @@ async function compressBgImage(file: File): Promise<string> {
 function GroupPicker({
   onClose,
   onCreate,
+  preselectCharacterId,
 }: {
   onClose: () => void;
-  onCreate: (name: string, memberIds: string[]) => void;
+  onCreate: (memberIds: string[]) => void;
+  preselectCharacterId?: string;
 }) {
-  const [groupName, setGroupName] = useState('');
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(
+    () => new Set(preselectCharacterId ? [preselectCharacterId] : []),
+  );
+  const [query, setQuery] = useState('');
   const characters = useCharacterStore((s) => s.characters);
 
   const contacts = useMemo(() => {
-    return characters.map((c) => ({
-      id: `char-${c.id}`,
-      name: c.name,
-      avatar: c.avatar?.trim() || CHAR_FALLBACK_AVATAR,
-      ringIndex: 0,
-    }));
-  }, [characters]);
+    return characters
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        avatar: c.avatar?.trim() || CHAR_FALLBACK_AVATAR,
+      }))
+      .filter((c) => !query.trim() || c.name.toLowerCase().includes(query.trim().toLowerCase()));
+  }, [characters, query]);
 
   const toggle = (id: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   };
 
+  const selectedArr = Array.from(selected);
+  const canCreate = selected.size >= 2;
+
   const handleCreate = () => {
-    if (selected.size < 2) return;
-    const name = groupName.trim() || contacts.filter((c) => selected.has(c.id)).map((c) => c.name).join('、');
-    onCreate(name, Array.from(selected));
+    if (!canCreate) return;
+    onCreate(selectedArr);
   };
 
   return (
     <motion.div className="absolute inset-0 z-50 flex flex-col">
-      <motion.div
-        className="absolute inset-0 bg-black/40"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.3 }}
-        onClick={onClose}
-      />
+      <div className="absolute inset-0" onClick={onClose} />
       <motion.div
         className="mt-auto flex flex-col"
         style={{
           backgroundColor: T.bg,
           borderTopLeftRadius: 24,
           borderTopRightRadius: 24,
-          maxHeight: '80%',
+          maxHeight: '85%',
         }}
-        initial={{ y: '100%' }}
-        animate={{ y: 0 }}
-        exit={{ y: '100%' }}
+        initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
         transition={{ type: 'spring', damping: 28, stiffness: 300 }}
       >
-        {/* 拖拽指示条 */}
         <div className="flex justify-center pt-3 pb-1">
           <div className="h-1 w-10 rounded-full" style={{ backgroundColor: T.separator }} />
         </div>
-
-        {/* 标题栏 */}
         <div className="flex items-center justify-between px-5 pb-3">
           <span style={{ fontSize: 16, fontWeight: 700, color: T.textPrimary }}>选择成员</span>
-          <motion.button
-            onClick={onClose}
-            whileTap={{ scale: 0.9 }}
-            className="flex items-center justify-center"
-            style={{ width: 28, height: 28 }}
-          >
+          <motion.button onClick={onClose} whileTap={{ scale: 0.9 }} style={{ width: 28, height: 28 }}>
             <X size={18} strokeWidth={2} color={T.textMuted} />
           </motion.button>
         </div>
 
-        {/* 群名输入 */}
-        <div className="px-5 pb-3">
-          <input
-            className="w-full bg-transparent outline-none"
-            style={{
-              fontSize: 14,
-              color: T.textPrimary,
-              padding: '8px 12px',
-              borderRadius: T.r.sm,
-              backgroundColor: T.card,
-              border: `1px solid ${T.border}`,
-            }}
-            value={groupName}
-            onChange={(e) => setGroupName(e.target.value)}
-            placeholder="输入群聊名称（可选）"
-            maxLength={20}
-          />
+        {/* 已选横滑条 */}
+        {selectedArr.length > 0 && (
+          <div className="scrollbar-hide flex gap-2 overflow-x-auto px-5 pb-2">
+            {selectedArr.map((id) => {
+              const c = characters.find((ch) => ch.id === id);
+              return (
+                <div key={id} className="flex shrink-0 items-center gap-1.5 rounded-full px-2 py-1"
+                  style={{ backgroundColor: T.card, border: `1px solid ${T.border}` }}>
+                  <Avatar src={c?.avatar?.trim() || CHAR_FALLBACK_AVATAR} size={22} ringIndex={0} />
+                  <span style={{ fontSize: 12, color: T.textPrimary }}>{c?.name ?? '?'}</span>
+                  <button onClick={() => toggle(id)}><X size={12} color={T.textMuted} /></button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* 搜索框 */}
+        <div className="px-5 pb-2">
+          <div className="flex items-center gap-2 rounded-lg px-3"
+            style={{ backgroundColor: T.card, height: 36, border: `1px solid ${T.border}` }}>
+            <Search size={14} color={T.textMuted} />
+            <input
+              className="min-w-0 flex-1 bg-transparent outline-none"
+              style={{ fontSize: 13, color: T.textPrimary }}
+              placeholder="搜索联系人"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
         </div>
 
         {/* 联系人列表 */}
@@ -402,27 +417,20 @@ function GroupPicker({
               <motion.button
                 key={c.id}
                 className="flex w-full items-center gap-3"
-                style={{
-                  padding: '10px 0',
-                  borderBottom: `0.5px solid ${T.separator}`,
-                }}
+                style={{ padding: '10px 0', borderBottom: `0.5px solid ${T.separator}` }}
                 onClick={() => toggle(c.id)}
                 whileTap={{ scale: 0.97 }}
               >
-                <Avatar src={c.avatar} size={40} ringIndex={c.ringIndex} />
+                <Avatar src={c.avatar} size={40} ringIndex={0} />
                 <span className="flex-1 text-left" style={{ fontSize: 15, fontWeight: 500, color: T.textPrimary }}>
                   {c.name}
                 </span>
-                <div
-                  className="flex items-center justify-center rounded-full"
+                <div className="flex items-center justify-center rounded-full"
                   style={{
-                    width: 22,
-                    height: 22,
-                    borderRadius: '50%',
+                    width: 22, height: 22,
                     backgroundColor: isSelected ? T.accent : 'transparent',
                     border: isSelected ? 'none' : `1.5px solid ${T.border}`,
-                  }}
-                >
+                  }}>
                   {isSelected && <Check size={14} strokeWidth={3} color="#fff" />}
                 </div>
               </motion.button>
@@ -430,24 +438,22 @@ function GroupPicker({
           })}
         </div>
 
-        {/* 底部创建按钮 */}
+        {/* 底部 CTA */}
         <div className="px-5 pt-3 pb-6">
           <motion.button
             className="flex w-full items-center justify-center"
             style={{
-              height: 44,
-              borderRadius: T.r.md,
-              background: selected.size >= 2 ? T.accentGrad : T.border,
-              color: selected.size >= 2 ? '#fff' : T.textMuted,
-              fontSize: 15,
-              fontWeight: 600,
+              height: 44, borderRadius: T.r.md,
+              background: canCreate ? T.accentGrad : T.border,
+              color: canCreate ? '#fff' : T.textMuted,
+              fontSize: 15, fontWeight: 600,
             }}
             onClick={handleCreate}
-            whileTap={selected.size >= 2 ? { scale: 0.97 } : undefined}
+            whileTap={canCreate ? { scale: 0.97 } : undefined}
           >
-            创建群聊{selected.size > 0 ? `(${selected.size})` : ''}
+            完成（{selected.size}）
           </motion.button>
-          {selected.size > 0 && selected.size < 2 && (
+          {selected.size < 2 && (
             <p className="mt-2 text-center" style={{ fontSize: 11, color: T.textMuted }}>
               至少选择 2 位成员
             </p>
