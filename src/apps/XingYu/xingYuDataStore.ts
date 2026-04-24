@@ -76,6 +76,18 @@ function fireAppSwitchMarker(convId: string, get: () => XingYuDataState): void {
 }
 
 
+/** 根据成员 id 列表派生群名（取前3个成员名；超过3人附加「等 N 人」后缀） */
+function deriveGroupName(memberIds: string[]): string {
+  const chars = useCharacterStore.getState().characters;
+  const names = memberIds
+    .map((id) => chars.find((c) => c.id === id)?.name ?? '未知')
+    .filter(Boolean);
+  if (names.length === 0) return '新群聊';
+  const head = names.slice(0, 3).join('、');
+  if (memberIds.length > 3) return `${head} 等 ${memberIds.length} 人`;
+  return head;
+}
+
 /* ── Auto-reply timers (module-level, not serializable) ── */
 const replyTimers = new Map<string, ReturnType<typeof setTimeout>>();
 /* ── In-flight AI sessions (+ their abort controllers), keyed by convId ── */
@@ -158,8 +170,8 @@ interface XingYuDataState {
   ensureIdolConversation: (idolId: string) => string;
   /** 更新单个会话的设置（背景、备注名等） */
   updateConversationSettings: (convId: string, patch: Partial<Pick<Conversation, 'backgroundUrl' | 'remarkName'>>) => void;
-  /** 创建用户自建群聊，返回 convId */
-  createGroupConversation: (name: string, memberIds: string[]) => string;
+  /** 创建用户自建群聊（裸 characterId 数组；无需传群名，自动派生），返回 convId */
+  createGroupConversation: (memberIds: string[]) => string;
   /** 清除角色的对话记忆（消息+摘要），保留会话并重注入开场白 */
   clearCharacterMemory: (characterId: string) => void;
   /**
@@ -878,16 +890,20 @@ export const useXYData = create<XingYuDataState>()(
         });
       },
 
-      createGroupConversation: (name, memberIds) => {
+      createGroupConversation: (memberIds) => {
+        const stripped = memberIds.map((id) =>
+          id.startsWith('char-') ? id.slice('char-'.length) : id,
+        );
+        const name = deriveGroupName(stripped);
         const convId = `c-group-${uid()}`;
         const conv: Conversation = {
           id: convId,
-          idolId: convId, // placeholder
+          idolId: convId,
           lastMsg: '',
           lastTime: Date.now(),
           unread: 0,
           groupName: name,
-          groupMemberIds: memberIds,
+          groupMemberIds: stripped,
         };
         set({ conversations: [conv, ...get().conversations] });
         return convId;
