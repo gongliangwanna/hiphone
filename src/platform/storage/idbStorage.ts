@@ -14,7 +14,7 @@
 // ---------------------------------------------------------------------------
 
 const DB_NAME = 'hiPhone-storage';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 const STORE_NAME = 'kv';
 
 // Per-record object stores (added in v2)
@@ -66,7 +66,9 @@ export function getDB(): Promise<IDBDatabase> {
         const kvStore = db.createObjectStore(APP_KV_STORE); // key = full key string
         kvStore.createIndex(APP_KV_BY_APP_INDEX, 'appId', { unique: false });
       }
-      // v4: AI character memory (MemoryEntry keyed by id, indexed by characterId)
+      // v4: AI character memory (MemoryEntry keyed by id, indexed by characterId).
+      // v5 re-runs this guarded upgrade to repair any v4 DBs whose
+      // upgrade-needed handler skipped MEMORY_STORE creation.
       if (!db.objectStoreNames.contains(MEMORY_STORE)) {
         const memStore = db.createObjectStore(MEMORY_STORE, { keyPath: 'id' });
         memStore.createIndex(MEMORY_BY_CHAR_INDEX, 'characterId', { unique: false });

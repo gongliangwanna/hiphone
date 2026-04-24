@@ -981,7 +981,7 @@ const MsgBubble = memo(function MsgBubble({
   onForwardCardTap,
 }: {
   msg: Message;
-  peer: { id: string; avatar: string; ringIndex: number };
+  peer: { id: string; avatar: string; ringIndex: number; isGroup?: boolean };
   prevMsg?: Message;
   onAvatarTap?: (id: string) => void;
   skipAnimation?: boolean;
@@ -1085,15 +1085,33 @@ const MsgBubble = memo(function MsgBubble({
           </div>
         )}
         {!isMine && (() => {
-          const p = aiChatPeers?.peers[msg.senderId] ?? peer;
+          // Group: every bubble must show its individual sender's avatar.
+          // senderId is `char-${characterId}` and characterStore IDs themselves
+          // start with `char-`, so strip exactly one `char-` to get the lookup key.
+          let resolvedAvatar = peer.avatar;
+          let resolvedRing = peer.ringIndex;
+          let resolvedTapId = peer.id;
+          if (peer.isGroup) {
+            const charId = msg.senderId.replace(/^char-/, '');
+            const ch = characters.find((c) => c.id === charId);
+            if (ch) {
+              resolvedAvatar = ch.avatar?.trim() || CHAR_FALLBACK_AVATAR;
+              resolvedRing = 0;
+              resolvedTapId = ch.id;
+            }
+          } else {
+            const p = aiChatPeers?.peers[msg.senderId] ?? peer;
+            resolvedAvatar = p.avatar;
+            resolvedRing = p.ringIndex;
+          }
           return (
             <motion.button
               className="mr-2 shrink-0"
-              onClick={() => onAvatarTap?.(peer.id)}
+              onClick={() => onAvatarTap?.(resolvedTapId)}
               whileTap={{ scale: 0.9 }}
               style={multiSelectMode ? { pointerEvents: 'none' } : undefined}
             >
-              <Avatar src={p.avatar} size={36} ringIndex={p.ringIndex} />
+              <Avatar src={resolvedAvatar} size={36} ringIndex={resolvedRing} />
             </motion.button>
           );
         })()}
@@ -1109,6 +1127,18 @@ const MsgBubble = memo(function MsgBubble({
           onPointerCancel={multiSelectMode ? undefined : longPress.onPointerCancel}
           onClick={multiSelectMode ? undefined : longPress.onClick}
         >
+          {peer.isGroup && !isMine && resolveSenderName && (
+            <div
+              style={{
+                fontSize: 11,
+                color: T.textMuted,
+                marginBottom: 3,
+                paddingLeft: 2,
+              }}
+            >
+              {resolveSenderName(msg.senderId)}
+            </div>
+          )}
           {actionMenuOpen && menuPosition === 'above' && (
             <AnimatePresence>
               <div style={{ display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start' }}>
