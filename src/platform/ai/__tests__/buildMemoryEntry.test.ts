@@ -53,6 +53,32 @@ describe('buildMemoryEntry — text messages', () => {
     });
   });
 
+  it('xingyu-prefixed senderId (char-char-001) for current char → role=assistant', () => {
+    // xingYuDataStore writes `senderId = `char-${characterId}`` even when
+    // characterId already starts with `char-`, producing a double-prefixed
+    // senderId. resolveSpeaker must still recognize this as the current
+    // character (otherwise group fan-out tags every member's own messages
+    // as `user` in their own memory and the rendered transcript shows
+    // them all as the persona instead of differentiated speakers).
+    const entry = buildMemoryEntry(
+      baseText({ type: 'text', text: '我也来一句', senderId: 'char-char-001' }),
+      'xingyu',
+      ctx,
+    );
+    expect(entry?.role).toBe('assistant');
+    expect(entry?.speakerId).toBe('char-char-001');
+  });
+
+  it('xingyu-prefixed senderId for OTHER character → role=user', () => {
+    const entry = buildMemoryEntry(
+      baseText({ type: 'text', text: '我请客', senderId: 'char-char-002' }),
+      'xingyu',
+      ctx,
+    );
+    expect(entry?.role).toBe('user');
+    expect(entry?.speakerId).toBe('char-char-002');
+  });
+
   it('third-party character text → role=user, speakerId=char-002', () => {
     const entry = buildMemoryEntry(
       baseText({ type: 'text', text: '我也去', senderId: 'char-002' }),

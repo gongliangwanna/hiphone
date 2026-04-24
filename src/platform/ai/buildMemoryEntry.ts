@@ -21,6 +21,20 @@ import type {
 } from './characterMemoryStore';
 import { stripCharPrefix } from '@/platform/utils/characterId';
 
+/**
+ * Reduce an id to its bare form by stripping every leading `char-`. This
+ * tolerates both id conventions seen across the codebase:
+ *   - raw character id, e.g. `char-1700000000-1` (the canonical form)
+ *   - xingyu-style senderId, which prepends `char-` to the character id and
+ *     therefore double-prefixes (`char-char-1700000000-1`).
+ * `stripCharPrefix` only removes one prefix, so a single strip on each side
+ * left the two forms mismatched and broke role attribution.
+ */
+function bareCharacterId(id: string): string {
+  while (id.startsWith('char-')) id = id.slice('char-'.length);
+  return id;
+}
+
 export interface BuildMemoryContext {
   /** The character whose memoryStore receives this entry; defines role mapping. */
   currentCharId: string;
@@ -52,11 +66,11 @@ function resolveSpeaker(
   if (senderId === 'me') {
     return { role: 'user', speakerId: 'me' };
   }
-  // The codebase inconsistently uses bare (e.g. 'soren') and prefixed
-  // ('char-soren') character IDs across different stores. Normalize both
-  // sides before comparison. speakerId preserves senderId verbatim so the
-  // render layer can look up display names via its own convention.
-  if (stripCharPrefix(senderId) === stripCharPrefix(currentCharId)) {
+  // Compare bare ids — tolerates both conventions (`char-X` raw id vs
+  // `char-char-X` xingyu-prefixed senderId). speakerId preserves senderId
+  // verbatim so the render layer can look up display names via its own
+  // convention.
+  if (bareCharacterId(senderId) === bareCharacterId(currentCharId)) {
     return { role: 'assistant', speakerId: senderId };
   }
   return { role: 'user', speakerId: senderId };
