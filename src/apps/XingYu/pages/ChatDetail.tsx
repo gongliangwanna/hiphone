@@ -150,7 +150,7 @@ export function ChatDetail() {
       return {
         id: conv.id,
         name: conv.groupName,
-        avatar: '/resource/avatars/idol-starlight.jpg',
+        avatar: conv.groupAvatar?.trim() || '/resource/avatars/idol-starlight.jpg',
         ringIndex: 0,
         online: true,
         isGroup: true,

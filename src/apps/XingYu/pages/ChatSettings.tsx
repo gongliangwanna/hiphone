@@ -57,6 +57,7 @@ export function ChatSettings() {
           {pickerMode && (
             <GroupPicker
               preselectCharacterId={pickerMode === 'create' ? conv.characterId : undefined}
+              minSelected={pickerMode === 'add' ? 1 : 2}
               onClose={() => setPickerMode(null)}
               onCreate={(memberIds) => {
                 if (pickerMode === 'add') {
@@ -340,10 +341,12 @@ function GroupPicker({
   onClose,
   onCreate,
   preselectCharacterId,
+  minSelected = 2,
 }: {
   onClose: () => void;
   onCreate: (memberIds: string[]) => void;
   preselectCharacterId?: string;
+  minSelected?: number;
 }) {
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set(preselectCharacterId ? [preselectCharacterId] : []),
@@ -371,7 +374,7 @@ function GroupPicker({
   };
 
   const selectedArr = Array.from(selected);
-  const canCreate = selected.size >= 2;
+  const canCreate = selected.size >= minSelected;
 
   const handleCreate = () => {
     if (!canCreate) return;
@@ -478,9 +481,9 @@ function GroupPicker({
           >
             完成（{selected.size}）
           </motion.button>
-          {selected.size < 2 && (
+          {selected.size < minSelected && (
             <p className="mt-2 text-center" style={{ fontSize: 11, color: T.textMuted }}>
-              至少选择 2 位成员
+              至少选择 {minSelected} 位成员
             </p>
           )}
         </div>

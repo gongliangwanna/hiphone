@@ -776,6 +776,7 @@ export const useXYData = create<XingYuDataState>()(
           entry.session.abort();
           aiSessions.delete(convId);
         }
+        generatingByConv.delete(convId);
         set((s) => ({
           conversations: s.conversations.filter((c) => c.id !== convId),
           messages: s.messages.filter((m) => m.convId !== convId),
