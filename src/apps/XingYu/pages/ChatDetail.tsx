@@ -2,7 +2,8 @@ import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback, mem
 import { AnimatePresence, motion } from 'motion/react';
 import { ChevronLeft, Phone, Send, Image, Smile, Palette, MoreHorizontal, Play } from 'lucide-react';
 import { useXYNav } from '../xingYuNavStore';
-import { useXYData } from '../xingYuDataStore';
+import { useXYData, _isGroupReplyGenerating } from '../xingYuDataStore';
+import { GroupMemberStrip } from '../components/GroupMemberStrip';
 import { getIdol, formatChatTime, DEFAULT_AVATAR } from '../data';
 import type { Message, QuoteRef } from '../data';
 import { useCharacterStore } from '@/platform/stores/characterStore';
@@ -106,6 +107,12 @@ export function ChatDetail() {
   const { phoneOwnerId, isViewingOther } = usePerspective();
   const persona = usePersonaStore((s) => s.getActivePersona());
   const userSettings = useXYData((s) => s.userSettings);
+
+  // Group manual-reply serial lock — re-read each render. ChatDetail re-renders
+  // whenever messages or conv state change (which happens around every reply
+  // event), so reading via the module helper here is correct in practice.
+  const generatingMemberId = conv?.groupMemberIds ? _isGroupReplyGenerating(conv.id) : null;
+  const triggerGroupReply = useXYData((s) => s.triggerGroupReply);
 
   // 对话对端:character 优先,fallback 到 legacy mock idol
   // 查手机模式下需要视角化: AI 的对方是玩家
@@ -742,6 +749,15 @@ export function ChatDetail() {
           return <TypingDots avatarSrc={peer.avatar} ringIndex={peer.ringIndex} />;
         })()}
       </div>
+
+      {/* ── Group member strip (above quote/input, group chats only) ── */}
+      {conv?.groupMemberIds?.length && !multiSelectMode && !isViewingOther ? (
+        <GroupMemberStrip
+          memberIds={conv.groupMemberIds}
+          generatingId={generatingMemberId}
+          onTapMember={(characterId) => triggerGroupReply(conv.id, characterId)}
+        />
+      ) : null}
 
       {/* ── Quote preview bar (above input) ── */}
       {quoteMsg && !multiSelectMode && !conv?.aiChatParticipants && !isViewingOther && (
