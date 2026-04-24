@@ -251,6 +251,13 @@ export interface ChatOptions {
    * fallback as before.
    */
   onParseFailure?: (info: { raw: string; attempts: number }) => void;
+  /**
+   * Per-session suffix appended to the frozen appSystemPrompt.
+   *
+   * Caller 用来注入会话级稳定上下文（如群聊成员名单）。保持在 System
+   * block 里对 KV cache 友好——只要 suffix 在一次 session 里不变就行。
+   */
+  appSystemPromptSuffix?: string;
 }
 
 export interface SessionEntry {
@@ -345,10 +352,16 @@ export function chatWithCharacter(
   // the registries inside callLLM.
   const frozenTools: ToolDefinition[] =
     capturedAppId ? getTools(capturedAppId) : [];
-  const frozenAppSystemPrompt: string | undefined =
-    capturedAppId
+  const frozenAppSystemPrompt: string | undefined = (() => {
+    const base = capturedAppId
       ? (getAppSystemPrompt(capturedAppId)?.() ?? undefined)
       : undefined;
+    const suffix = options.appSystemPromptSuffix?.trim();
+    if (suffix) {
+      return base ? `${base}\n\n${suffix}` : suffix;
+    }
+    return base;
+  })();
   const frozenCurrentAppId: string | undefined = capturedAppId ?? undefined;
 
   // persistent=false: snapshot the character's memory at creation time
