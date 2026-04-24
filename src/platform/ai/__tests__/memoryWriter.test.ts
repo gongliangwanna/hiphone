@@ -177,3 +177,50 @@ describe('_appendMessage — AI-AI cross-write', () => {
     });
   });
 });
+
+describe('_appendMessage — group fan-out', () => {
+  beforeEach(() => {
+    useCharacterMemory.setState({ entries: {} } as any);
+    useCharacterStore.setState({
+      characters: [
+        { id: 'a', name: 'A', avatar: '', description: '', personality: '', scenario: '', systemPrompt: '', postHistoryInstructions: '', messageExamples: [], firstMessage: '' },
+        { id: 'b', name: 'B', avatar: '', description: '', personality: '', scenario: '', systemPrompt: '', postHistoryInstructions: '', messageExamples: [], firstMessage: '' },
+        { id: 'c', name: 'C', avatar: '', description: '', personality: '', scenario: '', systemPrompt: '', postHistoryInstructions: '', messageExamples: [], firstMessage: '' },
+      ],
+    } as any);
+    useXYData.setState({
+      conversations: [{
+        id: 'c-group-x',
+        idolId: 'c-group-x',
+        lastMsg: '', lastTime: 0, unread: 0,
+        groupName: 'G',
+        groupMemberIds: ['a', 'b', 'c'],
+      }],
+      messages: [],
+    });
+  });
+
+  it('user text fans out to every group member as role=user', () => {
+    _appendMessage({
+      id: 'm1', convId: 'c-group-x', senderId: 'me',
+      type: 'text', text: 'hi everyone', timestamp: 1000,
+    }, 'xingyu');
+    for (const memberId of ['a', 'b', 'c']) {
+      const entries = useCharacterMemory.getState().getAll(memberId);
+      expect(entries).toHaveLength(1);
+      expect(entries[0]!.role).toBe('user');
+      expect(entries[0]!.content).toBe('hi everyone');
+    }
+  });
+
+  it('member A reply fans out with role=assistant for A, role=user for B/C', () => {
+    _appendMessage({
+      id: 'm2', convId: 'c-group-x', senderId: 'char-a',
+      type: 'text', text: 'hello', timestamp: 2000,
+    }, 'xingyu');
+    expect(useCharacterMemory.getState().getAll('a')[0]!.role).toBe('assistant');
+    expect(useCharacterMemory.getState().getAll('b')[0]!.role).toBe('user');
+    expect(useCharacterMemory.getState().getAll('c')[0]!.role).toBe('user');
+    expect(useCharacterMemory.getState().getAll('b')[0]!.speakerId).toBe('char-a');
+  });
+});

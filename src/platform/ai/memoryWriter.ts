@@ -50,14 +50,23 @@ export function _appendMessage(msg: Message, source: MemorySource): void {
     useCharacterMemory.getState().append(primaryCharId, primaryEntry);
   }
 
-  // ── 3. AI-AI fan-out to other participants ──
+  // ── 3. AI-AI fan-out 或 群聊 fan-out ──
   const conv = useXYData.getState().conversations.find((c) => c.id === msg.convId);
+
   if (conv?.aiChatParticipants?.length) {
     for (const otherId of conv.aiChatParticipants) {
       if (otherId === primaryCharId) continue;
       const entryForOther = buildMemoryEntry(msg, source, buildCtx(otherId));
       if (entryForOther) {
         useCharacterMemory.getState().append(otherId, entryForOther);
+      }
+    }
+  } else if (conv?.groupMemberIds?.length) {
+    for (const memberId of conv.groupMemberIds) {
+      if (memberId === primaryCharId) continue; // primary already written above
+      const entryForMember = buildMemoryEntry(msg, source, buildCtx(memberId));
+      if (entryForMember) {
+        useCharacterMemory.getState().append(memberId, entryForMember);
       }
     }
   }
@@ -116,6 +125,7 @@ function deriveCharacterIdFromConv(convId: string): string | null {
   }
   const conv = useXYData.getState().conversations.find((c) => c.id === convId);
   if (conv?.aiChatParticipants?.length) return conv.aiChatParticipants[0]!;
+  if (conv?.groupMemberIds?.length) return conv.groupMemberIds[0]!;
   if (conv?.characterId) return conv.characterId;
   return null;
 }
