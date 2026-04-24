@@ -19,6 +19,7 @@ export function ChatSettings() {
   const conversations = useXYData((s) => s.conversations);
   const updateConvSettings = useXYData((s) => s.updateConversationSettings);
   const createGroupConversation = useXYData((s) => s.createGroupConversation);
+  const addGroupMembers = useXYData((s) => s.addGroupMembers);
   const characters = useCharacterStore((s) => s.characters);
 
   const conv = useMemo(
@@ -38,7 +39,7 @@ export function ChatSettings() {
   }, [conv, characters]);
 
   const [remarkName, setRemarkName] = useState(conv?.remarkName ?? '');
-  const [showGroupPicker, setShowGroupPicker] = useState(false);
+  const [pickerMode, setPickerMode] = useState<'create' | 'add' | null>(null);
   const bgFileRef = useRef<HTMLInputElement>(null);
 
   if (!conv) return null;
@@ -46,11 +47,30 @@ export function ChatSettings() {
   // Group conversations get a completely different settings page.
   if (conv.groupMemberIds && conv.groupMemberIds.length > 0) {
     return (
-      <GroupSettings
-        conv={conv}
-        onOpenPicker={() => setShowGroupPicker(true)}
-        onCompressImage={compressBgImage}
-      />
+      <>
+        <GroupSettings
+          conv={conv}
+          onOpenPicker={() => setPickerMode('add')}
+          onCompressImage={compressBgImage}
+        />
+        <AnimatePresence>
+          {pickerMode && (
+            <GroupPicker
+              preselectCharacterId={pickerMode === 'create' ? conv.characterId : undefined}
+              onClose={() => setPickerMode(null)}
+              onCreate={(memberIds) => {
+                if (pickerMode === 'add') {
+                  addGroupMembers(conv.id, memberIds);
+                } else {
+                  const convId = createGroupConversation(memberIds);
+                  openChat(convId);
+                }
+                setPickerMode(null);
+              }}
+            />
+          )}
+        </AnimatePresence>
+      </>
     );
   }
 
@@ -254,7 +274,7 @@ export function ChatSettings() {
               fontSize: 14,
               fontWeight: 600,
             }}
-            onClick={() => setShowGroupPicker(true)}
+            onClick={() => setPickerMode('create')}
             whileTap={{ scale: 0.97 }}
           >
             <Users size={18} strokeWidth={2} color="#fff" />
@@ -265,14 +285,18 @@ export function ChatSettings() {
 
       {/* 群聊创建 */}
       <AnimatePresence>
-        {showGroupPicker && (
+        {pickerMode && (
           <GroupPicker
-            preselectCharacterId={conv.characterId}
-            onClose={() => setShowGroupPicker(false)}
+            preselectCharacterId={pickerMode === 'create' ? conv.characterId : undefined}
+            onClose={() => setPickerMode(null)}
             onCreate={(memberIds) => {
-              const convId = createGroupConversation(memberIds);
-              setShowGroupPicker(false);
-              openChat(convId);
+              if (pickerMode === 'add') {
+                addGroupMembers(conv.id, memberIds);
+              } else {
+                const convId = createGroupConversation(memberIds);
+                openChat(convId);
+              }
+              setPickerMode(null);
             }}
           />
         )}
