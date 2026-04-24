@@ -1270,6 +1270,22 @@ export const useXYData = create<XingYuDataState>()(
             },
           );
           useXYData.setState({ messages, moments });
+
+          // Migrate legacy groupMemberIds: early builds stored ids with `char-` prefix
+          const currentState = useXYData.getState();
+          const needsMigration = currentState.conversations.some(
+            (c) => c.groupMemberIds?.some((id) => id.startsWith('char-')),
+          );
+          if (needsMigration) {
+            useXYData.setState({
+              conversations: currentState.conversations.map((c) =>
+                c.groupMemberIds
+                  ? { ...c, groupMemberIds: c.groupMemberIds.map(stripCharPrefix) }
+                  : c,
+              ),
+            });
+          }
+
           // Start write-through sync (subscribe to future changes)
           startXYDataSync(useXYData);
 
