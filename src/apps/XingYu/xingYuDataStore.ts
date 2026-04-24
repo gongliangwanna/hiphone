@@ -11,7 +11,6 @@ import {
 import { installAutoCompression } from '@/platform/ai/characterMemoryCompression';
 import { _appendMessage } from '@/platform/ai/memoryWriter';
 import { uid } from '@/platform/utils/uid';
-import { stripCharPrefix } from '@/platform/utils/characterId';
 import type {
   Conversation,
   Favorite,
@@ -930,8 +929,10 @@ export const useXYData = create<XingYuDataState>()(
       },
 
       createGroupConversation: (memberIds) => {
-        const stripped = memberIds.map(stripCharPrefix);
-        const name = deriveGroupName(stripped);
+        // Store raw character IDs verbatim. characterStore IDs are
+        // `char-${Date.now()}-${n}` — they legitimately start with `char-`,
+        // so any prefix-stripping here would clobber valid IDs.
+        const name = deriveGroupName(memberIds);
         const convId = `c-group-${uid()}`;
         const conv: Conversation = {
           id: convId,
@@ -940,7 +941,7 @@ export const useXYData = create<XingYuDataState>()(
           lastTime: Date.now(),
           unread: 0,
           groupName: name,
-          groupMemberIds: stripped,
+          groupMemberIds: memberIds,
         };
         set({ conversations: [conv, ...get().conversations] });
         return convId;
@@ -955,11 +956,10 @@ export const useXYData = create<XingYuDataState>()(
       },
 
       addGroupMembers: (convId, newIds) => {
-        const stripped = newIds.map(stripCharPrefix);
         set({
           conversations: get().conversations.map((c) => {
             if (c.id !== convId || !c.groupMemberIds) return c;
-            const merged = Array.from(new Set([...c.groupMemberIds, ...stripped]));
+            const merged = Array.from(new Set([...c.groupMemberIds, ...newIds]));
             return { ...c, groupMemberIds: merged };
           }),
         });
@@ -1270,22 +1270,50 @@ export const useXYData = create<XingYuDataState>()(
               } as Moment;
             },
           );
-          useXYData.setState({ messages, moments });
+          // Drop stuck streaming placeholders — these are typing indicators
+          // from sessions interrupted by browser close; without this they'd
+          // come back as ghost "speaking but never resolves" bubbles.
+          const liveMessages = messages.filter((m) => !(m as { streaming?: boolean }).streaming);
+          useXYData.setState({ messages: liveMessages, moments });
 
-          // Migrate legacy groupMemberIds: early builds stored ids with `char-` prefix
-          const currentState = useXYData.getState();
-          const needsMigration = currentState.conversations.some(
-            (c) => c.groupMemberIds?.some((id) => id.startsWith('char-')),
-          );
-          if (needsMigration) {
-            useXYData.setState({
-              conversations: currentState.conversations.map((c) =>
-                c.groupMemberIds
-                  ? { ...c, groupMemberIds: c.groupMemberIds.map(stripCharPrefix) }
-                  : c,
-              ),
+          // Repair groupMemberIds against characterStore. Two historical bugs
+          // produced bad IDs: (a) legacy picker double-prefixed (`char-char-...`),
+          // (b) recent createGroupConversation/migration over-stripped real
+          // IDs (which themselves start with `char-`), leaving bare suffixes.
+          // characterStore rehydrates independently — wait briefly before
+          // attempting the repair.
+          (async () => {
+            for (let i = 0; i < 20; i++) {
+              if (useCharacterStore.getState().characters.length > 0) break;
+              await new Promise((r) => setTimeout(r, 100));
+            }
+            const characters = useCharacterStore.getState().characters;
+            if (characters.length === 0) return;
+            const charIds = new Set(characters.map((c) => c.id));
+            const state = useXYData.getState();
+            let mutated = false;
+            const conversations = state.conversations.map((c) => {
+              if (!c.groupMemberIds) return c;
+              const repaired = c.groupMemberIds.map((id) => {
+                if (charIds.has(id)) return id;
+                const withPrefix = `char-${id}`;
+                if (charIds.has(withPrefix)) {
+                  mutated = true;
+                  return withPrefix;
+                }
+                if (id.startsWith('char-char-')) {
+                  const stripped = id.slice('char-'.length);
+                  if (charIds.has(stripped)) {
+                    mutated = true;
+                    return stripped;
+                  }
+                }
+                return id;
+              });
+              return { ...c, groupMemberIds: repaired };
             });
-          }
+            if (mutated) useXYData.setState({ conversations });
+          })();
 
           // Start write-through sync (subscribe to future changes)
           startXYDataSync(useXYData);

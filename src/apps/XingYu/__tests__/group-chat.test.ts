@@ -15,7 +15,7 @@ describe('createGroupConversation', () => {
     useXYData.setState({ conversations: [], messages: [] });
   });
 
-  it('stores bare characterIds without char- prefix', () => {
+  it('stores characterIds verbatim', () => {
     const convId = useXYData.getState().createGroupConversation(['xiaoxing', 'yueyue']);
     const conv = useXYData.getState().conversations.find((c) => c.id === convId)!;
     expect(conv.groupMemberIds).toEqual(['xiaoxing', 'yueyue']);
@@ -40,10 +40,17 @@ describe('createGroupConversation', () => {
     expect(conv.groupName).toBe('小星、月月、Aria 等 5 人');
   });
 
-  it('strips char- prefix if caller passes prefixed ids', () => {
-    const convId = useXYData.getState().createGroupConversation(['char-xiaoxing', 'char-yueyue']);
+  it('preserves real char-prefixed IDs without clobbering', () => {
+    useCharacterStore.setState({
+      characters: [
+        { id: 'char-1700000000-1', name: '阿尔法', avatar: '', description: '', personality: '', scenario: '', systemPrompt: '', postHistoryInstructions: '', messageExamples: [], firstMessage: '' },
+        { id: 'char-1700000000-2', name: '贝塔', avatar: '', description: '', personality: '', scenario: '', systemPrompt: '', postHistoryInstructions: '', messageExamples: [], firstMessage: '' },
+      ],
+    } as any);
+    const convId = useXYData.getState().createGroupConversation(['char-1700000000-1', 'char-1700000000-2']);
     const conv = useXYData.getState().conversations.find((c) => c.id === convId)!;
-    expect(conv.groupMemberIds).toEqual(['xiaoxing', 'yueyue']);
+    expect(conv.groupMemberIds).toEqual(['char-1700000000-1', 'char-1700000000-2']);
+    expect(conv.groupName).toBe('阿尔法、贝塔');
   });
 });
 
