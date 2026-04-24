@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useXYData } from '../xingYuDataStore';
 import { useCharacterStore } from '@/platform/stores/characterStore';
+import { useAIConfigStore } from '@/platform/stores/aiConfigStore';
 
 describe('createGroupConversation', () => {
   beforeEach(() => {
@@ -91,5 +92,37 @@ describe('group settings mutations', () => {
     );
     const conv = useXYData.getState().conversations.find((c) => c.id === convId)!;
     expect(conv.groupMemberIds).toEqual(['a', 'b']); // unchanged
+  });
+});
+
+describe('triggerGroupReply', () => {
+  beforeEach(() => {
+    // Minimal AI config so API-key early-exit triggers error bubble
+    // instead of network call. We're testing the lock + dispatch shape,
+    // not the LLM integration.
+    useAIConfigStore.setState({ apiKey: '', endpoint: '', model: '' } as any);
+    useCharacterStore.setState({
+      characters: [
+        { id: 'a', name: 'A', avatar: '', description: '', personality: '', scenario: '', systemPrompt: '', postHistoryInstructions: '', messageExamples: [], firstMessage: '' },
+        { id: 'b', name: 'B', avatar: '', description: '', personality: '', scenario: '', systemPrompt: '', postHistoryInstructions: '', messageExamples: [], firstMessage: '' },
+      ],
+    } as any);
+    useXYData.setState({ conversations: [], messages: [] });
+  });
+
+  it('triggerGroupReply writes an error bubble when API key missing (smoke)', () => {
+    const convId = useXYData.getState().createGroupConversation(['a', 'b']);
+    useXYData.getState().triggerGroupReply(convId, 'a');
+    const msgs = useXYData.getState().messages.filter((m) => m.convId === convId);
+    expect(msgs.length).toBe(1);
+    expect(msgs[0]!.senderId).toBe('char-a');
+    expect((msgs[0] as any).text).toMatch(/未配置 AI 服务/);
+  });
+
+  it('triggerGroupReply no-ops when characterId not in members', () => {
+    const convId = useXYData.getState().createGroupConversation(['a', 'b']);
+    useXYData.getState().triggerGroupReply(convId, 'stranger');
+    const msgs = useXYData.getState().messages.filter((m) => m.convId === convId);
+    expect(msgs).toHaveLength(0);
   });
 });

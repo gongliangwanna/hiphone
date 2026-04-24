@@ -97,6 +97,12 @@ interface XingYuAiSession {
   controller: AbortController;
 }
 const aiSessions = new Map<string, XingYuAiSession>();
+/** 群聊手动触发回复时的串行锁：convId → 正在生成的 characterId */
+const generatingByConv = new Map<string, string>();
+
+export function _isGroupReplyGenerating(convId: string): string | null {
+  return generatingByConv.get(convId) ?? null;
+}
 
 // uid() imported from @/platform/utils/uid
 
@@ -182,6 +188,8 @@ interface XingYuDataState {
   addGroupMembers: (convId: string, memberIds: string[]) => void;
   /** 移除单个群成员；群成员 < 2 时抛错 */
   removeGroupMember: (convId: string, memberId: string) => void;
+  /** 群聊手动触发某角色回复；若该 conv 已有角色在生成则 no-op */
+  triggerGroupReply: (convId: string, characterId: string) => void;
   /** 清除角色的对话记忆（消息+摘要），保留会话并重注入开场白 */
   clearCharacterMemory: (characterId: string) => void;
   /**
@@ -343,6 +351,7 @@ function buildStickerBubble(args: {
 function scheduleAICharacterReply(
   convId: string,
   get: () => XingYuDataState,
+  characterIdOverride?: string,
 ) {
   // Abort any in-flight request for this conversation
   const prev = aiSessions.get(convId);
@@ -352,15 +361,22 @@ function scheduleAICharacterReply(
   }
 
   const conv = get().conversations.find((c) => c.id === convId);
-  if (!conv?.characterId) return;
+  if (!conv) return;
+
+  // Resolve which character is speaking this turn.
+  const characterId = characterIdOverride ?? conv.characterId;
+  if (!characterId) return;
 
   const character = useCharacterStore
     .getState()
-    .characters.find((c) => c.id === conv.characterId);
-  if (!character) return;
+    .characters.find((c) => c.id === characterId);
+  if (!character) {
+    if (generatingByConv.get(convId) === characterId) generatingByConv.delete(convId);
+    return;
+  }
 
   const aiConfig = useAIConfigStore.getState();
-  const senderId = `char-${conv.characterId}`;
+  const senderId = `char-${characterId}`;
   const now = Date.now();
 
   // Missing API key → immediately inject an error bubble, no network call.
@@ -374,17 +390,10 @@ function scheduleAICharacterReply(
       text: errText,
       timestamp: now,
     };
-    const state = get();
-    useXYData.setState({
-      messages: [...state.messages, errMsg],
-      conversations: state.conversations.map((c) =>
-        c.id === convId ? { ...c, lastMsg: errText, lastTime: now } : c,
-      ),
-    });
+    _appendMessage(errMsg, 'xingyu');
+    if (generatingByConv.get(convId) === characterId) generatingByConv.delete(convId);
     return;
   }
-
-  const characterId = conv.characterId;
 
   // ── Show typing indicator ──
   const placeholderId = uid();
@@ -422,6 +431,17 @@ function scheduleAICharacterReply(
     });
   };
 
+  // Build group-context suffix when this is a group conversation.
+  const groupSuffix: string | undefined = conv.groupMemberIds?.length
+    ? (() => {
+        const chars = useCharacterStore.getState().characters;
+        const names = conv.groupMemberIds
+          .map((id) => chars.find((c) => c.id === id)?.name ?? '未知')
+          .join('、');
+        return `你正在群聊「${conv.groupName ?? names}」中，群成员包含：${names}。请以你自己的身份发言，可以回应其他成员说的话。`;
+      })()
+    : undefined;
+
   // Wrap session creation in withUserAppContext so the session captures
   // XingYu's appId — which in turn drives Tool Registry / Renderer /
   // AppSystemPrompt lookups frozen into the session for KV-cache
@@ -436,6 +456,7 @@ function scheduleAICharacterReply(
       onParseFailure: () => {
         showFailureBubble('[AI 回复失败] 回复格式错误,已重试 3 次');
       },
+      appSystemPromptSuffix: groupSuffix,
     }),
   );
   aiSessions.set(convId, { session: sessionInstance, controller });
@@ -591,6 +612,10 @@ function scheduleAICharacterReply(
       const entry = aiSessions.get(convId);
       if (entry && entry.session === sessionInstance) {
         aiSessions.delete(convId);
+      }
+      // Release the group-reply lock if held (no-op for 1:1)
+      if (generatingByConv.get(convId) === characterId) {
+        generatingByConv.delete(convId);
       }
     });
 }
@@ -949,6 +974,14 @@ export const useXYData = create<XingYuDataState>()(
               : c,
           ),
         });
+      },
+
+      triggerGroupReply: (convId, characterId) => {
+        const conv = get().conversations.find((c) => c.id === convId);
+        if (!conv?.groupMemberIds?.includes(characterId)) return;
+        if (generatingByConv.has(convId)) return;
+        generatingByConv.set(convId, characterId);
+        scheduleAICharacterReply(convId, get, characterId);
       },
 
       ensureCharacterConversation: (characterId) => {
