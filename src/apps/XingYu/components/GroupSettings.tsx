@@ -35,14 +35,6 @@ export function GroupSettings({ conv, onOpenPicker, onCompressImage }: Props) {
 
   const memberIds = conv.groupMemberIds ?? [];
 
-  const handleRemove = (id: string) => {
-    try {
-      removeMember(conv.id, id);
-    } catch (e) {
-      alert((e as Error).message);
-    }
-  };
-
   const handleGroupAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -64,7 +56,7 @@ export function GroupSettings({ conv, onOpenPicker, onCompressImage }: Props) {
   };
 
   return (
-    <div className="flex h-full flex-col" style={{ backgroundColor: T.bg }}>
+    <div className="relative flex h-full flex-col" style={{ backgroundColor: T.bg }}>
       {/* Header */}
       <div className="flex shrink-0 items-center gap-2.5 px-2"
         style={{ height: 56, backgroundColor: T.overlay, borderBottom: `0.5px solid ${T.separator}` }}>
@@ -92,13 +84,13 @@ export function GroupSettings({ conv, onOpenPicker, onCompressImage }: Props) {
                 <motion.button
                   key={id}
                   className="relative flex flex-col items-center"
-                  onClick={() => deleteMode && handleRemove(id)}
+                  onClick={() => deleteMode && removeMember(conv.id, id)}
                   whileTap={{ scale: 0.92 }}
                 >
                   <Avatar src={ch?.avatar?.trim() || CHAR_FALLBACK_AVATAR} size={44} ringIndex={0} />
                   {deleteMode && (
                     <div className="absolute -top-1 -left-1 flex items-center justify-center rounded-full"
-                      style={{ width: 18, height: 18, backgroundColor: '#FF3B30' }}>
+                      style={{ width: 18, height: 18, backgroundColor: T.rose }}>
                       <Minus size={12} strokeWidth={3} color="#fff" />
                     </div>
                   )}
@@ -144,7 +136,9 @@ export function GroupSettings({ conv, onOpenPicker, onCompressImage }: Props) {
               <ChevronRight size={16} color={T.textMuted} />
             </div>
           </button>
-          <input ref={groupAvatarRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleGroupAvatarUpload} />
+          <input ref={groupAvatarRef} type="file" accept="image/*"
+            style={{ position: 'absolute', width: 0, height: 0, opacity: 0, overflow: 'hidden' }}
+            onChange={handleGroupAvatarUpload} />
           <div style={{ height: 0.5, backgroundColor: T.separator, marginLeft: 16 }} />
 
           <button className="flex w-full items-center justify-between px-4 py-3" onClick={() => setShowNameEditor(true)}>
@@ -187,13 +181,15 @@ export function GroupSettings({ conv, onOpenPicker, onCompressImage }: Props) {
             </div>
             <ChevronRight size={16} color={T.textMuted} />
           </button>
-          <input ref={bgRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleBgUpload} />
+          <input ref={bgRef} type="file" accept="image/*"
+            style={{ position: 'absolute', width: 0, height: 0, opacity: 0, overflow: 'hidden' }}
+            onChange={handleBgUpload} />
         </section>
 
         {/* ── 危险操作 ── */}
         <button
           className="flex w-full items-center justify-center rounded-2xl py-3"
-          style={{ backgroundColor: T.card, color: '#FF3B30', fontSize: 15, fontWeight: 600, boxShadow: T.shadow2 }}
+          style={{ backgroundColor: T.card, color: T.rose, fontSize: 15, fontWeight: 600, boxShadow: T.shadow2 }}
           onClick={() => {
             if (confirm('确认删除并退出这个群聊？')) {
               deleteConv(conv.id);
