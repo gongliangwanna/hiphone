@@ -382,8 +382,12 @@ function GroupPicker({
   };
 
   return (
-    <motion.div className="absolute inset-0 z-50 flex flex-col">
-      <div className="absolute inset-0" onClick={onClose} />
+    <motion.div
+      className="absolute inset-0 z-50 flex flex-col"
+      onClick={onClose}
+      style={{ backgroundColor: 'rgba(0,0,0,0.4)' }}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+    >
       <motion.div
         className="mt-auto flex flex-col"
         style={{
@@ -392,6 +396,7 @@ function GroupPicker({
           borderTopRightRadius: 24,
           maxHeight: '85%',
         }}
+        onClick={(e) => e.stopPropagation()}
         initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
         transition={{ type: 'spring', damping: 28, stiffness: 300 }}
       >
