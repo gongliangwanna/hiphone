@@ -96,11 +96,29 @@ interface XingYuAiSession {
   controller: AbortController;
 }
 const aiSessions = new Map<string, XingYuAiSession>();
-/** 群聊手动触发回复时的串行锁：convId → 正在生成的 characterId */
-const generatingByConv = new Map<string, string>();
+
+/**
+ * 群聊手动触发回复时的串行锁：convId → 正在生成的 characterId.
+ * Lives in zustand state so React subscribers (the member strip spinner)
+ * re-render when the lock is acquired or released.
+ */
+function setGeneratingLock(convId: string, characterId: string) {
+  useXYData.setState((s) => ({
+    generatingByConv: { ...s.generatingByConv, [convId]: characterId },
+  }));
+}
+function clearGeneratingLock(convId: string, expected?: string) {
+  useXYData.setState((s) => {
+    const current = s.generatingByConv[convId];
+    if (current === undefined) return s;
+    if (expected !== undefined && current !== expected) return s;
+    const { [convId]: _drop, ...rest } = s.generatingByConv;
+    return { generatingByConv: rest };
+  });
+}
 
 export function _isGroupReplyGenerating(convId: string): string | null {
-  return generatingByConv.get(convId) ?? null;
+  return useXYData.getState().generatingByConv[convId] ?? null;
 }
 
 // uid() imported from @/platform/utils/uid
@@ -142,6 +160,11 @@ interface XingYuDataState {
   characterSeenInteractionCount: Record<string, number>;
   /** 用户收藏的消息 */
   favorites: Favorite[];
+  /**
+   * 群聊手动触发回复时的串行锁：convId → 正在生成的 characterId.
+   * 仅运行时状态，不持久化（partialize 排除）。
+   */
+  generatingByConv: Record<string, string>;
 
   sendMessage: (convId: string, text: string, quoteRef?: QuoteRef) => void;
   sendNoteMessage: (convId: string, noteRef: { noteId: string; title: string; body: string }) => void;
@@ -370,7 +393,7 @@ function scheduleAICharacterReply(
     .getState()
     .characters.find((c) => c.id === characterId);
   if (!character) {
-    if (generatingByConv.get(convId) === characterId) generatingByConv.delete(convId);
+    clearGeneratingLock(convId, characterId);
     return;
   }
 
@@ -390,7 +413,7 @@ function scheduleAICharacterReply(
       timestamp: now,
     };
     _appendMessage(errMsg, 'xingyu');
-    if (generatingByConv.get(convId) === characterId) generatingByConv.delete(convId);
+    clearGeneratingLock(convId, characterId);
     return;
   }
 
@@ -616,9 +639,7 @@ function scheduleAICharacterReply(
         aiSessions.delete(convId);
       }
       // Release the group-reply lock if held (no-op for 1:1)
-      if (generatingByConv.get(convId) === characterId) {
-        generatingByConv.delete(convId);
-      }
+      clearGeneratingLock(convId, characterId);
     });
 }
 
@@ -697,6 +718,7 @@ export const useXYData = create<XingYuDataState>()(
       characterLastReadMsgTs: {},
       characterSeenInteractionCount: {},
       favorites: [],
+      generatingByConv: {},
 
       userSettings: {
         nickname: '小星星',
@@ -775,7 +797,7 @@ export const useXYData = create<XingYuDataState>()(
           entry.session.abort();
           aiSessions.delete(convId);
         }
-        generatingByConv.delete(convId);
+        clearGeneratingLock(convId);
         set((s) => ({
           conversations: s.conversations.filter((c) => c.id !== convId),
           messages: s.messages.filter((m) => m.convId !== convId),
@@ -983,8 +1005,8 @@ export const useXYData = create<XingYuDataState>()(
       triggerGroupReply: (convId, characterId) => {
         const conv = get().conversations.find((c) => c.id === convId);
         if (!conv?.groupMemberIds?.includes(characterId)) return;
-        if (generatingByConv.has(convId)) return;
-        generatingByConv.set(convId, characterId);
+        if (get().generatingByConv[convId] !== undefined) return;
+        setGeneratingLock(convId, characterId);
         scheduleAICharacterReply(convId, get, characterId);
       },
 

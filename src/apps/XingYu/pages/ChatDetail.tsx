@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback, mem
 import { AnimatePresence, motion } from 'motion/react';
 import { ChevronLeft, Phone, Send, Image, Smile, Palette, MoreHorizontal, Play } from 'lucide-react';
 import { useXYNav } from '../xingYuNavStore';
-import { useXYData, _isGroupReplyGenerating } from '../xingYuDataStore';
+import { useXYData } from '../xingYuDataStore';
 import { GroupMemberStrip } from '../components/GroupMemberStrip';
 import { getIdol, formatChatTime, DEFAULT_AVATAR } from '../data';
 import type { Message, QuoteRef } from '../data';
@@ -108,10 +108,11 @@ export function ChatDetail() {
   const persona = usePersonaStore((s) => s.getActivePersona());
   const userSettings = useXYData((s) => s.userSettings);
 
-  // Group manual-reply serial lock — re-read each render. ChatDetail re-renders
-  // whenever messages or conv state change (which happens around every reply
-  // event), so reading via the module helper here is correct in practice.
-  const generatingMemberId = conv?.groupMemberIds ? _isGroupReplyGenerating(conv.id) : null;
+  // Group manual-reply serial lock — subscribe via state so the spinner
+  // updates the moment the lock is released in scheduleAICharacterReply's
+  // .finally(), not on the next unrelated re-render.
+  const generatingByConv = useXYData((s) => s.generatingByConv);
+  const generatingMemberId = conv?.groupMemberIds ? generatingByConv[conv.id] ?? null : null;
   const triggerGroupReply = useXYData((s) => s.triggerGroupReply);
 
   // 对话对端:character 优先,fallback 到 legacy mock idol
