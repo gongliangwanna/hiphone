@@ -743,6 +743,21 @@ export function ChatDetail() {
           const last = visibleMessages[visibleMessages.length - 1];
           if (!last) return null;
           const lastText = (last.type === 'text' || last.type === 'heartbeat_log') ? last.text : undefined;
+          // Group chats: dots only when an AI member is actively streaming a
+          // placeholder. Auto-reply on user send is intentionally disabled —
+          // replies are manually triggered via the member strip — so showing
+          // a "typing" indicator after every user message would be a lie.
+          if (conv?.groupMemberIds) {
+            if (!last.streaming || lastText) return null;
+            const charId = last.senderId.replace(/^char-/, '');
+            const ch = characters.find((c) => c.id === charId);
+            return (
+              <TypingDots
+                avatarSrc={ch?.avatar?.trim() || CHAR_FALLBACK_AVATAR}
+                ringIndex={0}
+              />
+            );
+          }
           const isCharStreaming = conv.characterId && last.streaming && !lastText;
           const isLegacyTyping =
             !conv.characterId && peer.online && last.senderId === 'me';
