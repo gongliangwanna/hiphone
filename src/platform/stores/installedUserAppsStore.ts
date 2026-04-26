@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { SimpleToolInfo } from '@/platform/userApp/manifest';
 
 export interface InstalledUserApp {
   id: string;
@@ -19,6 +20,11 @@ export interface InstalledUserApp {
   description?: string;
   /** Release notes from manifest.changelog (preserves newlines). */
   changelog?: string;
+  /** Static tool catalog from manifest.aiTools. Used by Settings → AI 工具
+   *  to show toggles for installed-but-not-yet-mounted apps (whose
+   *  registerTools call hasn't fired yet). Source of truth at runtime
+   *  is still toolRegistry; this is a static fallback. */
+  aiTools?: SimpleToolInfo[];
 }
 
 interface InstalledUserAppsState {

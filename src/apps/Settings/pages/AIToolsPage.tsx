@@ -3,6 +3,7 @@ import { AlertTriangle } from 'lucide-react';
 import { useDisabledToolsStore } from '@/platform/ai/disabledToolsStore';
 import { getAllTools } from '@/platform/ai/toolRegistry';
 import { appRegistry, getAppDisplayName } from '@/platform/appRegistry';
+import { useInstalledUserAppsStore } from '@/platform/stores/installedUserAppsStore';
 
 const HEARTBEAT_APP_ID = 'heartbeat';
 
@@ -53,12 +54,14 @@ export function AIToolsPage() {
   // Subscribe to disabled state so toggles re-render after setDisabled.
   const disabledMap = useDisabledToolsStore((s) => s.disabled);
   const setDisabled = useDisabledToolsStore((s) => s.setDisabled);
+  const installedUserApps = useInstalledUserAppsStore((s) => s.apps);
 
   const sections: AppToolsSection[] = useMemo(() => {
-    // Collect all (appId, tools) pairs.
     const apps = appRegistry.list();
+    const userAppsById = new Map(installedUserApps.map((a) => [a.id, a]));
     const collected: AppToolsSection[] = [];
-    // Always include heartbeat (it's not in appRegistry — it's a virtual app).
+
+    // Heartbeat first (virtual app, not in appRegistry).
     const heartbeatTools = getAllTools(HEARTBEAT_APP_ID);
     if (heartbeatTools.length > 0) {
       collected.push({
@@ -67,15 +70,28 @@ export function AIToolsPage() {
         tools: heartbeatTools.map((t) => ({ type: t.type, description: t.description })),
       });
     }
+
     for (const app of apps) {
-      const tools = getAllTools(app.id);
+      let tools: { type: string; description: string }[] = getAllTools(app.id).map((t) => ({
+        type: t.type,
+        description: t.description,
+      }));
+      // Fallback to manifest.aiTools when the app hasn't registered any
+      // tools yet (typical for installed-but-not-yet-mounted user apps).
+      if (tools.length === 0) {
+        const userApp = userAppsById.get(app.id);
+        if (userApp?.aiTools && userApp.aiTools.length > 0) {
+          tools = userApp.aiTools.map((t) => ({ type: t.type, description: t.description }));
+        }
+      }
       if (tools.length === 0) continue;
       collected.push({
         appId: app.id,
         appName: getAppDisplayName(app.id),
-        tools: tools.map((t) => ({ type: t.type, description: t.description })),
+        tools,
       });
     }
+
     // Heartbeat already first; sort the rest alphabetically by appName.
     if (collected.length > 1) {
       const [head, ...rest] = collected;
@@ -87,7 +103,9 @@ export function AIToolsPage() {
     // appRegistry.list() / getAllTools() are not reactive — but we want the
     // memo to recompute when the disabled map changes (so the warning under
     // each section updates). disabledMap also acts as our render trigger.
+    // installedUserApps triggers re-render when apps install/uninstall.
     disabledMap,
+    installedUserApps,
   ]);
 
   if (sections.length === 0) {

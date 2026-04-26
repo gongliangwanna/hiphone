@@ -59,14 +59,80 @@ describe('validateManifest', () => {
     ).toThrow(/statusBarStyle/);
   });
 
-  it('ignores unknown optional fields (author, description, permissions, aiTools)', () => {
+  it('ignores unknown optional fields (author, description, permissions)', () => {
     const result = validateManifest({
       id: 'app3', name: 'X', version: '1.0.0', entry: 'App.tsx',
-      author: 'foo', description: 'bar', permissions: ['x'], aiTools: 'AI.tsx',
+      author: 'foo', description: 'bar', permissions: ['x'],
     });
     expect(result.id).toBe('app3');
     // these fields pass through but have no M2 behavior
     expect(result.author).toBe('foo');
+  });
+
+  it('accepts aiTools as a SimpleToolInfo[] array', () => {
+    const m = validateManifest({
+      id: 'abc',
+      name: 'X',
+      version: '1.0.0',
+      entry: 'App.tsx',
+      aiTools: [
+        { type: 'do_x', description: '做 X' },
+        { type: 'do_y', description: '做 Y' },
+      ],
+    });
+    expect(m.aiTools).toEqual([
+      { type: 'do_x', description: '做 X' },
+      { type: 'do_y', description: '做 Y' },
+    ]);
+  });
+
+  it('drops malformed aiTools entries silently', () => {
+    const m = validateManifest({
+      id: 'abc',
+      name: 'X',
+      version: '1.0.0',
+      entry: 'App.tsx',
+      aiTools: [
+        { type: 'good', description: 'ok' },
+        { type: 'bad' },                   // missing description
+        { description: 'bad' },            // missing type
+        'totally bad',                     // not an object
+        { type: 1, description: 'ok' },    // wrong type for type
+      ],
+    });
+    expect(m.aiTools).toEqual([{ type: 'good', description: 'ok' }]);
+  });
+
+  it('omits aiTools when none provided', () => {
+    const m = validateManifest({
+      id: 'abc',
+      name: 'X',
+      version: '1.0.0',
+      entry: 'App.tsx',
+    });
+    expect(m.aiTools).toBeUndefined();
+  });
+
+  it('treats non-array aiTools as missing', () => {
+    const m = validateManifest({
+      id: 'abc',
+      name: 'X',
+      version: '1.0.0',
+      entry: 'App.tsx',
+      aiTools: 'wrong shape',
+    });
+    expect(m.aiTools).toBeUndefined();
+  });
+
+  it('treats empty array of valid items as undefined (no entries)', () => {
+    const m = validateManifest({
+      id: 'abc',
+      name: 'X',
+      version: '1.0.0',
+      entry: 'App.tsx',
+      aiTools: [{ bad: 'shape' }, 42],
+    });
+    expect(m.aiTools).toBeUndefined();
   });
 
   it('rejects missing required field', () => {

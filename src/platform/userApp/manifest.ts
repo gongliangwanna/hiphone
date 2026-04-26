@@ -3,9 +3,18 @@
  *
  * The M2 installer only consumes fields listed in `UserAppManifest`.
  * Fields the parent app-store spec defines for M3+ (author, description,
- * permissions, aiTools) pass through validation unchanged so they can be
- * present in manifests aimed at forward compatibility.
+ * permissions) pass through validation unchanged so they can be present in
+ * manifests aimed at forward compatibility. `aiTools` is now structurally
+ * validated as a `SimpleToolInfo[]` array; malformed entries are dropped
+ * silently.
  */
+
+export interface SimpleToolInfo {
+  /** Tool identifier — must match the `type` the running app passes to registerTools(). */
+  type: string;
+  /** Human-readable description. Shown in Settings → AI 工具 page. */
+  description: string;
+}
 
 const ID_PATTERN = /^[a-z][a-z0-9-]{2,31}$/;
 const RESERVED_ID_PREFIX = '__';
@@ -53,7 +62,11 @@ export interface UserAppManifest {
    *  the detail sheet; newlines are preserved. */
   changelog?: string;
   permissions?: string[];
-  aiTools?: string;
+  /** Static tool catalog declared in manifest.json. Used by Settings → AI 工具
+   *  to show toggles for installed-but-not-yet-mounted apps (whose
+   *  registerTools() call hasn't fired yet). Source of truth at runtime
+   *  is still toolRegistry; this is a static fallback. */
+  aiTools?: SimpleToolInfo[];
 }
 
 export function validateManifest(raw: unknown): UserAppManifest {
@@ -89,6 +102,23 @@ export function validateManifest(raw: unknown): UserAppManifest {
     );
   }
 
+  let aiTools: SimpleToolInfo[] | undefined;
+  if (Array.isArray(obj.aiTools)) {
+    const valid: SimpleToolInfo[] = [];
+    for (const entry of obj.aiTools) {
+      if (
+        typeof entry === 'object' &&
+        entry !== null &&
+        typeof (entry as { type?: unknown }).type === 'string' &&
+        typeof (entry as { description?: unknown }).description === 'string'
+      ) {
+        const e = entry as { type: string; description: string };
+        valid.push({ type: e.type, description: e.description });
+      }
+    }
+    aiTools = valid.length > 0 ? valid : undefined;
+  }
+
   let services: string | undefined;
   if (obj.services !== undefined) {
     if (typeof obj.services !== 'string' || obj.services.length === 0) {
@@ -115,7 +145,7 @@ export function validateManifest(raw: unknown): UserAppManifest {
     permissions: Array.isArray(obj.permissions)
       ? obj.permissions.filter((p): p is string => typeof p === 'string')
       : undefined,
-    aiTools: typeof obj.aiTools === 'string' ? obj.aiTools : undefined,
+    aiTools,
   };
 }
 

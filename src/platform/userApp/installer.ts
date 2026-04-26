@@ -268,6 +268,7 @@ export async function install(
       author: manifest.author,
       description: manifest.description,
       changelog: manifest.changelog,
+      aiTools: manifest.aiTools,
     };
     useInstalledUserAppsStore.getState().add(record);
 
@@ -365,6 +366,7 @@ export async function loadInstalledApps(): Promise<void> {
     author: meta.manifest.author,
     description: meta.manifest.description,
     changelog: meta.manifest.changelog,
+    aiTools: meta.manifest.aiTools,
   }));
   useInstalledUserAppsStore.getState().replaceAll(records);
 
