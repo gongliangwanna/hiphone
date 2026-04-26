@@ -19,7 +19,17 @@
     "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@hiphone/ai": ["./src/platform/userApp/sdk/ai"],
+      "@hiphone/ui": ["./src/platform/userApp/sdk/ui"],
+      "@hiphone/motion": ["./src/platform/userApp/sdk/motion"],
+      "@hiphone/toast": ["./src/platform/userApp/sdk/toast"],
+      "@hiphone/storage": ["./src/platform/userApp/sdk/storage"],
+      "@hiphone/nav": ["./src/platform/userApp/sdk/nav"],
+      "@hiphone/perspective": ["./src/platform/userApp/sdk/perspective"],
+      "@hiphone/hooks": ["./src/platform/userApp/sdk/hooks"],
+      "@hiphone/banner": ["./src/platform/userApp/sdk/banner"],
+      "@hiphone/services": ["./src/platform/userApp/sdk/services"]
     }
   },
   "include": ["src"],

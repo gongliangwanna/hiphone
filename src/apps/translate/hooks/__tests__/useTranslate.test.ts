@@ -16,18 +16,20 @@ describe('buildTranslateMessages', () => {
   it('emits system + user pair, source name in system prompt', () => {
     const msgs = buildTranslateMessages('你好', ZH, EN);
     expect(msgs).toHaveLength(2);
-    expect(msgs[0].role).toBe('system');
-    expect(msgs[0].content).toContain('中文');
-    expect(msgs[0].content).toContain('英语');
-    expect(msgs[0].content).not.toContain('Detect the source language');
-    expect(msgs[1].role).toBe('user');
-    expect(msgs[1].content).toBe('你好');
+    const [sys, usr] = msgs as [typeof msgs[0], typeof msgs[1]];
+    expect(sys.role).toBe('system');
+    expect(sys.content).toContain('中文');
+    expect(sys.content).toContain('英语');
+    expect(sys.content).not.toContain('Detect the source language');
+    expect(usr.role).toBe('user');
+    expect(usr.content).toBe('你好');
   });
 
   it('appends auto-detect instruction when source is the auto sentinel', () => {
     const msgs = buildTranslateMessages('hi', AUTO_LANG, EN);
-    expect(msgs[0].content).toContain('Detect the source language');
-    expect(msgs[0].content).toContain('英语');
+    const [sys] = msgs as [typeof msgs[0]];
+    expect(sys.content).toContain('Detect the source language');
+    expect(sys.content).toContain('英语');
   });
 });
 
