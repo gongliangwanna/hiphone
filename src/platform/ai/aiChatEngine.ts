@@ -24,6 +24,10 @@ import { filterReply } from './replyFilters';
 import { buildDeviceContext } from './deviceContext';
 import { uid } from './heartbeatTools';
 import { _appendMessage } from './memoryWriter';
+import { getTools } from './toolRegistry';
+import { getAppSystemPrompt } from './appSystemPromptRegistry';
+import { XINGYU_APP_ID } from '@/apps/XingYu/xingYuRegister';
+import { useStickerStore } from '@/apps/XingYu/stickerStore';
 import type { Message } from '@/apps/XingYu/data';
 
 // ---------------------------------------------------------------------------
@@ -80,11 +84,19 @@ export async function runAIChat(opts: AIChatOptions): Promise<AIChatResult> {
 
   const persona = usePersonaStore.getState().getActivePersona();
 
+  // AI-AI chat reuses XingYu's Tool Registry: text + sticker + update_signature.
+  // Without this guidance the LLM improvises and often emits malformed JSON
+  // (unescaped quotes inside Chinese text). Passing the proper tool list
+  // dramatically reduces parse failures.
+  const frozenTools = getTools(XINGYU_APP_ID);
+  const frozenAppPrompt = getAppSystemPrompt(XINGYU_APP_ID)?.() ?? undefined;
+  const knownTypes = new Set(frozenTools.map((t) => t.type));
+
   // Ensure conversation exists
   const convId = useXYData.getState().ensureAIChatConversation(initiatorCharId, targetCharId);
 
   // Insert the initiator's opening message
-  insertMessage(convId, initiatorCharId, openingMessage);
+  insertTextMessage(convId, initiatorCharId, openingMessage);
 
   // Collect generated messages for caller
   const generatedMessages: AIChatResult['messages'] = [];
@@ -141,6 +153,11 @@ export async function runAIChat(opts: AIChatOptions): Promise<AIChatResult> {
       now: new Date(),
       deviceContext: buildDeviceContext(),
       sceneHint: `[当前场景] 你正在和${other.name}私聊。请直接回复${other.name}。`,
+      // M4.3 fix: seat AI-AI chat in XingYu's Tool Registry so the LLM
+      // gets proper [可用动作] guidance and emits clean JSON.
+      currentAppId: XINGYU_APP_ID,
+      availableTools: frozenTools,
+      appSystemPromptSnapshot: frozenAppPrompt,
     });
 
     let rawReply: string;
@@ -157,51 +174,75 @@ export async function runAIChat(opts: AIChatOptions): Promise<AIChatResult> {
       break;
     }
 
-    // Parse the structured reply, extract text messages.
-    // Pass an empty Set as knownTypes — AI-AI chat is lenient about types
-    // and handles its own branching over item.type below.
-    const { items } = parseReply(rawReply, new Set());
-    const textParts: string[] = [];
-    for (const item of items) {
+    // Parse with proper knownTypes — invalid types now error out cleanly.
+    const { items, error } = parseReply(rawReply, knownTypes);
+
+    if (error !== null) {
+      // Round produced unparseable output (LLM emitted malformed JSON,
+      // typically unescaped quotes). Skip this round rather than inserting
+      // raw JSON as a text bubble. The other character's next round will
+      // continue from prior context. Better than polluting the chat with
+      // garbage that confuses both users and the LLM.
+      console.warn(`[ai-chat] ${responderId} parse error:`, error.kind);
+      continue;
+    }
+
+    // Dispatch on item.type — same shape as XingYu's scheduleAICharacterReply
+    // but writing directly to xyData instead of going through ChatSession.
+    const responderName = responder.name;
+    let producedAny = false;
+    for (let i = 0; i < items.length; i++) {
+      if (signal.aborted) break;
+      const item = items[i]!;
+
       if (item.type === 'text') {
         const content = typeof item.param === 'string' ? item.param : '';
         const filtered = filterReply(content);
-        if (filtered) textParts.push(filtered);
-      }
-      // Signature updates from AI-AI chat are applied silently
-      if (item.type === 'update_signature') {
+        if (filtered) {
+          insertTextMessage(convId, responderId!, filtered);
+          generatedMessages.push({ senderName: responderName, text: filtered });
+          producedAny = true;
+        }
+      } else if (item.type === 'sticker') {
+        const p = (item.param ?? {}) as { stickerId?: unknown; content?: unknown };
+        const stickerId = typeof p.stickerId === 'string' ? p.stickerId : '';
+        const desc = typeof p.content === 'string' ? p.content : '';
+        const sticker = lookupSticker(stickerId);
+        if (sticker) {
+          insertStickerMessage(convId, responderId!, sticker.imageData, sticker.description);
+          generatedMessages.push({
+            senderName: responderName,
+            text: `[表情:${sticker.description}]`,
+          });
+          producedAny = true;
+        } else if (desc || stickerId) {
+          // Sticker id not in registry — fall back to a text bubble
+          // describing it (matches the renderer's stable contract).
+          const fallbackText = `[表情:${desc || stickerId}]`;
+          insertTextMessage(convId, responderId!, fallbackText);
+          generatedMessages.push({ senderName: responderName, text: fallbackText });
+          producedAny = true;
+        }
+      } else if (item.type === 'update_signature') {
         const p = (item.param ?? {}) as { text?: unknown };
         const text = typeof p.text === 'string' ? p.text : '';
         if (text) {
           useXYData.getState().updateCharacterSignature(responderId!, text);
         }
+        // No bubble produced; signature change is silent.
       }
-    }
 
-    // Lenient fallback: if the LLM didn't emit any well-formed text item
-    // (parse failed, or items contained only side-effect tools like
-    // update_signature), don't kill the conversation — treat the raw reply
-    // as a single text line. Only break when the reply is genuinely empty.
-    // This matches the resilience of XingYu's S2 retry loop semantically:
-    // we'd rather show a slightly malformed turn than abort the chat.
-    if (textParts.length === 0) {
-      const fallback = filterReply(rawReply.trim());
-      if (fallback) {
-        textParts.push(fallback);
-      } else {
-        break;
-      }
-    }
-
-    // Insert all text messages from this turn
-    for (const text of textParts) {
-      insertMessage(convId, responderId!, text);
-      generatedMessages.push({ senderName: responder.name, text });
-      // Small delay between multi-bubble messages
-      if (textParts.length > 1) {
+      // Small delay between multi-bubble messages from the same turn,
+      // matching XingYu's bubble-delivery cadence.
+      if (i < items.length - 1) {
         await new Promise((r) => setTimeout(r, 200));
       }
     }
+
+    // If the round produced ONLY a signature update (no text/sticker),
+    // continue to the next round rather than inserting a placeholder.
+    // This is a no-op turn, not a failure.
+    void producedAny;  // tracked for clarity; loop continues regardless
   }
 
   return { convId, messages: generatedMessages };
@@ -211,16 +252,48 @@ export async function runAIChat(opts: AIChatOptions): Promise<AIChatResult> {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function insertMessage(convId: string, characterId: string, text: string) {
+function insertTextMessage(convId: string, characterId: string, text: string) {
   const senderId = `char-${characterId}`;
-  const now = Date.now();
   const msg: Message = {
     id: uid(),
     convId,
     senderId,
     type: 'text',
     text,
-    timestamp: now,
+    timestamp: Date.now(),
   };
   _appendMessage(msg, 'xingyu');
+}
+
+function insertStickerMessage(
+  convId: string,
+  characterId: string,
+  stickerUrl: string,
+  stickerDesc: string,
+) {
+  const senderId = `char-${characterId}`;
+  const msg: Message = {
+    id: uid(),
+    convId,
+    senderId,
+    type: 'sticker',
+    stickerUrl,
+    stickerDesc,
+    timestamp: Date.now(),
+  };
+  _appendMessage(msg, 'xingyu');
+}
+
+/**
+ * Look up a sticker by id across the global sticker store.
+ * Returns the imageData + description for use in a Message.
+ */
+function lookupSticker(stickerId: string): { imageData: string; description: string } | null {
+  if (!stickerId) return null;
+  const packs = useStickerStore.getState().packs;
+  for (const pack of packs) {
+    const found = pack.stickers.find((s) => s.id === stickerId);
+    if (found) return { imageData: found.imageData, description: found.description };
+  }
+  return null;
 }
