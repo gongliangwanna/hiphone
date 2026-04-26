@@ -23,103 +23,6 @@ import { uid } from '@/platform/utils/uid';
 export { uid } from '@/platform/utils/uid';
 
 // ---------------------------------------------------------------------------
-// Tool descriptions (injected into system prompt)
-// ---------------------------------------------------------------------------
-
-export interface ToolDef {
-  name: string;
-  description: string;
-  params: string;
-}
-
-/**
- * Build tool definitions with dynamic user name.
- * The user name makes send_message clearly distinct from chat_with_character.
- */
-export function buildHeartbeatTools(userName: string): ToolDef[] {
-  return [
-    {
-      name: 'send_message',
-      description: `在你和${userName}的私聊中发一条消息（注意：这是给${userName}发消息，不是给其他角色）`,
-      params: '{"text": "消息内容"}',
-    },
-    {
-      name: 'post_moment',
-      description: '发一条星球动态（朋友圈）',
-      params: '{"text": "动态内容"}',
-    },
-    {
-      name: 'view_moments',
-      description: '分页查看星球动态，每页5条',
-      params: '{"page": 1}',
-    },
-    {
-      name: 'like_moment',
-      description: '给某条动态点赞（先 view_moments 获取编号）',
-      params: '{"momentId": "m1"}',
-    },
-    {
-      name: 'comment_moment',
-      description: '给某条动态评论（先 view_moments 获取编号）',
-      params: '{"momentId": "m1", "text": "评论内容"}',
-    },
-    {
-      name: 'view_user_signature',
-      description: `查看${userName}当前的个性签名`,
-      params: '{}',
-    },
-    {
-      name: 'view_user_signature_history',
-      description: `查看${userName}的历史个性签名`,
-      params: '{}',
-    },
-    {
-      name: 'update_signature',
-      description: '修改自己的个性签名',
-      params: '{"text": "新签名"}',
-    },
-    {
-      name: 'view_notes',
-      description: '分页查看自己的备忘录，每页5条',
-      params: '{"page": 1}',
-    },
-    {
-      name: 'create_note',
-      description: '创建一条备忘录（可以用来写日记、记录想法等）',
-      params: '{"title": "标题", "body": "内容"}',
-    },
-    {
-      name: 'view_unread_messages',
-      description: `查看${userName}发给你的未回复消息`,
-      params: '{}',
-    },
-    {
-      name: 'view_unread_interactions',
-      description: '查看你的动态收到的互动通知（谁赞了/评论了你的动态）',
-      params: '{}',
-    },
-    {
-      name: 'view_characters',
-      description: '查看可以聊天的其他角色列表',
-      params: '{}',
-    },
-    {
-      name: 'chat_with_character',
-      description: '和另一个AI角色私聊（想找别的角色说话就用这个，不是send_message）',
-      params: '{"characterId": "c1", "message": "你想对TA说的话"}',
-    },
-    {
-      name: 'done',
-      description: '结束本次心跳，不再执行其他操作',
-      params: '{}',
-    },
-  ];
-}
-
-/** Static reference for backward compat (uses generic "用户") */
-export const HEARTBEAT_TOOLS: ToolDef[] = buildHeartbeatTools('用户');
-
-// ---------------------------------------------------------------------------
 // Rate limiting & short-ID registry (per character per heartbeat session)
 // ---------------------------------------------------------------------------
 
@@ -172,15 +75,22 @@ export interface ToolResult {
   done: boolean;
 }
 
-export async function executeTool(
-  toolName: string,
-  input: Record<string, unknown>,
+export async function executeHeartbeatTool(
+  type: string,
+  param: unknown,
   characterId: string,
   signal?: AbortSignal,
 ): Promise<ToolResult> {
   const store = useHeartbeatStore.getState();
+  // Coerce param into a record shape for the existing exec functions.
+  // Each exec already defensively reads `String(input.x ?? '')`, so the
+  // shape contract stays identical.
+  const input: Record<string, unknown> =
+    param !== null && typeof param === 'object' && !Array.isArray(param)
+      ? (param as Record<string, unknown>)
+      : {};
 
-  switch (toolName) {
+  switch (type) {
     case 'send_message':
       return execSendMessage(input, characterId, store);
     case 'post_moment':
@@ -212,7 +122,7 @@ export async function executeTool(
     case 'done':
       return { observation: '心跳结束。', done: true };
     default:
-      return { observation: `未知工具: ${toolName}`, done: false };
+      return { observation: `未知工具: ${type}`, done: false };
   }
 }
 

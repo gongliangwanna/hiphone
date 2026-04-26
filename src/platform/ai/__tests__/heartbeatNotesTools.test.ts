@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { executeTool, resetHeartbeatLimits } from '../heartbeatTools';
+import { executeHeartbeatTool, resetHeartbeatLimits } from '../heartbeatTools';
 import { notesRegistry } from '@/apps/Notes/notesDataStore';
 
 const CHAR_ID = 'test-notes-char';
@@ -17,7 +17,7 @@ describe('heartbeat notes tools', () => {
 
   describe('view_notes', () => {
     it('returns empty message when no notes exist', async () => {
-      const result = await executeTool('view_notes', { page: 1 }, CHAR_ID);
+      const result = await executeHeartbeatTool('view_notes', { page: 1 }, CHAR_ID);
       expect(result.done).toBe(false);
       expect(result.observation).toContain('还没有写过备忘录');
     });
@@ -27,7 +27,7 @@ describe('heartbeat notes tools', () => {
       store.getState().addNote('Note A', 'Body A');
       store.getState().addNote('Note B', 'Body B');
 
-      const result = await executeTool('view_notes', { page: 1 }, CHAR_ID);
+      const result = await executeHeartbeatTool('view_notes', { page: 1 }, CHAR_ID);
       expect(result.done).toBe(false);
       expect(result.observation).toContain('[n1]');
       expect(result.observation).toContain('[n2]');
@@ -38,7 +38,7 @@ describe('heartbeat notes tools', () => {
       const store = getCharStore();
       store.getState().addNote('Only one', 'Single note');
 
-      const result = await executeTool('view_notes', { page: 99 }, CHAR_ID);
+      const result = await executeHeartbeatTool('view_notes', { page: 99 }, CHAR_ID);
       expect(result.observation).toContain('没有更多备忘录了');
     });
 
@@ -46,14 +46,14 @@ describe('heartbeat notes tools', () => {
       const store = getCharStore();
       store.getState().addNote('Default page', 'Body');
 
-      const result = await executeTool('view_notes', {}, CHAR_ID);
+      const result = await executeHeartbeatTool('view_notes', {}, CHAR_ID);
       expect(result.observation).toContain('[n1]');
     });
   });
 
   describe('create_note', () => {
     it('creates a note and pushes heartbeat log', async () => {
-      const result = await executeTool(
+      const result = await executeHeartbeatTool(
         'create_note',
         { title: 'My Diary', body: 'Today was a good day.' },
         CHAR_ID,
@@ -68,7 +68,7 @@ describe('heartbeat notes tools', () => {
     });
 
     it('rejects empty title and body', async () => {
-      const result = await executeTool(
+      const result = await executeHeartbeatTool(
         'create_note',
         { title: '', body: '' },
         CHAR_ID,
@@ -78,7 +78,7 @@ describe('heartbeat notes tools', () => {
     });
 
     it('accepts title-only note', async () => {
-      const result = await executeTool(
+      const result = await executeHeartbeatTool(
         'create_note',
         { title: 'Quick thought', body: '' },
         CHAR_ID,
@@ -88,7 +88,7 @@ describe('heartbeat notes tools', () => {
     });
 
     it('accepts body-only note', async () => {
-      const result = await executeTool(
+      const result = await executeHeartbeatTool(
         'create_note',
         { title: '', body: 'Just a body' },
         CHAR_ID,
@@ -104,12 +104,12 @@ describe('heartbeat notes tools', () => {
       store.getState().addNote('Alias test', 'body');
 
       // First view registers aliases
-      await executeTool('view_notes', { page: 1 }, CHAR_ID);
+      await executeHeartbeatTool('view_notes', { page: 1 }, CHAR_ID);
 
       // Reset clears aliases — new view should re-register
       resetHeartbeatLimits(CHAR_ID);
 
-      const result = await executeTool('view_notes', { page: 1 }, CHAR_ID);
+      const result = await executeHeartbeatTool('view_notes', { page: 1 }, CHAR_ID);
       expect(result.observation).toContain('[n1]');
     });
   });

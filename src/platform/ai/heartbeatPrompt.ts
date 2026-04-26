@@ -8,7 +8,6 @@
  * but with ReAct agent instructions instead of JSON structured output.
  */
 
-import { buildHeartbeatTools } from './heartbeatTools';
 
 /**
  * Build the format override string for heartbeat agent mode.
@@ -28,11 +27,26 @@ export function buildHeartbeatFormatOverride(
     `请像一个真实的人一样自然地行动。不需要每次都做很多事，有时候只是看看就好。`,
   );
 
-  // Tool descriptions (with user name for disambiguation)
-  const tools = buildHeartbeatTools(userName);
-  const toolLines = tools.map(
-    (t) => `- ${t.name}: ${t.description}\n  参数格式: ${t.params}`,
-  );
+  // Tool descriptions (inlined — buildHeartbeatTools was deleted in S6;
+  // heartbeatPrompt.ts itself will be removed in S8 once runHeartbeat
+  // switches to the Tool Registry path).
+  const toolLines: string[] = [
+    `- send_message: 在你和${userName}的私聊中发一条消息(注意:这是给${userName}发消息,不是给其他角色)\n  参数格式: {"text": "消息内容"}`,
+    `- post_moment: 发一条星球动态(朋友圈)\n  参数格式: {"text": "动态内容"}`,
+    `- view_moments: 分页查看星球动态,每页5条\n  参数格式: {"page": 1}`,
+    `- like_moment: 给某条动态点赞(先 view_moments 获取编号)\n  参数格式: {"momentId": "m1"}`,
+    `- comment_moment: 给某条动态评论(先 view_moments 获取编号)\n  参数格式: {"momentId": "m1", "text": "评论内容"}`,
+    `- view_user_signature: 查看${userName}当前的个性签名\n  参数格式: {}`,
+    `- view_user_signature_history: 查看${userName}的历史个性签名\n  参数格式: {}`,
+    `- update_signature: 修改自己的个性签名\n  参数格式: {"text": "新签名"}`,
+    `- view_notes: 分页查看自己的备忘录,每页5条\n  参数格式: {"page": 1}`,
+    `- create_note: 创建一条备忘录(可以用来写日记、记录想法等)\n  参数格式: {"title": "标题", "body": "内容"}`,
+    `- view_unread_messages: 查看${userName}发给你的未回复消息\n  参数格式: {}`,
+    `- view_unread_interactions: 查看你的动态收到的互动通知(谁赞了/评论了你的动态)\n  参数格式: {}`,
+    `- view_characters: 查看可以聊天的其他角色列表\n  参数格式: {}`,
+    `- chat_with_character: 和另一个AI角色私聊(想找别的角色说话就用这个,不是send_message)\n  参数格式: {"characterId": "c1", "message": "你想对TA说的话"}`,
+    `- done: 结束本次心跳,不再执行其他操作\n  参数格式: {}`,
+  ];
   chunks.push(`[可用工具]\n${toolLines.join('\n')}`);
 
   // Inject available characters (so AI can directly use chat_with_character)

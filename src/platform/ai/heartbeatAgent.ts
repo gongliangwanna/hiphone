@@ -36,7 +36,7 @@ import { chatComplete } from './chatComplete';
 import { assemblePrompt, type ChatMessage } from './promptAssembly';
 import { buildDeviceContext } from './deviceContext';
 import { buildHeartbeatFormatOverride } from './heartbeatPrompt';
-import { executeTool, resetHeartbeatLimits, getCharacterAlias, resolveCharacterId, uid } from './heartbeatTools';
+import { executeHeartbeatTool, resetHeartbeatLimits, getCharacterAlias, resolveCharacterId, uid } from './heartbeatTools';
 import { _appendMessage } from './memoryWriter';
 import type { Message } from '@/apps/XingYu/data';
 
@@ -330,7 +330,7 @@ async function runHeartbeat(
         break;
       }
 
-      const result = await executeTool(act.action, act.actionInput, characterId, signal);
+      const result = await executeHeartbeatTool(act.action, act.actionInput, characterId, signal);
       actionsTaken.push({ action: act.action, detail: formatActionDetail(act, characterId) });
       observations.push(`[${act.action}] ${result.observation}`);
 
