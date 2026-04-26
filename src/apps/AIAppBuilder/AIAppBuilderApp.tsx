@@ -13,7 +13,7 @@
  * fires generateDraft, and threads the result back into the store.
  */
 
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { Plus, Download } from 'lucide-react';
 import { AppScreen, NavBar } from '@/system';
 import { show as toastShow } from '@/platform/userApp/sdk/toast';
@@ -30,7 +30,15 @@ export function AIAppBuilderApp() {
   const status = useAIAppBuilderStore((s) => s.status);
   const goHome = useAppRuntimeStore((s) => s.goHome);
 
+  const abortRef = useRef<AbortController | null>(null);
+
   const handleSend = useCallback(async (text: string) => {
+    // Abort any in-flight generation from a prior send (defensive — UI also
+    // disables the button while generating).
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     const store = useAIAppBuilderStore.getState();
     if (!store.draftId) {
       // First message → start new draft
@@ -43,7 +51,7 @@ export function AIAppBuilderApp() {
     const { draftId: id, chatHistory } = useAIAppBuilderStore.getState();
     if (!id) return; // shouldn't happen
 
-    const result = await generateDraft({ draftId: id, chatHistory });
+    const result = await generateDraft({ draftId: id, chatHistory, signal: controller.signal });
 
     const after = useAIAppBuilderStore.getState();
     switch (result.kind) {
@@ -57,7 +65,14 @@ export function AIAppBuilderApp() {
         break;
       case 'api-error':
         after.appendBuilderMessage(`API 错误: ${result.message}`);
-        after.setError(result.message);
+        after.setStatus('idle');
+        break;
+      case 'compile-error':
+        after.appendBuilderMessage(
+          `代码编译失败:\`${result.failedPath}\`\n${result.compileMessage}\n\n自动重试也未恢复,请重新描述你的需求或换个说法。`,
+          result.files,
+        );
+        after.setError(`${result.failedPath}: ${result.compileMessage}`);
         break;
     }
   }, []);

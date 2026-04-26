@@ -93,6 +93,49 @@ describe('generateDraft', () => {
     expect(call[2]!.maxTokens).toBe(8000);
   });
 
+  it('returns compile-error when LLM emits invalid TSX', async () => {
+    vi.spyOn(chatCompleteMod, 'chatComplete')
+      .mockResolvedValueOnce(JSON.stringify({
+        files: [
+          { path: 'manifest.json', content: '{"id":"x"}' },
+          { path: 'App.tsx', content: 'this is not valid TSX !@#$' },
+        ],
+      }))
+      .mockResolvedValueOnce(JSON.stringify({
+        files: [
+          { path: 'manifest.json', content: '{"id":"x"}' },
+          { path: 'App.tsx', content: 'this is also not valid !@#$' },
+        ],
+      }));
+    const result = await generateDraft({
+      draftId: 'ai-app-x-1234',
+      chatHistory: [{ role: 'user', text: 'x', timestamp: 1 }],
+    });
+    expect(result.kind).toBe('compile-error');
+  });
+
+  it('retries once on compile-error and recovers if second TSX is valid', async () => {
+    const spy = vi.spyOn(chatCompleteMod, 'chatComplete')
+      .mockResolvedValueOnce(JSON.stringify({
+        files: [
+          { path: 'manifest.json', content: '{"id":"x"}' },
+          { path: 'App.tsx', content: 'broken syntax !@#$' },
+        ],
+      }))
+      .mockResolvedValueOnce(JSON.stringify({
+        files: [
+          { path: 'manifest.json', content: '{"id":"x"}' },
+          { path: 'App.tsx', content: 'export default () => null;' },
+        ],
+      }));
+    const result = await generateDraft({
+      draftId: 'ai-app-x-1234',
+      chatHistory: [{ role: 'user', text: 'x', timestamp: 1 }],
+    });
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(result.kind).toBe('success');
+  });
+
   it('threads chat history into the messages array', async () => {
     const spy = vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValueOnce(
       JSON.stringify({ files: [{ path: 'App.tsx', content: 'x' }] }),

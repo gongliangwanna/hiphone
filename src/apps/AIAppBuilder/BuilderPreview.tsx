@@ -75,7 +75,7 @@ export function BuilderPreview() {
     return () => {
       cancelled = true;
     };
-  }, [draftId, filesKey, draftFiles]);
+  }, [draftId, filesKey]);
 
   if (error) {
     return (

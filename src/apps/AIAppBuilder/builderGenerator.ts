@@ -21,11 +21,13 @@ import type { Message } from '@/platform/userApp/sdk/ai';
 import { useAIAppBuilderConfigStore } from './aiAppBuilderConfigStore';
 import { buildSystemPrompt } from './builderPrompt';
 import { parseGeneratedFiles } from './builderParser';
+import { compileTsx } from '@/platform/userApp/compiler';
 import type { ChatTurn } from './aiAppBuilderStore';
 
 export type GenerateResult =
   | { kind: 'success'; files: Record<string, string> }
   | { kind: 'parse-error'; rawReply: string }
+  | { kind: 'compile-error'; rawReply: string; files: Record<string, string>; failedPath: string; compileMessage: string }
   | { kind: 'api-error'; message: string };
 
 export interface GenerateInput {
@@ -40,21 +42,30 @@ export async function generateDraft(input: GenerateInput): Promise<GenerateResul
 
   // Attempt 1
   const first = await callOnce(messages, cfg, input.signal);
-  if (first.kind === 'api-error') return first;
-  if (first.kind === 'success') return first;
+  if (first.kind === 'success' || first.kind === 'api-error') return first;
 
-  // Retry once with a stricter system reminder appended as a user-role nudge.
-  const stricterMessages: Message[] = [
-    ...messages,
-    {
-      role: 'assistant',
-      content: first.rawReply,
-    },
-    {
-      role: 'user',
-      content: '上一条回复格式不对。请只输出一个 JSON 对象 {"files":[{"path":"...","content":"..."}]},不要任何说明文字。',
-    },
-  ];
+  let stricterMessages: Message[];
+  if (first.kind === 'parse-error') {
+    // Retry once with a stricter system reminder appended as a user-role nudge.
+    stricterMessages = [
+      ...messages,
+      { role: 'assistant', content: first.rawReply },
+      {
+        role: 'user',
+        content: '上一条回复格式不对。请只输出一个 JSON 对象 {"files":[{"path":"...","content":"..."}]},不要任何说明文字。',
+      },
+    ];
+  } else {
+    // compile-error: ask LLM to fix the broken file
+    stricterMessages = [
+      ...messages,
+      { role: 'assistant', content: first.rawReply },
+      {
+        role: 'user',
+        content: `上一条回复中,文件 \`${first.failedPath}\` 编译失败:\n${first.compileMessage}\n\n请修复并重新输出完整的 files 数组。`,
+      },
+    ];
+  }
   return callOnce(stricterMessages, cfg, input.signal);
 }
 
@@ -113,6 +124,23 @@ async function callOnce(
     };
   }
   const files = parseGeneratedFiles(raw);
-  if (files) return { kind: 'success', files };
-  return { kind: 'parse-error', rawReply: raw };
+  if (!files) return { kind: 'parse-error', rawReply: raw };
+
+  // Compile validation: every .tsx/.ts file must compile.
+  for (const [path, content] of Object.entries(files)) {
+    if (!path.endsWith('.tsx') && !path.endsWith('.ts')) continue;
+    try {
+      await compileTsx(content, path);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return {
+        kind: 'compile-error',
+        rawReply: raw,
+        files,
+        failedPath: path,
+        compileMessage: message,
+      };
+    }
+  }
+  return { kind: 'success', files };
 }
