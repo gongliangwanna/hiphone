@@ -205,7 +205,6 @@ async function runHeartbeat(
   useHeartbeatStore.getState().setRunning(characterId, 0);
 
   const actionsTaken: { action: string; detail: string }[] = [];
-  const thoughts: string[] = [];
 
   for (let i = 0; i < config.maxIterations; i++) {
     if (signal.aborted) break;
@@ -291,7 +290,7 @@ async function runHeartbeat(
   const READ_ONLY_ACTIONS = new Set(['view_moments', 'view_user_signature', 'view_user_signature_history', 'view_characters', 'view_notes', 'view_unread_messages', 'view_unread_interactions', 'done']);
   const writeActions = actionsTaken.filter((a) => a.action !== 'send_message' && !READ_ONLY_ACTIONS.has(a.action));
 
-  if (thoughts.length > 0 || actionsTaken.length > 0) {
+  if (actionsTaken.length > 0) {
     // Ask the LLM to write a diary entry summarizing the heartbeat session.
     // The `messages` array already contains the full session context (all
     // observations, emotional reactions, tool results) so the LLM can produce
@@ -312,17 +311,17 @@ async function runHeartbeat(
           { maxTokens: aiConfig.maxTokens, temperature: aiConfig.temperature },
           signal,
         );
-        // Strip any accidental ReAct formatting from the summary
-        narrativeSummary = narrativeSummary
-          .replace(/^Thought:\s*/i, '')
-          .replace(/\nActions:[\s\S]*$/, '')
-          .trim();
+        narrativeSummary = narrativeSummary.trim();
       } catch {
-        // Fallback: use collected thoughts directly
-        narrativeSummary = thoughts.join('；');
+        // Fallback when the summary LLM call fails: synthesize a brief
+        // narrative from the action labels we collected during the loop,
+        // so the heartbeat_log still gets written. Joining with ';'
+        // keeps it on one short line.
+        narrativeSummary = actionsTaken.map((a) => a.detail).join(';');
       }
     } else {
-      narrativeSummary = thoughts.join('；');
+      // Aborted before summary could run — best-effort fallback from action labels.
+      narrativeSummary = actionsTaken.map((a) => a.detail).join(';');
     }
 
     const parts: string[] = [];

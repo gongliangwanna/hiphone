@@ -12,12 +12,22 @@ import {
 import { useCharacterStore } from '@/platform/stores/characterStore';
 import { usePersonaStore } from '@/platform/stores/personaStore';
 import { getCharacterAlias } from '../heartbeatTools';
+import { useXYData } from '@/apps/XingYu/xingYuDataStore';
 
 describe('registerHeartbeatAi', () => {
   beforeEach(() => {
     _resetToolRegistryForTests();
     _resetAppSystemPromptRegistryForTests();
     _resetHeartbeatRegistrationForTests();
+
+    // Reset XingYu data store so positive-path tests don't bleed into null-path tests.
+    useXYData.setState({
+      ...useXYData.getState(),
+      messages: [],
+      moments: [],
+      characterLastReadMsgTs: {},
+      characterSeenInteractionCount: {},
+    });
 
     useCharacterStore.setState({
       characters: [
@@ -100,6 +110,58 @@ describe('registerHeartbeatAi', () => {
     const tool = getTools(HEARTBEAT_APP_ID).find((t) => t.type === 'view_unread_messages')!;
     const body = tool.dynamicContext!({ appId: HEARTBEAT_APP_ID, characterId: 'char-001' });
     expect(body).toBeNull();
+  });
+
+  it('view_unread_messages.dynamicContext returns non-null string with count when unread present', () => {
+    registerHeartbeatAi();
+    // Seed an unread user message into XingYu state.
+    useXYData.setState({
+      ...useXYData.getState(),
+      messages: [
+        {
+          id: 'm1', convId: 'c-char-char-001', senderId: 'me',
+          type: 'text', text: 'hello', timestamp: 1_700_000_000_000,
+        } as never,
+        {
+          id: 'm2', convId: 'c-char-char-001', senderId: 'me',
+          type: 'text', text: 'hi again', timestamp: 1_700_000_001_000,
+        } as never,
+      ],
+      characterLastReadMsgTs: { 'char-001': 0 },
+    });
+
+    const tool = getTools(HEARTBEAT_APP_ID).find((t) => t.type === 'view_unread_messages')!;
+    const body = tool.dynamicContext!({ appId: HEARTBEAT_APP_ID, characterId: 'char-001' });
+    expect(body).toBeDefined();
+    expect(body).not.toBeNull();
+    expect(body).toContain('2');
+    expect(body).toContain('未读');
+  });
+
+  it('view_unread_interactions.dynamicContext returns non-null string with count when interactions present', () => {
+    registerHeartbeatAi();
+    // Seed a moment owned by char-001 that another user has liked + commented.
+    useXYData.setState({
+      ...useXYData.getState(),
+      moments: [
+        {
+          id: 'mom1',
+          idolId: 'char-char-001',
+          text: 'my moment',
+          likedBy: ['char-char-002'],
+          comments: [{ id: 'c1', userId: 'char-char-002', text: 'nice' } as never],
+          timestamp: 1_700_000_000_000,
+        } as never,
+      ],
+      characterSeenInteractionCount: { 'char-001': 0 },
+    });
+
+    const tool = getTools(HEARTBEAT_APP_ID).find((t) => t.type === 'view_unread_interactions')!;
+    const body = tool.dynamicContext!({ appId: HEARTBEAT_APP_ID, characterId: 'char-001' });
+    expect(body).toBeDefined();
+    expect(body).not.toBeNull();
+    expect(body).toContain('2');
+    expect(body).toContain('互动');
   });
 
   it('view_unread_interactions.dynamicContext returns null when no new interactions', () => {
