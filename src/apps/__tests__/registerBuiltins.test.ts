@@ -11,6 +11,7 @@ describe('registerBuiltins', () => {
     registerBuiltins();
     const ids = appRegistry.list().map((e) => e.id).sort();
     expect(ids).toEqual([
+      'ai-app-builder',
       'app-store',
       'calendar',
       'camera',

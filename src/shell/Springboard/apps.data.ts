@@ -74,6 +74,7 @@ const cnApps: AppInfo[] = [
 
   { id: 'xingyu', name: '可爱信', icon: `${CN_ICON_BASE}/xingyu.svg`, page: 1 },
   { id: 'gomoku', name: '五子棋', icon: `${CN_ICON_BASE}/gomoku.svg`, page: 1 },
+  { id: 'ai-app-builder', name: 'AI 工坊', icon: `${SYSTEM_ICON_BASE}/shortcuts.jpg`, page: 1 },
 ];
 
 // [DEV] Fake user app icon — for M1 pipeline verification. In production
