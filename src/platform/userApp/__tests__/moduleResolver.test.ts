@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { render, cleanup } from '@testing-library/react';
 import { resolveRelativePath, createUserAppRuntime } from '../moduleResolver';
 import React from 'react';
 
@@ -59,8 +60,9 @@ describe('createUserAppRuntime — multi-file', () => {
     `);
 
     const Component = createUserAppRuntime(compiledMap, 'App.tsx', sdkResolveMock, 'test-app');
-    const output = (Component as any)();
-    expect(output.props.children).toBe('hello-util');
+    const { container } = render(React.createElement(Component));
+    expect(container.textContent).toBe('hello-util');
+    cleanup();
   });
 
   it('handles nested import path (./components/X)', async () => {
@@ -80,8 +82,9 @@ describe('createUserAppRuntime — multi-file', () => {
     `);
 
     const Component = createUserAppRuntime(compiledMap, 'App.tsx', sdkResolveMock, 'test-app');
-    const output = (Component as any)();
-    expect(output.type).toBeDefined();
+    const { container } = render(React.createElement(Component));
+    expect(container.querySelector('span')?.textContent).toBe('x');
+    cleanup();
   });
 
   it('handles circular dependency A ↔ B without infinite loop', async () => {
@@ -112,8 +115,9 @@ describe('createUserAppRuntime — multi-file', () => {
       sdkResolveMock,
       'test-app',
     );
-    const output = (Component as any)();
-    expect(output.props.children).toBe('AB');
+    const { container } = render(React.createElement(Component));
+    expect(container.textContent).toBe('AB');
+    cleanup();
   });
 
   it('throws when entry does not export default', async () => {

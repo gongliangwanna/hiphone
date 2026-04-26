@@ -1,6 +1,6 @@
-import type { ComponentType } from 'react';
+import React, { type ComponentType } from 'react';
 import { executeInSandbox, type ModuleResolver } from './sandbox';
-import { withUserAppContext } from './sdk/context';
+import { registerMountedApp, withUserAppContext } from './sdk/context';
 
 /**
  * Resolve a relative specifier (starting with `./` or `../`) to an
@@ -130,8 +130,19 @@ export function createUserAppRuntime(
   }
 
   // Wrap returned Component so render-time SDK calls (inside hooks) also
-  // see the context.
+  // see the context. Additionally register the mount in `mountedApps` so
+  // post-render lifecycle paths (useEffect, async callbacks resolving
+  // after withUserAppContext has unwound) can resolve appId via the
+  // mounted-apps fallback. Without this, getCurrentAppId() throws
+  // NoUserAppContextError from any useEffect-driven SDK call (e.g.
+  // @hiphone/storage hydration).
+  //
+  // useLayoutEffect (not useEffect) so it runs BEFORE any passive
+  // useEffect inside the user component. Idempotent with refcount: if
+  // installer.ts also wraps this with its own registerMountedApp call,
+  // the count just goes 2 → 0 on unmount.
   return function UserAppRoot(props: any) {
+    React.useLayoutEffect(() => registerMountedApp(appId), []);
     return withUserAppContext(appId, () => (Component as any)(props));
   };
 }
