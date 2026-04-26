@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "lint": "eslint src/",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "verify:prod-sucrase": "node scripts/check-sucrase-in-prod.mjs"
   },
   "dependencies": {
     "@tailwindcss/browser": "^4",
