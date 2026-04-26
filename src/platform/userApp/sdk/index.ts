@@ -9,6 +9,7 @@ import * as hiphoneToast from './toast';
 import * as hiphoneBanner from './banner';
 import * as hiphoneServices from './services';
 import * as hiphoneAi from './ai';
+import * as hiphoneMotion from './motion';
 
 /**
  * Module registry for the user-app sandbox.
@@ -35,6 +36,7 @@ const moduleMap: Record<string, unknown> = {
   '@hiphone/banner': hiphoneBanner,
   '@hiphone/services': hiphoneServices,
   '@hiphone/ai': hiphoneAi,
+  '@hiphone/motion': hiphoneMotion,
 };
 
 /**

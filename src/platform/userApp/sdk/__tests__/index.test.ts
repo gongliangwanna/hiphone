@@ -98,3 +98,28 @@ describe('resolveModule', () => {
     expect(() => resolveModule('__proto__')).toThrow(/Module not found/);
   });
 });
+
+describe('@hiphone/motion', () => {
+  it('exposes motion/react surface', () => {
+    const mod = resolveModule('@hiphone/motion') as Record<string, unknown>;
+    // motion is a callable function (also a proxy with .div, .span etc. sub-properties)
+    expect(typeof mod.motion).toBe('function');
+    expect(typeof mod.AnimatePresence).toBe('function');
+    expect(typeof mod.useMotionValue).toBe('function');
+    expect(typeof mod.useTransform).toBe('function');
+    expect(typeof mod.useSpring).toBe('function');
+  });
+
+  it('exposes design-token spring presets', () => {
+    const mod = resolveModule('@hiphone/motion') as {
+      spring: Record<string, { stiffness: number; damping: number; mass: number }>;
+      duration: Record<string, number>;
+      ease: { standard: [number, number, number, number] };
+    };
+    expect(mod.spring.snappy).toEqual({ stiffness: 500, damping: 38, mass: 1 });
+    expect(mod.spring.bouncy).toEqual({ stiffness: 220, damping: 18, mass: 1 });
+    expect(mod.spring.smooth).toEqual({ stiffness: 280, damping: 28, mass: 1 });
+    expect(mod.duration.fast).toBe(200);
+    expect(mod.ease.standard).toEqual([0.4, 0, 0.2, 1]);
+  });
+});
