@@ -3,12 +3,9 @@
  * sandbox pipeline (compile → sandbox → register), but cannot be
  * uninstalled and don't appear in App Store's "installed" list.
  *
- * Why this exists:
- * - Validates the user-app SDK upper bound — these apps consume only
- *   the public `@hiphone/*` surface, proving uploaded user apps can
- *   achieve the same fidelity.
- * - Makes Sucrase a first-class production dependency: an unconditional
- *   compileTsx caller forces it into the prod bundle (CLAUDE.md note 4).
+ * Source files for each app live under src/apps/<id>/ as real .tsx/.ts
+ * files (IDE highlight + tsc + ESLint friendly), and are pulled in here
+ * as raw strings via Vite's ?raw query so the sandbox can compile them.
  */
 
 import { appRegistry } from '@/platform/appRegistry';
@@ -16,6 +13,14 @@ import { compileTsx } from './compiler';
 import { createUserAppRuntime } from './moduleResolver';
 import { resolveModule } from './sdk';
 import { wrapUserComponent } from './sdk/wrap';
+
+// Translate app source files (S3 — core translate flow; S4/S5 will add sheets + history).
+import translateAppSrc from '@/apps/translate/TranslateApp.tsx?raw';
+import translateLangBarSrc from '@/apps/translate/selectors/LangBar.tsx?raw';
+import translateSourcePanelSrc from '@/apps/translate/panels/SourcePanel.tsx?raw';
+import translateTargetPanelSrc from '@/apps/translate/panels/TargetPanel.tsx?raw';
+import translateUseTranslateSrc from '@/apps/translate/hooks/useTranslate.ts?raw';
+import translateLanguagesSrc from '@/apps/translate/constants/languages.ts?raw';
 
 export interface BuiltinUserApp {
   id: string;
@@ -26,29 +31,18 @@ export interface BuiltinUserApp {
   globalData: boolean;
 }
 
-const TRANSLATE_PLACEHOLDER_SOURCE = `
-import React from 'react';
-import { NavBar } from '@hiphone/ui';
-
-export default function TranslateApp() {
-  return (
-    <div style={{ height: '100%', backgroundColor: 'var(--color-systemBackground)' }}>
-      <NavBar title="翻译" />
-      <div style={{ padding: 20, fontSize: 17, color: 'var(--color-secondaryLabel)' }}>
-        翻译功能即将上线 (S3-S5)
-      </div>
-    </div>
-  );
-}
-`;
-
 export const BUILTIN_USER_APPS: BuiltinUserApp[] = [
   {
     id: 'translate',
     name: '翻译',
     entry: 'TranslateApp.tsx',
     files: {
-      'TranslateApp.tsx': TRANSLATE_PLACEHOLDER_SOURCE,
+      'TranslateApp.tsx': translateAppSrc,
+      'selectors/LangBar.tsx': translateLangBarSrc,
+      'panels/SourcePanel.tsx': translateSourcePanelSrc,
+      'panels/TargetPanel.tsx': translateTargetPanelSrc,
+      'hooks/useTranslate.ts': translateUseTranslateSrc,
+      'constants/languages.ts': translateLanguagesSrc,
     },
     perspectiveAware: true,
     globalData: false,
