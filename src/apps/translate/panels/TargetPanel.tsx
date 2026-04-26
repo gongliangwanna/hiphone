@@ -1,4 +1,3 @@
-import React from 'react';
 import { motion, AnimatePresence } from '@hiphone/motion';
 import { spring } from '@hiphone/motion';
 import { Copy, Star } from 'lucide-react';
@@ -14,15 +13,8 @@ export interface TargetPanelProps {
   onToggleFavorite?: () => void;
 }
 
-const CONTAINER_STYLE: React.CSSProperties = {
-  position: 'relative',
-  margin: '12px 16px 0',
-  backgroundColor: 'var(--color-secondarySystemBackground)',
-  borderRadius: 12,
-  padding: 12,
-  minHeight: 140,
-  color: 'var(--color-label)',
-};
+const ICON_BTN =
+  'absolute bottom-2 w-8 h-8 rounded-full border-none bg-[var(--color-tertiarySystemFill)] flex items-center justify-center cursor-pointer';
 
 export function TargetPanel({ text, status, errorMessage, isFavorited, onToggleFavorite }: TargetPanelProps) {
   const onCopy = async () => {
@@ -36,7 +28,7 @@ export function TargetPanel({ text, status, errorMessage, isFavorited, onToggleF
   };
 
   return (
-    <div style={CONTAINER_STYLE}>
+    <div className="relative mx-4 mt-3 bg-[var(--color-secondarySystemBackground)] rounded-[12px] p-3 min-h-[140px] text-[var(--color-label)]">
       <AnimatePresence mode="wait">
         {status === 'loading' && (
           <motion.div
@@ -45,10 +37,7 @@ export function TargetPanel({ text, status, errorMessage, isFavorited, onToggleF
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={spring.smooth}
-            style={{
-              fontSize: 15,
-              color: 'var(--color-secondaryLabel)',
-            }}
+            className="text-[15px] text-[var(--color-secondaryLabel)]"
           >
             翻译中…
           </motion.div>
@@ -60,11 +49,7 @@ export function TargetPanel({ text, status, errorMessage, isFavorited, onToggleF
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             transition={spring.smooth}
-            style={{
-              fontSize: 15,
-              color: 'var(--color-systemRed)',
-              whiteSpace: 'pre-wrap',
-            }}
+            className="text-[15px] text-[var(--color-systemRed)] whitespace-pre-wrap"
           >
             {errorMessage ?? '翻译失败'}
           </motion.div>
@@ -76,12 +61,7 @@ export function TargetPanel({ text, status, errorMessage, isFavorited, onToggleF
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
             transition={spring.smooth}
-            style={{
-              fontSize: 17,
-              lineHeight: 1.4,
-              whiteSpace: 'pre-wrap',
-              paddingRight: 32,
-            }}
+            className="text-[17px] leading-[1.4] whitespace-pre-wrap pr-8"
           >
             {text}
           </motion.div>
@@ -95,21 +75,7 @@ export function TargetPanel({ text, status, errorMessage, isFavorited, onToggleF
           whileTap={{ scale: 1.15 }}
           transition={spring.bouncy}
           aria-label="复制译文"
-          style={{
-            position: 'absolute',
-            right: 8,
-            bottom: 8,
-            width: 32,
-            height: 32,
-            borderRadius: 16,
-            border: 'none',
-            backgroundColor: 'var(--color-tertiarySystemFill)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            color: 'var(--color-systemBlue)',
-          }}
+          className={`${ICON_BTN} right-2 text-[var(--color-systemBlue)]`}
         >
           <Copy size={16} strokeWidth={2.2} />
         </motion.button>
@@ -122,21 +88,7 @@ export function TargetPanel({ text, status, errorMessage, isFavorited, onToggleF
           onClick={onToggleFavorite}
           whileTap={{ scale: 1.3 }}
           transition={spring.bouncy}
-          style={{
-            position: 'absolute',
-            right: 48,
-            bottom: 8,
-            width: 32,
-            height: 32,
-            borderRadius: 16,
-            border: 'none',
-            background: 'var(--color-tertiarySystemFill)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            color: isFavorited ? 'var(--color-systemYellow)' : 'var(--color-systemBlue)',
-          }}
+          className={`${ICON_BTN} right-12 ${isFavorited ? 'text-[var(--color-systemYellow)]' : 'text-[var(--color-systemBlue)]'}`}
         >
           <Star size={16} strokeWidth={2.2} fill={isFavorited ? 'currentColor' : 'none'} />
         </motion.button>

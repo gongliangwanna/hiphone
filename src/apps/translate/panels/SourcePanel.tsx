@@ -1,4 +1,3 @@
-import React from 'react';
 import { X } from 'lucide-react';
 
 export interface SourcePanelProps {
@@ -8,45 +7,6 @@ export interface SourcePanelProps {
   disabled?: boolean;
 }
 
-const CONTAINER_STYLE: React.CSSProperties = {
-  position: 'relative',
-  margin: '0 16px',
-  backgroundColor: 'var(--color-tertiarySystemBackground)',
-  borderRadius: 12,
-  padding: 12,
-  minHeight: 140,
-};
-
-const TEXTAREA_STYLE: React.CSSProperties = {
-  width: '100%',
-  height: '100%',
-  minHeight: 116,
-  border: 'none',
-  outline: 'none',
-  resize: 'none',
-  background: 'transparent',
-  fontSize: 17,
-  lineHeight: 1.4,
-  color: 'var(--color-label)',
-  fontFamily: 'inherit',
-};
-
-const CLEAR_BTN_STYLE: React.CSSProperties = {
-  position: 'absolute',
-  right: 8,
-  top: 8,
-  width: 28,
-  height: 28,
-  borderRadius: 14,
-  border: 'none',
-  backgroundColor: 'var(--color-tertiarySystemFill)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  cursor: 'pointer',
-  color: 'var(--color-secondaryLabel)',
-};
-
 export function SourcePanel({
   value,
   onChange,
@@ -54,21 +14,21 @@ export function SourcePanel({
   disabled,
 }: SourcePanelProps) {
   return (
-    <div style={CONTAINER_STYLE}>
+    <div className="relative mx-4 bg-[var(--color-tertiarySystemBackground)] rounded-[12px] p-3 min-h-[140px]">
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         disabled={disabled}
         rows={5}
-        style={TEXTAREA_STYLE}
+        className="w-full h-full min-h-[116px] border-none outline-none resize-none bg-transparent text-[17px] leading-[1.4] text-[var(--color-label)] font-[inherit]"
       />
       {value.length > 0 && !disabled && (
         <button
           type="button"
           onClick={() => onChange('')}
           aria-label="清空"
-          style={CLEAR_BTN_STYLE}
+          className="absolute right-2 top-2 w-7 h-7 rounded-full border-none bg-[var(--color-tertiarySystemFill)] flex items-center justify-center cursor-pointer text-[var(--color-secondaryLabel)]"
         >
           <X size={16} strokeWidth={2.2} />
         </button>

@@ -1,4 +1,3 @@
-import React from 'react';
 import { motion, AnimatePresence } from '@hiphone/motion';
 import { spring } from '@hiphone/motion';
 import { RecentRow } from './RecentRow';
@@ -14,47 +13,6 @@ export interface RecentsSheetProps {
   onClose: () => void;
 }
 
-const CONTAINER: React.CSSProperties = { position: 'absolute', inset: 0, zIndex: 100 };
-const BACKDROP: React.CSSProperties = {
-  position: 'absolute',
-  inset: 0,
-  background: 'rgba(0,0,0,0.4)',
-  border: 'none',
-  cursor: 'pointer',
-};
-const SHEET: React.CSSProperties = {
-  position: 'absolute',
-  left: 0,
-  right: 0,
-  bottom: 0,
-  background: 'var(--color-secondarySystemBackground)',
-  borderTopLeftRadius: 16,
-  borderTopRightRadius: 16,
-  padding: '12px 0 24px',
-  maxHeight: '75%',
-  display: 'flex',
-  flexDirection: 'column',
-};
-const HANDLE: React.CSSProperties = {
-  width: 36,
-  height: 5,
-  borderRadius: 3,
-  margin: '0 auto 8px',
-  background: 'var(--color-tertiaryLabel)',
-};
-const TITLE: React.CSSProperties = {
-  fontSize: 13,
-  fontWeight: 600,
-  color: 'var(--color-secondaryLabel)',
-  padding: '4px 20px 8px',
-};
-const EMPTY: React.CSSProperties = {
-  fontSize: 15,
-  color: 'var(--color-tertiaryLabel)',
-  textAlign: 'center',
-  padding: '40px 20px',
-};
-
 export function RecentsSheet({
   open,
   history,
@@ -67,7 +25,7 @@ export function RecentsSheet({
   return (
     <AnimatePresence>
       {open && (
-        <div style={CONTAINER} role="dialog" aria-modal="true" aria-labelledby="recentssheet-title">
+        <div className="absolute inset-0 z-[100]" role="dialog" aria-modal="true" aria-labelledby="recentssheet-title">
           <motion.button
             type="button"
             aria-label="关闭历史"
@@ -76,22 +34,27 @@ export function RecentsSheet({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={spring.smooth}
-            style={BACKDROP}
+            className="absolute inset-0 bg-black/40 border-none cursor-pointer"
           />
           <motion.div
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={spring.snappy}
-            style={SHEET}
+            className="absolute left-0 right-0 bottom-0 bg-[var(--color-secondarySystemBackground)] rounded-t-2xl pt-3 pb-6 max-h-[75%] flex flex-col"
           >
-            <div style={HANDLE} />
-            <div id="recentssheet-title" style={TITLE}>
+            <div className="w-9 h-[5px] rounded-[3px] mx-auto mb-2 bg-[var(--color-tertiaryLabel)]" />
+            <div
+              id="recentssheet-title"
+              className="text-[13px] font-semibold text-[var(--color-secondaryLabel)] px-5 pt-1 pb-2"
+            >
               历史
             </div>
-            <div style={{ overflowY: 'auto', flex: 1 }}>
+            <div className="overflow-y-auto flex-1">
               {history.length === 0 ? (
-                <div style={EMPTY}>暂无历史</div>
+                <div className="text-[15px] text-[var(--color-tertiaryLabel)] text-center px-5 py-10">
+                  暂无历史
+                </div>
               ) : (
                 history.map((e) => (
                   <RecentRow

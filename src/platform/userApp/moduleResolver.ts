@@ -1,6 +1,7 @@
 import React, { type ComponentType } from 'react';
 import { executeInSandbox, type ModuleResolver } from './sandbox';
 import { registerMountedApp, withUserAppContext } from './sdk/context';
+import { ensureTwindInstalled } from './twindRuntime';
 
 /**
  * Resolve a relative specifier (starting with `./` or `../`) to an
@@ -142,7 +143,10 @@ export function createUserAppRuntime(
   // installer.ts also wraps this with its own registerMountedApp call,
   // the count just goes 2 → 0 on unmount.
   return function UserAppRoot(props: any) {
-    React.useLayoutEffect(() => registerMountedApp(appId), []);
+    React.useLayoutEffect(() => {
+      void ensureTwindInstalled();
+      return registerMountedApp(appId);
+    }, []);
     return withUserAppContext(appId, () => (Component as any)(props));
   };
 }

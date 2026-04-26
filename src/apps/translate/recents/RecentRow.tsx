@@ -1,4 +1,3 @@
-import React from 'react';
 import { motion } from '@hiphone/motion';
 import { spring } from '@hiphone/motion';
 import { Star, Trash2 } from 'lucide-react';
@@ -13,59 +12,9 @@ export interface RecentRowProps {
   onDelete?: (id: string) => void;
 }
 
-const ROW_OUTER: React.CSSProperties = {
-  position: 'relative',
-  overflow: 'hidden',
-  borderBottom: '1px solid var(--color-separator)',
-};
-
-const ROW_INNER: React.CSSProperties = {
-  // position:relative is load-bearing — without it, the row paints BEFORE
-  // the absolutely-positioned delete bg (per CSS paint order: non-positioned
-  // elements draw under positioned ones), and the delete bg covers the
-  // entire row content. Making this positioned puts both siblings in the
-  // same paint layer; source order then puts the row on top.
-  position: 'relative',
-  display: 'flex',
-  alignItems: 'flex-start',
-  width: '100%',
-  padding: '12px 16px',
-  background: 'var(--color-secondarySystemBackground)',
-  border: 'none',
-  textAlign: 'left',
-  cursor: 'pointer',
-  gap: 8,
-};
-
-const DELETE_BG: React.CSSProperties = {
-  position: 'absolute',
-  inset: 0,
-  background: 'var(--color-systemRed)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'flex-end',
-  paddingRight: 24,
-  color: 'white',
-  fontSize: 15,
-  fontWeight: 600,
-};
-
-const STAR_BTN: React.CSSProperties = {
-  flexShrink: 0,
-  width: 32,
-  height: 32,
-  borderRadius: 16,
-  border: 'none',
-  background: 'transparent',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  cursor: 'pointer',
-};
-
 export function RecentRow({ entry, isFavorited, onPick, onToggleFavorite, onDelete }: RecentRowProps) {
   return (
-    <div style={ROW_OUTER}>
+    <div className="relative overflow-hidden border-b border-[var(--color-separator)]">
       {onDelete && (
         /* aria-hidden + tabIndex=-1: delete sits behind the row as a swipe-reveal
            affordance; hiding it from a11y until M2 SheetGesture lands a proper
@@ -76,9 +25,9 @@ export function RecentRow({ entry, isFavorited, onPick, onToggleFavorite, onDele
           aria-hidden="true"
           tabIndex={-1}
           onClick={() => onDelete(entry.id)}
-          style={{ ...DELETE_BG, border: 'none', cursor: 'pointer' }}
+          className="absolute inset-0 bg-[var(--color-systemRed)] flex items-center justify-end pr-6 text-white text-[15px] font-semibold border-none cursor-pointer"
         >
-          <Trash2 size={18} strokeWidth={2.2} style={{ marginRight: 6 }} />
+          <Trash2 size={18} strokeWidth={2.2} className="mr-1.5" />
           删除
         </button>
       )}
@@ -87,61 +36,36 @@ export function RecentRow({ entry, isFavorited, onPick, onToggleFavorite, onDele
         dragConstraints={{ left: -88, right: 0 }}
         dragElastic={0.05}
         transition={spring.snappy}
-        style={ROW_INNER}
+        // position:relative is load-bearing — without it, the row paints BEFORE
+        // the absolutely-positioned delete bg (per CSS paint order: non-positioned
+        // elements draw under positioned ones), and the delete bg covers the
+        // entire row content. Making this positioned puts both siblings in the
+        // same paint layer; source order then puts the row on top.
+        className="relative flex items-start w-full px-4 py-3 bg-[var(--color-secondarySystemBackground)] border-none text-left cursor-pointer gap-2"
       >
         <button
           type="button"
           onClick={() => onPick(entry)}
           aria-label="恢复此条历史"
-          style={{
-            flex: 1,
-            background: 'transparent',
-            border: 'none',
-            textAlign: 'left',
-            cursor: 'pointer',
-            padding: 0,
-          }}
+          className="flex-1 bg-transparent border-none text-left cursor-pointer p-0"
         >
-          <div
-            style={{
-              fontSize: 13,
-              color: 'var(--color-secondaryLabel)',
-              marginBottom: 2,
-            }}
-          >
+          <div className="text-[13px] text-[var(--color-secondaryLabel)] mb-0.5">
             {entry.sourceLang.native} → {entry.targetLang.native}
           </div>
-          <div
-            style={{
-              fontSize: 15,
-              color: 'var(--color-label)',
-              marginBottom: 2,
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-            }}
-          >
+          <div className="text-[15px] text-[var(--color-label)] mb-0.5 whitespace-pre-wrap break-words">
             {entry.sourceText}
           </div>
-          <div
-            style={{
-              fontSize: 15,
-              color: 'var(--color-secondaryLabel)',
-              whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word',
-            }}
-          >
+          <div className="text-[15px] text-[var(--color-secondaryLabel)] whitespace-pre-wrap break-words">
             {entry.targetText}
           </div>
         </button>
         <motion.button
           type="button"
           aria-label={isFavorited ? '取消收藏' : '收藏'}
-          onClick={() => {
-            onToggleFavorite(entry);
-          }}
+          onClick={() => onToggleFavorite(entry)}
           whileTap={{ scale: 1.3 }}
           transition={spring.bouncy}
-          style={STAR_BTN}
+          className="shrink-0 w-8 h-8 rounded-full border-none bg-transparent flex items-center justify-center cursor-pointer"
         >
           <Star
             size={20}

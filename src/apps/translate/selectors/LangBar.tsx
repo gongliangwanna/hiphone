@@ -1,4 +1,3 @@
-import React from 'react';
 import { motion } from '@hiphone/motion';
 import { spring } from '@hiphone/motion';
 import { ArrowLeftRight } from 'lucide-react';
@@ -12,20 +11,9 @@ export interface LangBarProps {
   onTapTarget?: () => void;
 }
 
-const PILL_STYLE: React.CSSProperties = {
-  flex: 1,
-  height: 44,
-  borderRadius: 22,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  fontSize: 17,
-  fontWeight: 500,
-  color: 'var(--color-label)',
-  backgroundColor: 'var(--color-secondarySystemFill)',
-  cursor: 'pointer',
-  userSelect: 'none',
-};
+const PILL =
+  'flex-1 h-11 rounded-[22px] flex items-center justify-center text-[17px] font-medium ' +
+  'text-[var(--color-label)] bg-[var(--color-secondarySystemFill)] border-none cursor-pointer select-none';
 
 export function LangBar({
   sourceLang,
@@ -35,17 +23,10 @@ export function LangBar({
   onTapTarget,
 }: LangBarProps) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '8px 16px',
-      }}
-    >
+    <div className="flex items-center gap-2 px-4 py-2">
       <button
         type="button"
-        style={{ ...PILL_STYLE, border: 'none' }}
+        className={PILL}
         onClick={onTapSource}
         aria-label={`源语言 ${sourceLang.name}`}
       >
@@ -57,25 +38,13 @@ export function LangBar({
         whileTap={{ scale: 0.92 }}
         onClick={onSwap}
         aria-label="交换语种"
-        style={{
-          width: 44,
-          height: 44,
-          borderRadius: 22,
-          border: 'none',
-          backgroundColor: 'var(--color-systemBlue)',
-          color: 'white',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-        }}
+        className="w-11 h-11 rounded-[22px] border-none bg-[var(--color-systemBlue)] text-white flex items-center justify-center cursor-pointer"
       >
         <motion.span
-          // 360 each toggle keeps the icon visually rotating each tap.
           animate={{ rotate: 0 }}
           whileTap={{ rotate: 180 }}
           transition={spring.bouncy}
-          style={{ display: 'inline-flex' }}
+          className="inline-flex"
         >
           <ArrowLeftRight size={20} strokeWidth={2.2} />
         </motion.span>
@@ -83,7 +52,7 @@ export function LangBar({
 
       <button
         type="button"
-        style={{ ...PILL_STYLE, border: 'none' }}
+        className={PILL}
         onClick={onTapTarget}
         aria-label={`目标语言 ${targetLang.name}`}
       >

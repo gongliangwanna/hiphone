@@ -22,13 +22,6 @@ import {
   type Language,
 } from './constants/languages';
 
-const APP_STYLE: React.CSSProperties = {
-  height: '100%',
-  display: 'flex',
-  flexDirection: 'column',
-  backgroundColor: 'var(--color-systemBackground)',
-};
-
 export default function TranslateApp() {
   const [sourceLang, setSourceLang] = useState<Language>(DEFAULT_SOURCE_LANG);
   const [targetLang, setTargetLang] = useState<Language>(DEFAULT_TARGET_LANG);
@@ -148,7 +141,7 @@ export default function TranslateApp() {
   const canTranslate = sourceText.trim().length > 0 && status !== 'loading';
 
   return (
-    <div style={APP_STYLE}>
+    <div className="h-full flex flex-col bg-[var(--color-systemBackground)]">
       <NavBar
         title="翻译"
         rightButtons={[
@@ -173,33 +166,25 @@ export default function TranslateApp() {
         onTapTarget={() => setPickerOpen('target')}
       />
 
-      <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 16 }}>
+      <div className="flex-1 overflow-y-auto pb-4">
         <SourcePanel
           value={sourceText}
           onChange={setSourceText}
           disabled={status === 'loading'}
         />
 
-        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>
+        <div className="flex justify-center mt-3">
           <motion.button
             type="button"
             disabled={!canTranslate}
             onClick={onTranslate}
             whileTap={canTranslate ? { scale: 0.96 } : undefined}
             transition={spring.snappy}
-            style={{
-              padding: '10px 28px',
-              minHeight: 44,
-              borderRadius: 22,
-              border: 'none',
-              fontSize: 17,
-              fontWeight: 600,
-              backgroundColor: canTranslate
-                ? 'var(--color-systemBlue)'
-                : 'var(--color-tertiarySystemFill)',
-              color: canTranslate ? 'white' : 'var(--color-tertiaryLabel)',
-              cursor: canTranslate ? 'pointer' : 'default',
-            }}
+            className={
+              canTranslate
+                ? 'px-7 py-2.5 min-h-11 rounded-[22px] border-none text-[17px] font-semibold bg-[var(--color-systemBlue)] text-white cursor-pointer'
+                : 'px-7 py-2.5 min-h-11 rounded-[22px] border-none text-[17px] font-semibold bg-[var(--color-tertiarySystemFill)] text-[var(--color-tertiaryLabel)] cursor-default'
+            }
           >
             {status === 'loading' ? '翻译中…' : '翻译'}
           </motion.button>

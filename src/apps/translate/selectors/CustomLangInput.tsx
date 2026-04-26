@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from '@hiphone/motion';
 import { spring } from '@hiphone/motion';
 import type { Language } from '../constants/languages';
@@ -9,56 +9,7 @@ export interface CustomLangInputProps {
   onClose: () => void;
 }
 
-const CONTAINER_STYLE: React.CSSProperties = {
-  position: 'absolute',
-  inset: 0,
-  zIndex: 110, // above LangSheet (100)
-};
-
-const BACKDROP_STYLE: React.CSSProperties = {
-  position: 'absolute',
-  inset: 0,
-  backgroundColor: 'rgba(0,0,0,0.4)',
-  border: 'none',
-  cursor: 'pointer',
-};
-
-const SHEET_STYLE: React.CSSProperties = {
-  position: 'absolute',
-  left: 0,
-  right: 0,
-  bottom: 0,
-  backgroundColor: 'var(--color-secondarySystemBackground)',
-  borderTopLeftRadius: 16,
-  borderTopRightRadius: 16,
-  padding: 16,
-};
-
-const HANDLE_STYLE: React.CSSProperties = {
-  width: 36,
-  height: 5,
-  borderRadius: 3,
-  margin: '0 auto 12px',
-  backgroundColor: 'var(--color-tertiaryLabel)',
-};
-
-const INPUT_STYLE: React.CSSProperties = {
-  width: '100%',
-  minHeight: 44,
-  padding: '10px 12px',
-  fontSize: 17,
-  borderRadius: 10,
-  border: 'none',
-  outline: 'none',
-  backgroundColor: 'var(--color-tertiarySystemFill)',
-  color: 'var(--color-label)',
-  marginBottom: 12,
-};
-
-const ROW_STYLE: React.CSSProperties = {
-  display: 'flex',
-  gap: 8,
-};
+const ACTION_BTN = 'flex-1 min-h-11 rounded-[10px] border-none text-[17px] cursor-pointer';
 
 function makeCustomLang(name: string): Language {
   return { code: `custom:${name}`, name, native: name };
@@ -67,8 +18,6 @@ function makeCustomLang(name: string): Language {
 export function CustomLangInput({ open, onSubmit, onClose }: CustomLangInputProps) {
   const [value, setValue] = useState('');
 
-  // Clear value whenever the sheet (re)opens — feels right for iOS dialogs:
-  // each invocation is fresh.
   useEffect(() => {
     if (open) setValue('');
   }, [open]);
@@ -85,7 +34,8 @@ export function CustomLangInput({ open, onSubmit, onClose }: CustomLangInputProp
   return (
     <AnimatePresence>
       {open && (
-        <div style={CONTAINER_STYLE} role="dialog" aria-modal="true" aria-label="自定义语种">
+        // z-110: above LangSheet (z-100).
+        <div className="absolute inset-0 z-[110]" role="dialog" aria-modal="true" aria-label="自定义语种">
           <motion.button
             type="button"
             aria-label="关闭"
@@ -94,18 +44,18 @@ export function CustomLangInput({ open, onSubmit, onClose }: CustomLangInputProp
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={spring.smooth}
-            style={BACKDROP_STYLE}
+            className="absolute inset-0 bg-black/40 border-none cursor-pointer"
           />
           <motion.div
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={spring.snappy}
-            style={SHEET_STYLE}
             onClick={(e) => e.stopPropagation()}
+            className="absolute left-0 right-0 bottom-0 bg-[var(--color-secondarySystemBackground)] rounded-t-2xl p-4"
           >
-            <div style={HANDLE_STYLE} />
-            <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 12, color: 'var(--color-label)' }}>
+            <div className="w-9 h-[5px] rounded-[3px] mx-auto mb-3 bg-[var(--color-tertiaryLabel)]" />
+            <div className="text-[17px] font-semibold mb-3 text-[var(--color-label)]">
               输入语种名
             </div>
             <input
@@ -117,23 +67,13 @@ export function CustomLangInput({ open, onSubmit, onClose }: CustomLangInputProp
               onKeyDown={(e) => {
                 if (e.key === 'Enter') submit();
               }}
-              style={INPUT_STYLE}
+              className="w-full min-h-11 px-3 py-2.5 text-[17px] rounded-[10px] border-none outline-none bg-[var(--color-tertiarySystemFill)] text-[var(--color-label)] mb-3"
             />
-            <div style={ROW_STYLE}>
+            <div className="flex gap-2">
               <button
                 type="button"
                 onClick={onClose}
-                style={{
-                  flex: 1,
-                  minHeight: 44,
-                  borderRadius: 10,
-                  border: 'none',
-                  fontSize: 17,
-                  fontWeight: 500,
-                  backgroundColor: 'var(--color-tertiarySystemFill)',
-                  color: 'var(--color-label)',
-                  cursor: 'pointer',
-                }}
+                className={`${ACTION_BTN} font-medium bg-[var(--color-tertiarySystemFill)] text-[var(--color-label)]`}
               >
                 取消
               </button>
@@ -141,19 +81,11 @@ export function CustomLangInput({ open, onSubmit, onClose }: CustomLangInputProp
                 type="button"
                 onClick={submit}
                 disabled={!canSubmit}
-                style={{
-                  flex: 1,
-                  minHeight: 44,
-                  borderRadius: 10,
-                  border: 'none',
-                  fontSize: 17,
-                  fontWeight: 600,
-                  backgroundColor: canSubmit
-                    ? 'var(--color-systemBlue)'
-                    : 'var(--color-tertiarySystemFill)',
-                  color: canSubmit ? 'white' : 'var(--color-tertiaryLabel)',
-                  cursor: canSubmit ? 'pointer' : 'default',
-                }}
+                className={
+                  canSubmit
+                    ? `${ACTION_BTN} font-semibold bg-[var(--color-systemBlue)] text-white`
+                    : `${ACTION_BTN} font-semibold bg-[var(--color-tertiarySystemFill)] text-[var(--color-tertiaryLabel)] !cursor-default`
+                }
               >
                 确认
               </button>
