@@ -8,6 +8,7 @@
  *   - motion/react bundle interop with the sandbox shape
  */
 import { describe, it, expect } from 'vitest';
+import { createElement, isValidElement } from 'react';
 import { compileTsx } from '../../compiler';
 import { executeSandboxed } from '../../sandbox';
 import { resolveModule } from '../index';
@@ -34,5 +35,11 @@ describe('@hiphone/motion in sandbox', () => {
     const compiled = await compileTsx(SOURCE, 'motion-smoke.tsx');
     const Component = executeSandboxed(compiled, resolveModule);
     expect(typeof Component).toBe('function');
+
+    // Actually invoke the component so motion + AnimatePresence + spring are
+    // dereferenced. If Sucrase silently drops any binding (per CLAUDE.md note 1),
+    // the call throws ReferenceError instead of silently passing.
+    const element = createElement(Component);
+    expect(isValidElement(element)).toBe(true);
   });
 });

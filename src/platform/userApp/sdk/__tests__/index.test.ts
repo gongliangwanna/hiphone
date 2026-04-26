@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import React from 'react';
 import { resolveModule } from '../index';
+import {
+  spring as designSpring,
+  duration as designDuration,
+  ease as designEase,
+} from '@/platform/design-tokens/motion';
 
 describe('resolveModule', () => {
   it('resolves "react" to the React namespace', () => {
@@ -110,16 +115,17 @@ describe('@hiphone/motion', () => {
     expect(typeof mod.useSpring).toBe('function');
   });
 
-  it('exposes design-token spring presets', () => {
+  it('re-exports design-token spring/duration/ease by reference', () => {
+    // Reference-equality guards the contract "the SDK module re-exports the
+    // canonical design-tokens object" without coupling to specific numeric
+    // values — designers can retune spring physics without breaking this test.
     const mod = resolveModule('@hiphone/motion') as {
-      spring: Record<string, { stiffness: number; damping: number; mass: number }>;
-      duration: Record<string, number>;
-      ease: { standard: [number, number, number, number] };
+      spring: typeof designSpring;
+      duration: typeof designDuration;
+      ease: typeof designEase;
     };
-    expect(mod.spring.snappy).toEqual({ stiffness: 500, damping: 38, mass: 1 });
-    expect(mod.spring.bouncy).toEqual({ stiffness: 220, damping: 18, mass: 1 });
-    expect(mod.spring.smooth).toEqual({ stiffness: 280, damping: 28, mass: 1 });
-    expect(mod.duration.fast).toBe(200);
-    expect(mod.ease.standard).toEqual([0.4, 0, 0.2, 1]);
+    expect(mod.spring).toBe(designSpring);
+    expect(mod.duration).toBe(designDuration);
+    expect(mod.ease).toBe(designEase);
   });
 });
