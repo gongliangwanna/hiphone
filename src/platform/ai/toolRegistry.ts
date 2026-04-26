@@ -65,6 +65,8 @@ export interface ToolDefinition {
   contextAtTail?: boolean;
 }
 
+import { useDisabledToolsStore } from './disabledToolsStore';
+
 const registry = new Map<string, ToolDefinition[]>();
 
 export function registerTools(appId: string, tools: ToolDefinition[]): void {
@@ -73,9 +75,34 @@ export function registerTools(appId: string, tools: ToolDefinition[]): void {
   registry.set(appId, [...tools]);
 }
 
+/**
+ * Returns tools registered for `appId`, with user-disabled tools filtered
+ * out. Consumers that drive prompt assembly + LLM dispatch should use
+ * this — disabled tools should not appear in the LLM's view of available
+ * actions.
+ *
+ * For the Settings UI (which needs to show ALL tools so the user can
+ * toggle them), use `getAllTools` instead.
+ */
 export function getTools(appId: string): ToolDefinition[] {
   const found = registry.get(appId);
-  // Defensive copy so callers cannot mutate our internal state.
+  if (!found) return [];
+  const disabled = useDisabledToolsStore.getState().getDisabled(appId);
+  if (disabled.size === 0) {
+    // Defensive copy so callers cannot mutate our internal state.
+    return [...found];
+  }
+  return found.filter((t) => !disabled.has(t.type));
+}
+
+/**
+ * Returns ALL tools registered for `appId`, ignoring the user's disabled
+ * list. Used by the Settings → AI → 工具 page to render toggles. Production
+ * dispatch should use `getTools` (filtered) — surfacing disabled tools to
+ * the LLM defeats the toggle.
+ */
+export function getAllTools(appId: string): ToolDefinition[] {
+  const found = registry.get(appId);
   return found ? [...found] : [];
 }
 

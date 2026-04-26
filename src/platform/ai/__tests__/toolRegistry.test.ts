@@ -3,11 +3,13 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   registerTools,
   getTools,
+  getAllTools,
   unregisterApp,
   _resetToolRegistryForTests,
   type ToolBuildContext,
   type ToolDefinition,
 } from '../toolRegistry';
+import { useDisabledToolsStore } from '../disabledToolsStore';
 
 describe('toolRegistry', () => {
   beforeEach(() => {
@@ -92,5 +94,59 @@ describe('toolRegistry', () => {
     const retrieved = getTools('app-a');
     expect(retrieved).toHaveLength(1);
     expect(retrieved[0]!.type).toBe('a');
+  });
+
+  describe('getTools — disabled filter', () => {
+    beforeEach(() => {
+      _resetToolRegistryForTests();
+      useDisabledToolsStore.setState({ disabled: {} });
+    });
+
+    it('returns all tools when nothing is disabled', () => {
+      registerTools('app-x', [
+        { type: 'a', description: '', param: '' },
+        { type: 'b', description: '', param: '' },
+      ]);
+      expect(getTools('app-x').map((t) => t.type)).toEqual(['a', 'b']);
+    });
+
+    it('hides disabled tools from getTools', () => {
+      registerTools('app-x', [
+        { type: 'a', description: '', param: '' },
+        { type: 'b', description: '', param: '' },
+        { type: 'c', description: '', param: '' },
+      ]);
+      useDisabledToolsStore.getState().setDisabled('app-x', 'b', true);
+      expect(getTools('app-x').map((t) => t.type)).toEqual(['a', 'c']);
+    });
+
+    it('shows ALL tools via getAllTools (used by Settings UI)', () => {
+      registerTools('app-x', [
+        { type: 'a', description: '', param: '' },
+        { type: 'b', description: '', param: '' },
+      ]);
+      useDisabledToolsStore.getState().setDisabled('app-x', 'b', true);
+      expect(getAllTools('app-x').map((t) => t.type)).toEqual(['a', 'b']);
+    });
+
+    it('disabled-tool isolation: filter on appId-A does not affect appId-B', () => {
+      registerTools('app-a', [{ type: 'shared', description: '', param: '' }]);
+      registerTools('app-b', [{ type: 'shared', description: '', param: '' }]);
+      useDisabledToolsStore.getState().setDisabled('app-a', 'shared', true);
+      expect(getTools('app-a')).toEqual([]);
+      expect(getTools('app-b').map((t) => t.type)).toEqual(['shared']);
+    });
+
+    it('returns [] when ALL tools are disabled', () => {
+      registerTools('app-x', [
+        { type: 'a', description: '', param: '' },
+        { type: 'b', description: '', param: '' },
+      ]);
+      const s = useDisabledToolsStore.getState();
+      s.setDisabled('app-x', 'a', true);
+      s.setDisabled('app-x', 'b', true);
+      expect(getTools('app-x')).toEqual([]);
+      expect(getAllTools('app-x').map((t) => t.type)).toEqual(['a', 'b']);
+    });
   });
 });
