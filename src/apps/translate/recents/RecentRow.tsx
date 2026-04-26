@@ -61,9 +61,14 @@ export function RecentRow({ entry, isFavorited, onPick, onToggleFavorite, onDele
   return (
     <div style={ROW_OUTER}>
       {onDelete && (
+        /* aria-hidden + tabIndex=-1: delete sits behind the row as a swipe-reveal
+           affordance; hiding it from a11y until M2 SheetGesture lands a proper
+           drag-reveal-disclose pattern that announces itself correctly. */
         <button
           type="button"
           aria-label="删除"
+          aria-hidden="true"
+          tabIndex={-1}
           onClick={() => onDelete(entry.id)}
           style={{ ...DELETE_BG, border: 'none', cursor: 'pointer' }}
         >
@@ -125,8 +130,7 @@ export function RecentRow({ entry, isFavorited, onPick, onToggleFavorite, onDele
         <motion.button
           type="button"
           aria-label={isFavorited ? '取消收藏' : '收藏'}
-          onClick={(e) => {
-            e.stopPropagation();
+          onClick={() => {
             onToggleFavorite(entry);
           }}
           whileTap={{ scale: 1.3 }}
