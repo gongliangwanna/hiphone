@@ -8,9 +8,10 @@
  * Shares the same IDBDatabase connection as idbStorage via getDB().
  */
 
-import { getDB, hasIDB, MESSAGES_STORE, MOMENTS_STORE, MEMORY_STORE } from './idbStorage';
+import { getDB, hasIDB, MESSAGES_STORE, MOMENTS_STORE, MEMORY_STORE, MEMORY_STATE_STORE } from './idbStorage';
 import type { Message, Moment } from '@/apps/XingYu/data';
 import type { MemoryEntry } from '@/platform/ai/characterMemoryStore';
+import type { CharacterMemoryStateRecord } from '@/platform/ai/memoryStateTypes';
 
 // ---------------------------------------------------------------------------
 // Messages
@@ -205,5 +206,73 @@ export async function clearAllMemoryEntries(): Promise<void> {
     });
   } catch (e) {
     console.error('[idbRecord] clearAllMemoryEntries failed:', e);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Character memory state
+// ---------------------------------------------------------------------------
+
+export async function putMemoryState(state: CharacterMemoryStateRecord): Promise<void> {
+  if (!hasIDB) return;
+  try {
+    const db = await getDB();
+    const tx = db.transaction(MEMORY_STATE_STORE, 'readwrite');
+    tx.objectStore(MEMORY_STATE_STORE).put(state);
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) {
+    console.error('[idbRecord] putMemoryState failed:', e);
+  }
+}
+
+export async function loadMemoryState(
+  characterId: string,
+): Promise<CharacterMemoryStateRecord | null> {
+  if (!hasIDB) return null;
+  try {
+    const db = await getDB();
+    return await new Promise<CharacterMemoryStateRecord | null>((resolve, reject) => {
+      const tx = db.transaction(MEMORY_STATE_STORE, 'readonly');
+      const req = tx.objectStore(MEMORY_STATE_STORE).get(characterId);
+      req.onsuccess = () => resolve((req.result as CharacterMemoryStateRecord | undefined) ?? null);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (e) {
+    console.warn('[idbRecord] loadMemoryState failed:', e);
+    return null;
+  }
+}
+
+export async function loadAllMemoryStates(): Promise<CharacterMemoryStateRecord[]> {
+  if (!hasIDB) return [];
+  try {
+    const db = await getDB();
+    return await new Promise<CharacterMemoryStateRecord[]>((resolve, reject) => {
+      const tx = db.transaction(MEMORY_STATE_STORE, 'readonly');
+      const req = tx.objectStore(MEMORY_STATE_STORE).getAll();
+      req.onsuccess = () => resolve(req.result as CharacterMemoryStateRecord[]);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (e) {
+    console.warn('[idbRecord] loadAllMemoryStates failed:', e);
+    return [];
+  }
+}
+
+export async function deleteMemoryState(characterId: string): Promise<void> {
+  if (!hasIDB) return;
+  try {
+    const db = await getDB();
+    const tx = db.transaction(MEMORY_STATE_STORE, 'readwrite');
+    tx.objectStore(MEMORY_STATE_STORE).delete(characterId);
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (e) {
+    console.error('[idbRecord] deleteMemoryState failed:', e);
   }
 }
