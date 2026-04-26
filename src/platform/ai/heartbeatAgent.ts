@@ -231,11 +231,14 @@ async function runHeartbeat(
     const { items, error } = parseReply(rawReply, knownTypes);
 
     if (error !== null) {
-      // Parse failure → feed a role:system correction back in-memory.
-      // Not persisted to memoryStore (heartbeat's loop state is ephemeral).
+      // Parse failure → feed a correction back in-memory. Not persisted
+      // to memoryStore (heartbeat's loop state is ephemeral). Uses role:user
+      // because Anthropic rejects requests where the conversation doesn't
+      // end with role:user; semantically system is more accurate but the
+      // cross-provider constraint takes precedence.
       messages.push({ role: 'assistant', content: rawReply });
       messages.push({
-        role: 'system',
+        role: 'user',
         content: buildParseErrorMessage(error, knownTypesArr),
       });
       useHeartbeatStore.getState().pushLog({
@@ -276,9 +279,12 @@ async function runHeartbeat(
     if (observations.length === 0) break;
 
     messages.push({ role: 'assistant', content: rawReply });
-    // Observations → role:system (spec §①.A). In-memory only.
+    // Observations → role:user. Anthropic requires the conversation to
+    // end with role:user (other providers tolerate non-user tails).
+    // The "Observation:" prefix preserves agent semantics; the role tag
+    // is purely an API-shape concern.
     messages.push({
-      role: 'system',
+      role: 'user',
       content: observations.length === 1
         ? `Observation: ${observations[0]}`
         : `Observations:\n${observations.join('\n')}`,

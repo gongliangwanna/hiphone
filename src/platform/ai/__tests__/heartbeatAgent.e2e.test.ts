@@ -90,7 +90,7 @@ describe('heartbeatAgent — end-to-end via Tool Registry', () => {
     // NOTE: this test does not assert log text, just no crash + correct loop.
   });
 
-  it('observations come back as role:system messages to the LLM', async () => {
+  it('observations come back as role:user messages to the LLM (Anthropic compat)', async () => {
     const spy = vi.spyOn(chatCompleteMod, 'chatComplete');
     spy
       .mockResolvedValueOnce('[{"type":"view_user_signature","param":{}}]')
@@ -103,12 +103,12 @@ describe('heartbeatAgent — end-to-end via Tool Registry', () => {
     const secondCallArgs = spy.mock.calls[1]!;
     const messagesSentToLLM = secondCallArgs[1];
     const observationMsg = messagesSentToLLM.find(
-      (m) => m.role === 'system' && typeof m.content === 'string' && m.content.includes('Observation:'),
+      (m) => m.role === 'user' && typeof m.content === 'string' && m.content.includes('Observation:'),
     );
     expect(observationMsg).toBeDefined();
   });
 
-  it('parse error → role:system correction fed back, loop continues', async () => {
+  it('parse error → role:user correction fed back, loop continues', async () => {
     const spy = vi.spyOn(chatCompleteMod, 'chatComplete')
       .mockResolvedValueOnce('total garbage')                 // parse fail
       .mockResolvedValueOnce('[{"type":"done","param":{}}]'); // recovers
@@ -118,12 +118,12 @@ describe('heartbeatAgent — end-to-end via Tool Registry', () => {
     expect(spy).toHaveBeenCalledTimes(2);
     const secondCallMessages = spy.mock.calls[1]![1];
     const errCorrection = secondCallMessages.find(
-      (m) => m.role === 'system' && typeof m.content === 'string' && m.content.includes('[格式错误]'),
+      (m) => m.role === 'user' && typeof m.content === 'string' && m.content.includes('[格式错误]'),
     );
     expect(errCorrection).toBeDefined();
   });
 
-  it('unknown type → role:system correction names the bad type', async () => {
+  it('unknown type → role:user correction names the bad type', async () => {
     const spy = vi.spyOn(chatCompleteMod, 'chatComplete')
       .mockResolvedValueOnce('[{"type":"bogus_tool","param":{}}]')
       .mockResolvedValueOnce('[{"type":"done","param":{}}]');
@@ -132,7 +132,7 @@ describe('heartbeatAgent — end-to-end via Tool Registry', () => {
 
     const secondMessages = spy.mock.calls[1]![1];
     const corr = secondMessages.find(
-      (m) => m.role === 'system' && typeof m.content === 'string' && m.content.includes('bogus_tool'),
+      (m) => m.role === 'user' && typeof m.content === 'string' && m.content.includes('bogus_tool'),
     );
     expect(corr).toBeDefined();
   });
@@ -144,6 +144,23 @@ describe('heartbeatAgent — end-to-end via Tool Registry', () => {
     await triggerHeartbeat(CHAR);
 
     expect(spy).toHaveBeenCalledTimes(1); // done on first round → no iteration 2
+  });
+
+  it('every chatComplete call sees a conversation ending with role:user (Anthropic constraint)', async () => {
+    const spy = vi.spyOn(chatCompleteMod, 'chatComplete')
+      .mockResolvedValueOnce('[{"type":"view_user_signature","param":{}}]')
+      .mockResolvedValueOnce('[{"type":"send_message","param":{"text":"hi"}}]')
+      .mockResolvedValueOnce('[{"type":"done","param":{}}]')
+      .mockResolvedValueOnce('summary text'); // narrativeSummary
+
+    await triggerHeartbeat(CHAR);
+
+    // Inspect every chatComplete call's messages argument.
+    for (let i = 0; i < spy.mock.calls.length; i++) {
+      const messages = spy.mock.calls[i]![1];
+      const last = messages[messages.length - 1]!;
+      expect(last.role, `call #${i + 1} last message role`).toBe('user');
+    }
   });
 
   it('does NOT pass formatOverride (uses Tool Registry path)', async () => {
