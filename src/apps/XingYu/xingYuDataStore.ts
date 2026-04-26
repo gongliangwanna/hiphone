@@ -521,6 +521,27 @@ function scheduleAICharacterReply(
         source: 'xingyu',
       });
 
+      // Group fan-out: per-item bubbles below are written via direct
+      // setState (not _appendMessage), so other members never see the
+      // speaker's reply unless we mirror it here. Mirror the same rendered
+      // form as a third-party user turn — speakerId is the senderId so the
+      // transcript renderer resolves it to the speaker's display name (it
+      // strips one `char-` prefix when looking up charactersById).
+      const convForFanout = useXYData
+        .getState()
+        .conversations.find((c) => c.id === convId);
+      if (convForFanout?.groupMemberIds?.length) {
+        for (const otherId of convForFanout.groupMemberIds) {
+          if (otherId === characterId) continue;
+          useCharacterMemory.getState().append(otherId, {
+            role: 'user',
+            speakerId: senderId,
+            content: reply.rendered,
+            source: 'xingyu',
+          });
+        }
+      }
+
       const active = isChatActive(convId);
 
       // Deliver messages one by one with natural delays

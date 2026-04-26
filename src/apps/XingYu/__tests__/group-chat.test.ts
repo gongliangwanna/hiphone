@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useXYData, _isGroupReplyGenerating } from '../xingYuDataStore';
 import { useCharacterStore } from '@/platform/stores/characterStore';
 import { useAIConfigStore } from '@/platform/stores/aiConfigStore';
+import { useCharacterMemory } from '@/platform/ai/characterMemoryStore';
 
 describe('createGroupConversation', () => {
   beforeEach(() => {
@@ -131,6 +132,49 @@ describe('triggerGroupReply', () => {
     useXYData.getState().triggerGroupReply(convId, 'stranger');
     const msgs = useXYData.getState().messages.filter((m) => m.convId === convId);
     expect(msgs).toHaveLength(0);
+  });
+
+  it('group fan-out: speaker reply is mirrored to other members memory as user turn', async () => {
+    useAIConfigStore.setState({ apiKey: 'test-key', endpoint: 'https://example.invalid', model: 'm' } as any);
+    // Reset memory store so we observe only what this test writes
+    useCharacterMemory.setState({ entriesByCharacter: {} } as any);
+
+    const convId = useXYData.getState().createGroupConversation(['a', 'b']);
+
+    const aiSdk = await import('@/platform/userApp/sdk/ai');
+    const reply = {
+      items: [{ type: 'text', param: '你好呀' }],
+      rendered: '你好呀',
+    };
+    const spy = vi.spyOn(aiSdk, 'chatWithCharacter').mockImplementation(() => {
+      return {
+        characterId: 'a',
+        persistent: true,
+        history: [],
+        send: () => Promise.resolve(reply as any),
+        streamSend: async function* () {},
+        append: () => {},
+        replyToLast: () => Promise.resolve(reply as any),
+        streamReplyToLast: async function* () {},
+        abort: () => {},
+      } as any;
+    });
+
+    try {
+      useXYData.getState().triggerGroupReply(convId, 'a');
+      // Wait for the .then() callback to run
+      await new Promise((r) => setTimeout(r, 10));
+
+      const aMem = useCharacterMemory.getState().getAll('a');
+      const bMem = useCharacterMemory.getState().getAll('b');
+
+      // Speaker (a) gets role=assistant
+      expect(aMem.some((e) => e.role === 'assistant' && e.content === '你好呀')).toBe(true);
+      // Other member (b) sees a's reply as a user turn attributed to a
+      expect(bMem.some((e) => e.role === 'user' && e.content === '你好呀' && e.speakerId === 'char-a')).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('serial lock: second trigger no-ops while first is generating', async () => {
