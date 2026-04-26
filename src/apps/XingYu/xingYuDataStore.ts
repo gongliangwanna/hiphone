@@ -13,6 +13,7 @@ import {
   startMemoryStateIdbSync,
 } from '@/platform/ai/memoryStateStore';
 import { installAutoCompression } from '@/platform/ai/characterMemoryCompression';
+import { migrateLegacyLongTermMemory } from '@/platform/ai/memoryStateMigration';
 import { _appendMessage } from '@/platform/ai/memoryWriter';
 import { uid } from '@/platform/utils/uid';
 import type {
@@ -1369,6 +1370,7 @@ export const useXYData = create<XingYuDataState>()(
           // Empty on first boot after M4.1 upgrade — intentional (no data migration).
           await loadCharacterMemoryFromIdb();
           await loadMemoryStateFromIdb();
+          await migrateLegacyLongTermMemory();
           startCharacterMemoryIdbSync();
           startMemoryStateIdbSync();
           installAutoCompression();
