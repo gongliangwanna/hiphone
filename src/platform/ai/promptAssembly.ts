@@ -69,11 +69,6 @@ export interface PromptInput {
   deviceContext?: string;
   /** Available stickers the AI can send */
   availableStickers?: AvailableSticker[];
-  /**
-   * When provided, replaces the default [回复格式] + sticker inventory sections
-   * in the system block. Used by heartbeat agent to inject ReAct format instead.
-   */
-  formatOverride?: string;
   /** Platform-captured app id for this session (used to gate M4.2 chunks). */
   currentAppId?: string;
   /** Tool Registry snapshot; drives chunk 8 [可用动作]. */
@@ -315,7 +310,6 @@ function buildSystemBlock(
   aiConfig: PromptAIConfig,
   worldBookChunk: string,
   availableStickers?: AvailableSticker[],
-  formatOverride?: string,
   availableTools?: ToolDefinition[],
   appSystemPromptSnapshot?: string,
   currentAppId?: string,
@@ -367,11 +361,10 @@ function buildSystemBlock(
   // 6.5 / 7 / 8 — Format / tools / app-task chunks.
   //
   // Priority (first match wins):
-  //   1. formatOverride  → legacy ReAct path (heartbeat). Everything else skipped.
-  //   2. Legacy XingYu   → old 7 [回复格式] + [可用表情包]. Fires when availableStickers
+  //   1. Legacy XingYu   → old 7 [回复格式] + [可用表情包]. Fires when availableStickers
   //                        is set AND neither tools nor appSystemPromptSnapshot is
   //                        present. Preserves pre-migration XingYu behavior.
-  //   3. Unified M4.2    → 6.5 [当前任务] + 7 [回复格式] + 8 [可用动作].
+  //   2. Unified M4.2    → 6.5 [当前任务] + 7 [回复格式] + 8 [可用动作].
   //                        Default when the M4.2 path is relevant. Chunks 6.5/8 are
   //                        emitted only when their input is non-empty.
   const hasStickers = availableStickers && availableStickers.length > 0;
@@ -384,9 +377,7 @@ function buildSystemBlock(
   const hasAppPrompt = appSystemPromptSnapshot !== undefined;
   const useLegacy = hasStickers && !hasTools && !hasAppPrompt;
 
-  if (formatOverride) {
-    chunks.push(formatOverride);
-  } else if (useLegacy) {
+  if (useLegacy) {
     // Legacy path — pre-migration XingYu style
     const formatLines = [
       `[回复格式]`,
@@ -581,7 +572,7 @@ export interface PromptInspection {
  * Same logic as assemblePrompt but exposes individual parts.
  */
 export function inspectPrompt(input: PromptInput): PromptInspection {
-  const { character, persona, aiConfig, worldBookChunk, now, deviceContext, availableStickers, formatOverride } = input;
+  const { character, persona, aiConfig, worldBookChunk, now, deviceContext, availableStickers } = input;
 
   let systemBlock = buildSystemBlock(
     character,
@@ -589,7 +580,6 @@ export function inspectPrompt(input: PromptInput): PromptInspection {
     aiConfig,
     worldBookChunk,
     availableStickers,
-    formatOverride,
     input.availableTools,
     input.appSystemPromptSnapshot,
     input.currentAppId,
@@ -674,7 +664,7 @@ export function inspectPrompt(input: PromptInput): PromptInspection {
 // ---------------------------------------------------------------------------
 
 export function assemblePrompt(input: PromptInput): PromptOutput {
-  const { character, persona, aiConfig, worldBookChunk, now, deviceContext, availableStickers, formatOverride } = input;
+  const { character, persona, aiConfig, worldBookChunk, now, deviceContext, availableStickers } = input;
 
   // Phase 1 — System block.
   let systemBlock = buildSystemBlock(
@@ -683,7 +673,6 @@ export function assemblePrompt(input: PromptInput): PromptOutput {
     aiConfig,
     worldBookChunk,
     availableStickers,
-    formatOverride,
     input.availableTools,
     input.appSystemPromptSnapshot,
     input.currentAppId,

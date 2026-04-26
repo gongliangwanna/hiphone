@@ -120,22 +120,6 @@ describe('promptAssembly chunks 7 / 8 (M4.2.5 unified)', () => {
     expect(iActions).toBeGreaterThan(iFormat);
   });
 
-  it('formatOverride (heartbeat ReAct) short-circuits all 3 new chunks', () => {
-    const tools: ToolDefinition[] = [
-      { type: 't', description: '', param: '' },
-    ];
-    const out = systemBlock({
-      ...BASE,
-      formatOverride: '[Heartbeat ReAct format]',
-      appSystemPromptSnapshot: 'task',
-      availableTools: tools,
-    });
-    expect(out).toContain('[Heartbeat ReAct format]');
-    expect(out).not.toContain('[当前任务]');
-    expect(out).not.toContain('[回复格式]');
-    expect(out).not.toContain('[可用动作]');
-  });
-
   it('legacy availableStickers path: emits old [可用表情包] block when neither appPrompt nor tools set', () => {
     const out = systemBlock({
       ...BASE,
