@@ -8,7 +8,6 @@ export interface LangBarProps {
   sourceLang: Language;
   targetLang: Language;
   onSwap: () => void;
-  /** S4 will wire these to open LangSheet. S3 keeps them as no-op stubs. */
   onTapSource?: () => void;
   onTapTarget?: () => void;
 }

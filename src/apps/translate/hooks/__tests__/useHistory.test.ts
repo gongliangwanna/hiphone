@@ -9,16 +9,28 @@ const EN = CURATED_LANGUAGES.find((l) => l.code === 'en')!;
 const JA = CURATED_LANGUAGES.find((l) => l.code === 'ja')!;
 
 const storageMap = new Map<string, unknown>();
+const setMock = vi.fn(async (k: string, v: unknown) => {
+  storageMap.set(k, v);
+});
 vi.mock('@hiphone/storage', () => ({
   get: vi.fn(async (k: string) => storageMap.get(k)),
-  set: vi.fn(async (k: string, v: unknown) => {
-    storageMap.set(k, v);
-  }),
+  set: (k: string, v: unknown) => setMock(k, v),
+}));
+
+const toastErrorMock = vi.fn();
+vi.mock('@hiphone/toast', () => ({
+  error: (...args: unknown[]) => toastErrorMock(...args),
+  show: vi.fn(),
 }));
 
 describe('useHistory', () => {
   beforeEach(() => {
     storageMap.clear();
+    setMock.mockReset();
+    setMock.mockImplementation(async (k: string, v: unknown) => {
+      storageMap.set(k, v);
+    });
+    toastErrorMock.mockReset();
   });
 
   it('starts empty and marks loaded after initial fetch', async () => {
@@ -190,5 +202,21 @@ describe('useHistory', () => {
     expect(result.current.history).toHaveLength(1);
     expect(result.current.favorites).toHaveLength(1);
     expect(result.current.isFavorited('preset')).toBe(true);
+  });
+
+  it('toasts "保存失败" when storage.set rejects (spec §3.8)', async () => {
+    const { result } = renderHook(() => useHistory());
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+    setMock.mockRejectedValueOnce(new Error('quota exceeded'));
+    await act(async () => {
+      await result.current.addEntry({
+        sourceText: 'a',
+        targetText: 'A',
+        sourceLang: ZH,
+        targetLang: EN,
+      });
+    });
+    expect(toastErrorMock).toHaveBeenCalledWith('保存失败');
+    expect(result.current.history).toHaveLength(1);
   });
 });

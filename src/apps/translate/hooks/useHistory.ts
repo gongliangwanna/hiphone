@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { get, set } from '@hiphone/storage';
+import { error as toastError } from '@hiphone/toast';
 import type { Language } from '../constants/languages';
 
 export const HISTORY_CAP = 50;
@@ -88,6 +89,7 @@ export function useHistory(): UseHistoryResult {
       await set(HISTORY_KEY, next);
     } catch (e) {
       console.warn('[translate] history save failed', e);
+      toastError('保存失败');
     }
   }, []);
 
@@ -98,6 +100,7 @@ export function useHistory(): UseHistoryResult {
       await set(FAVORITES_KEY, next);
     } catch (e) {
       console.warn('[translate] favorites save failed', e);
+      toastError('保存失败');
     }
   }, []);
 
