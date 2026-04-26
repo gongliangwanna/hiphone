@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback, memo } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ChevronLeft, Phone, Send, Image, Smile, Palette, MoreHorizontal, Play } from 'lucide-react';
+import { ChevronLeft, Phone, Send, Image, Smile, MoreHorizontal, Play } from 'lucide-react';
 import { useXYNav } from '../xingYuNavStore';
 import { useXYData } from '../xingYuDataStore';
 import { GroupMemberStrip } from '../components/GroupMemberStrip';
@@ -36,7 +36,6 @@ interface ChatPeer {
 import { Avatar } from '../components/Avatar';
 import { StickerPicker } from '../components/StickerPicker';
 import { ImagePicker } from '../components/ImagePicker';
-import { DrawingCanvas } from '../components/DrawingCanvas';
 import { T, springs } from '../theme';
 
 type PickerMode = 'none' | 'sticker' | 'image';
@@ -63,7 +62,6 @@ export function ChatDetail() {
   const [input, setInput] = useState('');
   const [pickerMode, setPickerMode] = useState<PickerMode>('none');
   const [highlightMsgId, setHighlightMsgId] = useState<string | null>(null);
-  const [showDrawing, setShowDrawing] = useState(false);
   const [actionMenu, setActionMenu] = useState<{ msgId: string; position: 'above' | 'below' } | null>(null);
   const [quoteMsg, setQuoteMsg] = useState<Message | null>(null);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
@@ -462,17 +460,6 @@ export function ChatDetail() {
     [],
   );
 
-  const isGroup = peer?.isGroup ?? false;
-
-  const handleSendDrawing = useCallback(
-    (dataUrl: string) => {
-      if (!activeChatId) return;
-      sendImageMessage(activeChatId, dataUrl);
-      setShowDrawing(false);
-    },
-    [activeChatId, sendImageMessage],
-  );
-
   const getSenderName = useCallback(
     (senderId: string): string => {
       if (senderId === 'me') return persona?.name || userSettings.nickname || '我';
@@ -832,26 +819,7 @@ export function ChatDetail() {
           <Image size={22} strokeWidth={1.8} color={pickerMode === 'image' ? T.accent : T.textMuted} />
         </button>
 
-        {isGroup && (
-          <button
-            type="button"
-            className="flex shrink-0 items-center justify-center transition-transform active:scale-90"
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: T.r.sm,
-              touchAction: 'manipulation',
-            }}
-            onPointerDown={(e) => {
-              e.preventDefault();
-              setShowDrawing(true);
-            }}
-          >
-            <Palette size={22} strokeWidth={1.8} color={T.textMuted} />
-          </button>
-        )}
-
-        <div
+<div
           className="flex min-w-0 flex-1 items-center gap-1"
           style={{
             minHeight: 40,
@@ -954,14 +922,6 @@ export function ChatDetail() {
         onClose={() => setPickerMode('none')}
       />
 
-      {/* ── Drawing Canvas (group chat only) ── */}
-      {isGroup && (
-        <DrawingCanvas
-          visible={showDrawing}
-          onSend={handleSendDrawing}
-          onClose={() => setShowDrawing(false)}
-        />
-      )}
     </div>
   );
 }
