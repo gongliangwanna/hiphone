@@ -59,17 +59,17 @@ export function ChatListTab() {
     setSearchPage(1);
   }, [query]);
 
-  // 按时间倒序排列,根据视角过滤对话:
-  // 玩家手机 → 过滤掉 AI-AI 对话
-  // AI 手机 → 只显示该 AI 参与的对话
+  // 按时间倒序排列,根据视角过滤对话。信箱永远只展示"和真实用户/玩家"
+  // 之间的对话,AI-AI 后台会话(c-ai2ai-…)不进信箱——它们由 heartbeat
+  // 等系统自动产生,以聊天预览形式出现在信箱里会让用户误以为"AI 给我
+  // 发了消息",事实上是 AI 之间在相互聊天。
+  //   玩家手机 → 过滤掉 AI-AI 对话
+  //   AI 手机   → 只显示该 AI 与用户(玩家)的对话,不展示该 AI 的 AI-AI
+  //              后台会话
   const sorted = useMemo(() => {
     const filtered = phoneOwnerId === null
       ? conversations.filter((c) => !c.aiChatParticipants)
-      : conversations.filter(
-          (c) =>
-            c.characterId === phoneOwnerId ||
-            c.aiChatParticipants?.includes(phoneOwnerId),
-        );
+      : conversations.filter((c) => c.characterId === phoneOwnerId);
     return [...filtered].sort((a, b) => b.lastTime - a.lastTime);
   }, [conversations, phoneOwnerId]);
 
