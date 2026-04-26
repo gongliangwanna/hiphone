@@ -1,0 +1,134 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import {
+  registerHeartbeatAi,
+  HEARTBEAT_APP_ID,
+  _resetHeartbeatRegistrationForTests,
+} from '../heartbeatRegister';
+import { getTools, _resetToolRegistryForTests } from '../toolRegistry';
+import {
+  getAppSystemPrompt,
+  _resetAppSystemPromptRegistryForTests,
+} from '../appSystemPromptRegistry';
+import { useCharacterStore } from '@/platform/stores/characterStore';
+import { usePersonaStore } from '@/platform/stores/personaStore';
+import { getCharacterAlias } from '../heartbeatTools';
+
+describe('registerHeartbeatAi', () => {
+  beforeEach(() => {
+    _resetToolRegistryForTests();
+    _resetAppSystemPromptRegistryForTests();
+    _resetHeartbeatRegistrationForTests();
+
+    useCharacterStore.setState({
+      characters: [
+        { id: 'char-001', name: '小星', avatar: '', description: '', personality: '', scenario: '', firstMessage: '', messageExamples: '', alternateGreetings: [], systemPrompt: '', postHistoryInstructions: '', creatorNotes: '', tags: [], version: '' },
+        { id: 'char-002', name: '小月', avatar: '', description: '', personality: '', scenario: '', firstMessage: '', messageExamples: '', alternateGreetings: [], systemPrompt: '', postHistoryInstructions: '', creatorNotes: '', tags: [], version: '' },
+      ],
+    });
+    usePersonaStore.setState({
+      personas: [{ id: 'p1', name: '小星星', description: '', avatar: '', isDefault: false }],
+      activePersonaId: 'p1',
+    } as never);
+  });
+
+  it('HEARTBEAT_APP_ID is the literal "heartbeat"', () => {
+    expect(HEARTBEAT_APP_ID).toBe('heartbeat');
+  });
+
+  it('registers 15 tools (14 built-in + done)', () => {
+    registerHeartbeatAi();
+    const tools = getTools(HEARTBEAT_APP_ID);
+    expect(tools.map((t) => t.type).sort()).toEqual([
+      'chat_with_character',
+      'comment_moment',
+      'create_note',
+      'done',
+      'like_moment',
+      'post_moment',
+      'send_message',
+      'update_signature',
+      'view_characters',
+      'view_moments',
+      'view_notes',
+      'view_unread_interactions',
+      'view_unread_messages',
+      'view_user_signature',
+      'view_user_signature_history',
+    ]);
+  });
+
+  it('send_message description uses generic "用户" (user name lives in appSystemPrompt)', () => {
+    registerHeartbeatAi();
+    const sendMsg = getTools(HEARTBEAT_APP_ID).find((t) => t.type === 'send_message')!;
+    expect(sendMsg.description).toContain('用户');
+    expect(sendMsg.description).not.toContain('小星星');
+  });
+
+  it('chat_with_character.dynamicContext lists other characters + registers aliases', () => {
+    registerHeartbeatAi();
+    const tool = getTools(HEARTBEAT_APP_ID).find((t) => t.type === 'chat_with_character')!;
+    expect(tool.dynamicContext).toBeDefined();
+
+    const body = tool.dynamicContext!({ appId: HEARTBEAT_APP_ID, characterId: 'char-001' });
+    expect(body).toContain('小月');
+    expect(body).toContain('c1');
+
+    expect(getCharacterAlias('char-001').get('c1')).toBe('char-002');
+  });
+
+  it('chat_with_character.dynamicContext handles zero-other-characters gracefully', () => {
+    useCharacterStore.setState({
+      characters: [
+        { id: 'char-solo', name: '独自一人', avatar: '', description: '', personality: '', scenario: '', firstMessage: '', messageExamples: '', alternateGreetings: [], systemPrompt: '', postHistoryInstructions: '', creatorNotes: '', tags: [], version: '' },
+      ],
+    });
+    registerHeartbeatAi();
+    const tool = getTools(HEARTBEAT_APP_ID).find((t) => t.type === 'chat_with_character')!;
+    const body = tool.dynamicContext!({ appId: HEARTBEAT_APP_ID, characterId: 'char-solo' });
+    expect(body).toContain('没有其他角色');
+  });
+
+  it('view_unread_messages has contextAtTail:true', () => {
+    registerHeartbeatAi();
+    const tool = getTools(HEARTBEAT_APP_ID).find((t) => t.type === 'view_unread_messages')!;
+    expect(tool.contextAtTail).toBe(true);
+    expect(tool.dynamicContext).toBeDefined();
+  });
+
+  it('view_unread_messages.dynamicContext returns null when no unread', () => {
+    registerHeartbeatAi();
+    const tool = getTools(HEARTBEAT_APP_ID).find((t) => t.type === 'view_unread_messages')!;
+    const body = tool.dynamicContext!({ appId: HEARTBEAT_APP_ID, characterId: 'char-001' });
+    expect(body).toBeNull();
+  });
+
+  it('view_unread_interactions.dynamicContext returns null when no new interactions', () => {
+    registerHeartbeatAi();
+    const tool = getTools(HEARTBEAT_APP_ID).find(
+      (t) => t.type === 'view_unread_interactions',
+    )!;
+    expect(tool.contextAtTail).toBe(true);
+    const body = tool.dynamicContext!({
+      appId: HEARTBEAT_APP_ID,
+      characterId: 'char-001',
+    });
+    expect(body).toBeNull();
+  });
+
+  it('appSystemPrompt("heartbeat") includes user name + behavior constraints', () => {
+    registerHeartbeatAi();
+    const fn = getAppSystemPrompt(HEARTBEAT_APP_ID)!;
+    const text = fn();
+    expect(text).toContain('自主行为');
+    expect(text).toContain('小星星');
+    expect(text).toContain('[行为约束]');
+    expect(text).toContain('done');
+  });
+
+  it('registerHeartbeatAi is idempotent', () => {
+    registerHeartbeatAi();
+    registerHeartbeatAi();
+    registerHeartbeatAi();
+    expect(getTools(HEARTBEAT_APP_ID)).toHaveLength(15);
+  });
+});
