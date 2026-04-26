@@ -24,6 +24,7 @@ import { serviceRegistry } from '@/platform/services/serviceRegistry';
 import { unregisterApp as unregisterToolRegistryApp } from '@/platform/ai/toolRegistry';
 import { unregisterApp as unregisterReplyRendererApp } from '@/platform/ai/replyRendererRegistry';
 import { unregisterApp as unregisterAppSystemPromptApp } from '@/platform/ai/appSystemPromptRegistry';
+import { useDisabledToolsStore } from '@/platform/ai/disabledToolsStore';
 
 export type InstallErrorKind =
   | 'bad-zip'
@@ -319,6 +320,7 @@ export async function uninstall(appId: string): Promise<void> {
   });
 
   useInstalledUserAppsStore.getState().remove(appId);
+  useDisabledToolsStore.getState().clearApp(appId);
   appRegistry.unregister(appId);
   serviceRegistry.unregisterApp(appId);
   unregisterToolRegistryApp(appId);

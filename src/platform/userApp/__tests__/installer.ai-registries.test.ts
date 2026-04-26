@@ -17,6 +17,7 @@ import {
   getAppSystemPrompt,
   _resetAppSystemPromptRegistryForTests,
 } from '@/platform/ai/appSystemPromptRegistry';
+import { useDisabledToolsStore } from '@/platform/ai/disabledToolsStore';
 import { appRegistry } from '@/platform/appRegistry';
 import { useInstalledUserAppsStore } from '@/platform/stores/installedUserAppsStore';
 
@@ -59,5 +60,15 @@ describe('installer.uninstall — AI registry cleanup', () => {
 
   it('still works when the app had nothing registered (no-op)', async () => {
     await expect(uninstall(APP_ID)).resolves.toBeUndefined();
+  });
+
+  it('uninstall clears disabledToolsStore entries for the app', async () => {
+    // Seed a disabled tool
+    useDisabledToolsStore.getState().setDisabled(APP_ID, 'some_tool', true);
+    expect(useDisabledToolsStore.getState().isDisabled(APP_ID, 'some_tool')).toBe(true);
+
+    await uninstall(APP_ID);
+
+    expect(useDisabledToolsStore.getState().isDisabled(APP_ID, 'some_tool')).toBe(false);
   });
 });

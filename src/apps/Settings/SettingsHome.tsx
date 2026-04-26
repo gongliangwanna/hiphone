@@ -10,6 +10,7 @@ import {
   Wrench,
   User,
   HardDrive,
+  ToggleLeft,
 } from 'lucide-react';
 import { useSettingsNavStore } from './settingsNavStore';
 import { usePersonaStore } from '@/platform/stores/personaStore';
@@ -107,6 +108,13 @@ export function SettingsHome() {
           iconColor="#AF52DE"
           title="AI 设置"
           onClick={() => push('aiSettings')}
+          chevron
+        />
+        <ListRow
+          icon={<ToggleLeft size={18} />}
+          iconColor="#FF9500"
+          title="AI 工具"
+          onClick={() => push('aiTools')}
           chevron
         />
         <ListRow
