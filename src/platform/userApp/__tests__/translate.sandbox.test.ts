@@ -81,10 +81,10 @@ describe('translate user-app — sandbox smoke', () => {
     fireEvent.click(screen.getByRole('button', { name: '翻译' }));
 
     expect(completeMock).toHaveBeenCalledTimes(1);
-    const messages = completeMock.mock.calls[0][0];
+    const messages = completeMock.mock.calls[0]![0] as Array<{ role: string; content: string }>;
     // System prompt should contain "中文" as the source language name.
-    expect(messages[0].content).toContain('中文');
-    expect(messages[0].content).not.toContain('Detect the source language automatically.');
+    expect(messages[0]!.content).toContain('中文');
+    expect(messages[0]!.content).not.toContain('Detect the source language automatically.');
     cleanup();
   });
 
@@ -107,8 +107,8 @@ describe('translate user-app — sandbox smoke', () => {
     fireEvent.click(screen.getByRole('button', { name: '翻译' }));
 
     expect(completeMock).toHaveBeenCalledTimes(1);
-    const messages = completeMock.mock.calls[0][0];
-    expect(messages[0].content).toContain('Klingon');
+    const messages = completeMock.mock.calls[0]![0] as Array<{ role: string; content: string }>;
+    expect(messages[0]!.content).toContain('Klingon');
     cleanup();
   });
 });
