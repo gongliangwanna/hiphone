@@ -1,15 +1,15 @@
 /**
- * Heartbeat agent — ReAct loop engine + concurrent scheduler.
+ * Heartbeat agent — unified Tool Registry loop engine + concurrent scheduler.
  *
  * The scheduler ticks every 30 seconds, checks which characters are due,
  * and runs them concurrently (each character gets its own AbortController).
- * Each run is a ReAct loop: LLM → parse Thought/Action/ActionInput →
- * execute tool → inject Observation → repeat.
+ * Each run is a ReAct loop: LLM → parseReply({type,param}) →
+ * execute tool → inject Observation (role:system) → repeat.
  *
  * The heartbeat agent reuses the full chat prompt pipeline (assemblePrompt)
- * with a formatOverride that replaces JSON structured output with ReAct
- * agent instructions. This gives the agent the same context as regular chat:
- * character card, persona, world book, chat history, device context, etc.
+ * with the unified Tool Registry path (currentAppId + availableTools +
+ * appSystemPromptSnapshot). This gives the agent the same context as regular
+ * chat: character card, persona, world book, chat history, device context, etc.
  *
  * Background execution:
  *   The timer runs inside a Web Worker so it is NOT throttled when the
@@ -35,10 +35,22 @@ import { getAdapter } from '@/platform/ai/providers';
 import { chatComplete } from './chatComplete';
 import { assemblePrompt, type ChatMessage } from './promptAssembly';
 import { buildDeviceContext } from './deviceContext';
-import { buildHeartbeatFormatOverride } from './heartbeatPrompt';
-import { executeHeartbeatTool, resetHeartbeatLimits, getCharacterAlias, resolveCharacterId, uid } from './heartbeatTools';
+import { executeHeartbeatTool, resetHeartbeatLimits, resolveCharacterId, uid } from './heartbeatTools';
 import { _appendMessage } from './memoryWriter';
+import {
+  registerHeartbeatAi,
+  HEARTBEAT_APP_ID,
+} from './heartbeatRegister';
+import { parseReply, type ReplyItem } from './replyParser';
+import { getTools } from './toolRegistry';
+import { getAppSystemPrompt } from './appSystemPromptRegistry';
+import { buildParseErrorMessage } from './parseErrorMessage';
 import type { Message } from '@/apps/XingYu/data';
+
+// Idempotent — ensures tools/appSystemPrompt are registered before any
+// heartbeat tick fires. Safe to call repeatedly (module re-imports,
+// test resets, etc.).
+registerHeartbeatAi();
 
 // ---------------------------------------------------------------------------
 // Module-level scheduler state
@@ -54,118 +66,48 @@ const activeControllers = new Map<string, AbortController>();
 const SCHEDULER_TICK_MS = 30_000; // 30 seconds
 
 // ---------------------------------------------------------------------------
-// ReAct parser
-// ---------------------------------------------------------------------------
-
-interface ParsedAction {
-  thought: string;
-  action: string;
-  actionInput: Record<string, unknown>;
-}
-
-interface ParsedReactOutput {
-  thought: string;
-  actions: ParsedAction[];
-}
-
-function parseReactOutput(text: string): ParsedReactOutput | null {
-  const thoughtMatch = text.match(/Thought:\s*(.+?)(?=\nActions:|\n*$)/s);
-  let thought = thoughtMatch?.[1]?.trim() ?? '';
-
-  // Fallback: if no explicit "Thought:" prefix, capture all text before "Actions:" as thought.
-  // The AI sometimes outputs free-form roleplay/narration instead of using the prefix.
-  if (!thought) {
-    const actionsIdx = text.indexOf('\nActions:');
-    if (actionsIdx > 0) {
-      thought = text.slice(0, actionsIdx).trim();
-    }
-  }
-
-  // Try new multi-action format: Actions:\n[...]
-  const actionsMatch = text.match(/Actions:\s*(\[[\s\S]*\])/);
-  if (actionsMatch?.[1]) {
-    try {
-      const arr = JSON.parse(actionsMatch[1].trim()) as Array<{ action: string; input?: Record<string, unknown> }>;
-      if (Array.isArray(arr) && arr.length > 0) {
-        const actions = arr
-          .filter((item) => item.action)
-          .map((item) => ({
-            thought,
-            action: item.action,
-            actionInput: item.input ?? {},
-          }));
-        if (actions.length > 0) return { thought, actions };
-      }
-    } catch {
-      // Try extracting JSON array with bracket matching
-      const bracketMatch = actionsMatch[1].match(/\[[\s\S]*\]/);
-      if (bracketMatch) {
-        try {
-          const arr = JSON.parse(bracketMatch[0]) as Array<{ action: string; input?: Record<string, unknown> }>;
-          if (Array.isArray(arr) && arr.length > 0) {
-            const actions = arr
-              .filter((item) => item.action)
-              .map((item) => ({
-                thought,
-                action: item.action,
-                actionInput: item.input ?? {},
-              }));
-            if (actions.length > 0) return { thought, actions };
-          }
-        } catch { /* fall through to legacy */ }
-      }
-    }
-  }
-
-  // Legacy single-action fallback: Action: / ActionInput:
-  const actionMatch = text.match(/Action:\s*(\S+)/);
-  const action = actionMatch?.[1]?.trim() ?? '';
-  if (!action) return null;
-
-  const inputMatch = text.match(/ActionInput:\s*(.+?)$/s);
-  let actionInput: Record<string, unknown> = {};
-  if (inputMatch?.[1]) {
-    try {
-      actionInput = JSON.parse(inputMatch[1].trim());
-    } catch {
-      const jsonMatch = inputMatch[1].match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        try { actionInput = JSON.parse(jsonMatch[0]); } catch { /* empty */ }
-      }
-    }
-  }
-
-  return { thought, actions: [{ thought, action, actionInput }] };
-}
-
-// ---------------------------------------------------------------------------
 // Action detail formatter (for activity log)
 // ---------------------------------------------------------------------------
 
-const ACTION_LABELS: Record<string, (p: ParsedAction, selfId: string) => string> = {
-  send_message: (p) => `给用户发了消息：「${String((p.actionInput as Record<string, unknown>).text ?? '').slice(0, 50)}」`,
-  post_moment: (p) => `发了一条动态：「${String((p.actionInput as Record<string, unknown>).text ?? '').slice(0, 50)}」`,
+const ACTION_LABELS: Record<string, (p: ReplyItem, selfId: string) => string> = {
+  send_message: (p) => {
+    const t = (p.param as { text?: unknown })?.text;
+    return `给用户发了消息:「${String(t ?? '').slice(0, 50)}」`;
+  },
+  post_moment: (p) => {
+    const t = (p.param as { text?: unknown })?.text;
+    return `发了一条动态:「${String(t ?? '').slice(0, 50)}」`;
+  },
   view_moments: () => '浏览了星球动态',
   like_moment: () => '给一条动态点了赞',
-  comment_moment: (p) => `评论了一条动态：「${String((p.actionInput as Record<string, unknown>).text ?? '').slice(0, 50)}」`,
-  update_signature: (p) => `更新了个性签名：「${String((p.actionInput as Record<string, unknown>).text ?? '').slice(0, 50)}」`,
+  comment_moment: (p) => {
+    const t = (p.param as { text?: unknown })?.text;
+    return `评论了一条动态:「${String(t ?? '').slice(0, 50)}」`;
+  },
+  update_signature: (p) => {
+    const t = (p.param as { text?: unknown })?.text;
+    return `更新了个性签名:「${String(t ?? '').slice(0, 50)}」`;
+  },
   view_user_signature: () => '查看了用户的个性签名',
   view_user_signature_history: () => '查看了用户的历史签名',
   view_notes: () => '查看了自己的备忘录',
-  create_note: (p) => `写了一条备忘录：「${String((p.actionInput as Record<string, unknown>).title ?? '').slice(0, 50)}」`,
+  create_note: (p) => {
+    const title = (p.param as { title?: unknown })?.title;
+    return `写了一条备忘录:「${String(title ?? '').slice(0, 50)}」`;
+  },
   view_characters: () => '查看了其他角色列表',
   chat_with_character: (p, selfId) => {
-    const inp = p.actionInput as Record<string, unknown>;
-    const rawId = String(inp.characterId ?? '');
+    const inp = p.param as { characterId?: unknown };
+    const rawId = String(inp?.characterId ?? '');
     const targetId = resolveCharacterId(selfId, rawId);
     const target = useCharacterStore.getState().characters.find((c) => c.id === targetId);
     return `和${target?.name ?? rawId}聊过天`;
   },
 };
 
-function formatActionDetail(parsed: ParsedAction, selfCharacterId: string): string {
-  const formatter = ACTION_LABELS[parsed.action];
-  return formatter ? formatter(parsed, selfCharacterId) : parsed.action;
+function formatActionDetail(item: ReplyItem, selfCharacterId: string): string {
+  const formatter = ACTION_LABELS[item.type];
+  return formatter ? formatter(item, selfCharacterId) : item.type;
 }
 
 // ---------------------------------------------------------------------------
@@ -202,28 +144,18 @@ async function runHeartbeat(
     pack.stickers.map((s) => ({ id: s.id, description: s.description })),
   );
 
-  // Reset per-heartbeat limits (clears old aliases) before registering new ones
   resetHeartbeatLimits(characterId);
 
+  const frozenTools = getTools(HEARTBEAT_APP_ID);
+  const frozenAppSystemPrompt = getAppSystemPrompt(HEARTBEAT_APP_ID)?.() ?? undefined;
+  const knownTypes = new Set(frozenTools.map((t) => t.type));
+  const knownTypesArr = [...knownTypes];
+
   const allCharacters = useCharacterStore.getState().characters;
-  const charactersById = new Map(allCharacters.map((c) => [c.id, { id: c.id, name: c.name }]));
-  const memoryEntries = useCharacterMemory.getState().getAll(characterId);
-
-  // Build character list + pre-register aliases for chat_with_character
-  const otherChars = allCharacters
-    .filter((c) => c.id !== characterId)
-    .map((c, i) => {
-      const alias = `c${i + 1}`;
-      getCharacterAlias(characterId).set(alias, c.id);
-      const sig = useXYData.getState().characterSignatures[c.id]?.current;
-      return { alias, name: c.name, signature: sig };
-    });
-
-  const userName = persona?.name ?? '用户';
-  const formatOverride = buildHeartbeatFormatOverride(
-    userName,
-    otherChars.length > 0 ? otherChars : undefined,
+  const charactersById = new Map(
+    allCharacters.map((c) => [c.id, { id: c.id, name: c.name }]),
   );
+  const memoryEntries = useCharacterMemory.getState().getAll(characterId);
 
   const { messages: chatMessages } = assemblePrompt({
     character: {
@@ -255,28 +187,28 @@ async function runHeartbeat(
     now: new Date(),
     deviceContext: buildDeviceContext(),
     availableStickers: allStickers.length > 0 ? allStickers : undefined,
-    formatOverride,
+    // Unified path — no formatOverride.
+    currentAppId: HEARTBEAT_APP_ID,
+    availableTools: frozenTools,
+    appSystemPromptSnapshot: frozenAppSystemPrompt,
   });
 
-  // The assembled messages become the initial context for the ReAct loop.
-  // Each iteration appends assistant reply + observation.
-  // Strip the auto-generated user trigger from assemblePrompt — in first-person
-  // mode, all history is in system messages and the only user-role message is
-  // the extracted trigger (which duplicates content already in [对话记录]).
-  // We replace it with the heartbeat-specific trigger.
+  // Trigger hack (preserved per spec §D6):
+  // assemblePrompt always synthesizes a user turn from the last live entry.
+  // Heartbeat has no "user input"; strip any user turns and push our own.
   const messages: ChatMessage[] = chatMessages.filter((m) => m.role !== 'user');
-  messages.push({ role: 'user', content: '你现在处于自主行为时间。请决定你现在要做什么。' });
+  messages.push({
+    role: 'user',
+    content: '你现在处于自主行为时间。请决定你现在要做什么。',
+  });
 
-  // Mark as running
   useHeartbeatStore.getState().setRunning(characterId, 0);
 
-  // Collect actions and thoughts during this heartbeat for the activity log
   const actionsTaken: { action: string; detail: string }[] = [];
   const thoughts: string[] = [];
 
   for (let i = 0; i < config.maxIterations; i++) {
     if (signal.aborted) break;
-
     useHeartbeatStore.getState().setRunning(characterId, i + 1);
 
     let rawReply: string;
@@ -297,51 +229,57 @@ async function runHeartbeat(
       break;
     }
 
-    const parsed = parseReactOutput(rawReply);
-    if (!parsed) {
+    const { items, error } = parseReply(rawReply, knownTypes);
+
+    if (error !== null) {
+      // Parse failure → feed a role:system correction back in-memory.
+      // Not persisted to memoryStore (heartbeat's loop state is ephemeral).
+      messages.push({ role: 'assistant', content: rawReply });
+      messages.push({
+        role: 'system',
+        content: buildParseErrorMessage(error, knownTypesArr),
+      });
       useHeartbeatStore.getState().pushLog({
         characterId,
         action: 'parse_error',
         detail: rawReply.slice(0, 80),
       });
-      break;
+      continue;
     }
 
-    // Collect thought for activity log
-    if (parsed.thought) thoughts.push(parsed.thought);
-
-    // Execute all actions in this turn, collect observations.
-    //
-    // NOTE: `parsed.actions` here is the HEARTBEAT ReAct shape
-    // (ParsedReactOutput — see parseReactOutput above), NOT the
-    // M4.2.5 unified `ReplyItem[]` shape produced by parseReply.
-    // Heartbeat uses `formatOverride` to bypass the unified format and
-    // has its own parser, so the M4.2.5 field-rename (content → param)
-    // does not affect this iteration.
     const observations: string[] = [];
     let hitDone = false;
 
-    for (const act of parsed.actions) {
+    for (const item of items) {
       if (signal.aborted) break;
 
-      if (act.action === 'done') {
-        useHeartbeatStore.getState().pushLog({ characterId, action: 'done', detail: parsed.thought.slice(0, 40) });
+      if (item.type === 'done') {
+        useHeartbeatStore.getState().pushLog({ characterId, action: 'done' });
         hitDone = true;
         break;
       }
 
-      const result = await executeHeartbeatTool(act.action, act.actionInput, characterId, signal);
-      actionsTaken.push({ action: act.action, detail: formatActionDetail(act, characterId) });
-      observations.push(`[${act.action}] ${result.observation}`);
+      const result = await executeHeartbeatTool(
+        item.type,
+        item.param,
+        characterId,
+        signal,
+      );
+      actionsTaken.push({ action: item.type, detail: formatActionDetail(item, characterId) });
+      observations.push(`[${item.type}] ${result.observation}`);
 
       if (result.done) { hitDone = true; break; }
     }
 
     if (hitDone) break;
+    // Aborted before any item executed → no useful observation to feed back;
+    // the outer loop will exit on the next iteration's top-of-loop signal check.
+    if (observations.length === 0) break;
 
     messages.push({ role: 'assistant', content: rawReply });
+    // Observations → role:system (spec §①.A). In-memory only.
     messages.push({
-      role: 'user',
+      role: 'system',
       content: observations.length === 1
         ? `Observation: ${observations[0]}`
         : `Observations:\n${observations.join('\n')}`,
