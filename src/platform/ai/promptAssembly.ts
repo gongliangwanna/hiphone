@@ -15,6 +15,8 @@
 import { estimateTokens } from './tokenEstimator';
 import type { MemoryEntry } from './characterMemoryStore';
 import type { ToolBuildContext, ToolDefinition } from './toolRegistry';
+import { renderMemoryStateBlock, type RenderContext } from './memoryStateRender';
+import { useMemoryState } from './memoryStateStore';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -143,6 +145,8 @@ export interface MemoryRenderContext {
   charactersById: Map<string, { id: string; name: string }>;
   /** Display name for the persona (user turns prefix with this). */
   personaName: string;
+  /** Render context for state tail (filters private facts); defaults to 'normal'. */
+  renderContext?: RenderContext;
 }
 
 // ---------------------------------------------------------------------------
@@ -150,8 +154,10 @@ export interface MemoryRenderContext {
 // ---------------------------------------------------------------------------
 
 export interface TranscriptRenderResult {
-  /** system #2 内容；含 `[长期记忆]\n...` 前缀。无压缩 entry 时为 null。 */
+  /** system #2 内容；含 `[长期记忆]\n...` 前缀。无 episodicSummary 时为 null。 */
   longTermMemory: string | null;
+  /** system tail 内容；包含关系模型/事实册/OpenLoops/Highlights + disclaimer。无 state 时为 null。 */
+  stateTailBlock: string | null;
   /** system #3 内容；含 `[历史记录]\n` 首行 + N 行 entry。无活 entry 时为 null。 */
   transcriptBlock: string | null;
   /** 最后一条活 entry 是 role=user 时非 null。 */
@@ -194,13 +200,17 @@ export function renderMemoryToTranscript(
   entries: readonly MemoryEntry[],
   ctx: MemoryRenderContext,
 ): TranscriptRenderResult {
-  // Latest compressed entry → long-term memory block (raw content, prefix already baked in).
-  const latestCompressed = [...entries].reverse().find((e) => e.compressed);
-  const longTermMemory = latestCompressed ? latestCompressed.content : null;
+  // Read structured state for long-term memory + system tail.
+  const memState = useMemoryState.getState().get(ctx.currentCharId) ?? null;
+  const longTermMemory = memState?.episodicSummary
+    ? `[长期记忆]\n${memState.episodicSummary.content}`
+    : null;
+  const stateTail = renderMemoryStateBlock(memState, { context: ctx.renderContext ?? 'normal' });
+  const stateTailBlock = stateTail || null;
 
   const live = entries.filter((e) => !e.compressed);
   if (live.length === 0) {
-    return { longTermMemory, transcriptBlock: null, userTurn: null };
+    return { longTermMemory, stateTailBlock, transcriptBlock: null, userTurn: null };
   }
 
   const last = live[live.length - 1]!;
@@ -227,7 +237,7 @@ export function renderMemoryToTranscript(
     transcriptBlock = ['[历史记录]', ...lines].join('\n');
   }
 
-  return { longTermMemory, transcriptBlock, userTurn };
+  return { longTermMemory, stateTailBlock, transcriptBlock, userTurn };
 }
 
 // Shared by resolveTranscriptSpeaker (for user entries) — resolves a speakerId
@@ -607,7 +617,7 @@ export function inspectPrompt(input: PromptInput): PromptInspection {
   const historyBudget = Math.max(0, totalBudget - aiConfig.maxTokens - systemTokens - postTokens - overhead);
 
   const trimmed = trimMemoryToFit(input.memoryEntries, historyBudget, aiConfig.keepRecentMessages);
-  const { longTermMemory, transcriptBlock, userTurn } = renderMemoryToTranscript(trimmed, {
+  const { longTermMemory, stateTailBlock, transcriptBlock, userTurn } = renderMemoryToTranscript(trimmed, {
     currentCharId: input.currentCharId,
     charactersById: input.charactersById,
     personaName: persona.name,
@@ -616,6 +626,14 @@ export function inspectPrompt(input: PromptInput): PromptInspection {
   const sections: PromptSection[] = [
     { label: 'System 提示词', content: systemBlock, tokens: systemTokens },
   ];
+
+  if (stateTailBlock) {
+    sections.push({
+      label: '状态层(关系/事实/Loops/Highlights)',
+      content: stateTailBlock,
+      tokens: estimateTokens(stateTailBlock),
+    });
+  }
 
   if (longTermMemory) {
     sections.push({
@@ -646,6 +664,7 @@ export function inspectPrompt(input: PromptInput): PromptInspection {
   }
 
   const historyTokens =
+    (stateTailBlock ? estimateTokens(stateTailBlock) : 0) +
     (longTermMemory ? estimateTokens(longTermMemory) : 0) +
     (transcriptBlock ? estimateTokens(transcriptBlock) : 0) +
     (userTurn ? estimateContentTokens(userTurn.content) : 0);
@@ -715,7 +734,7 @@ export function assemblePrompt(input: PromptInput): PromptOutput {
     historyBudget,
     aiConfig.keepRecentMessages,
   );
-  const { longTermMemory, transcriptBlock, userTurn } = renderMemoryToTranscript(
+  const { longTermMemory, stateTailBlock, transcriptBlock, userTurn } = renderMemoryToTranscript(
     trimmed,
     {
       currentCharId: input.currentCharId,
@@ -724,8 +743,11 @@ export function assemblePrompt(input: PromptInput): PromptOutput {
     },
   );
 
-  // Assemble final message array: system #1, optional system #2/#3, system #4, optional user turn.
+  // Assemble final message array: system #1, optional state tail / long-term / transcript, post-history, optional user turn.
   const messages: ChatMessage[] = [{ role: 'system', content: systemBlock }];
+  if (stateTailBlock) {
+    messages.push({ role: 'system', content: stateTailBlock });
+  }
   if (longTermMemory) {
     messages.push({ role: 'system', content: longTermMemory });
   }
@@ -740,6 +762,7 @@ export function assemblePrompt(input: PromptInput): PromptOutput {
   }
 
   const historyTokens =
+    (stateTailBlock ? estimateTokens(stateTailBlock) : 0) +
     (longTermMemory ? estimateTokens(longTermMemory) : 0) +
     (transcriptBlock ? estimateTokens(transcriptBlock) : 0) +
     (userTurn ? estimateContentTokens(userTurn.content) : 0);

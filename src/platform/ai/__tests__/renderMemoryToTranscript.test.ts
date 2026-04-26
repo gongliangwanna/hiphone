@@ -1,9 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import 'fake-indexeddb/auto';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   renderMemoryToTranscript,
   type MemoryRenderContext,
 } from '../promptAssembly';
 import type { MemoryEntry } from '../characterMemoryStore';
+import { useMemoryState, _resetMemoryStateForTests } from '../memoryStateStore';
+import { makeInitialState } from '../memoryStateTypes';
 
 const ctx: MemoryRenderContext = {
   currentCharId: 'char-001',
@@ -212,26 +215,32 @@ describe('renderMemoryToTranscript — userTurn dispatch', () => {
     const out = renderMemoryToTranscript([], ctx);
     expect(out).toEqual({
       longTermMemory: null,
+      stateTailBlock: null,
       transcriptBlock: null,
       userTurn: null,
     });
   });
 });
 
-describe('renderMemoryToTranscript — long-term memory', () => {
-  it('compressed entry → longTermMemory populated, not in transcript', () => {
+describe('renderMemoryToTranscript — long-term memory (state-driven)', () => {
+  beforeEach(async () => { await _resetMemoryStateForTests(); });
+
+  it('no episodicSummary in state → longTermMemory null', () => {
     const out = renderMemoryToTranscript(
-      [
-        mem({
-          role: 'system',
-          speakerId: 'system',
-          source: 'system',
-          content: '[长期记忆]\n他们聊了吃饭。',
-          compressed: true,
-          createdAt: tsAt(7, 0),
-        }),
-        mem({ role: 'assistant', speakerId: 'char-001', content: '早', createdAt: tsAt(9, 0) }),
-      ],
+      [mem({ role: 'assistant', speakerId: 'char-001', content: '早', createdAt: tsAt(9, 0) })],
+      ctx,
+    );
+    expect(out.longTermMemory).toBeNull();
+    expect(out.transcriptBlock).toBe('[历史记录]\n[09:00] 我：早');
+    expect(out.userTurn).toBeNull();
+  });
+
+  it('episodicSummary in state → longTermMemory populated with [长期记忆] prefix', () => {
+    const s = makeInitialState('char-001');
+    s.episodicSummary = { content: '他们聊了吃饭。', version: 1, coveringUpTo: 1, lastUpdatedAt: 1 };
+    useMemoryState.getState().set('char-001', s);
+    const out = renderMemoryToTranscript(
+      [mem({ role: 'assistant', speakerId: 'char-001', content: '早', createdAt: tsAt(9, 0) })],
       ctx,
     );
     expect(out.longTermMemory).toBe('[长期记忆]\n他们聊了吃饭。');
@@ -239,25 +248,24 @@ describe('renderMemoryToTranscript — long-term memory', () => {
     expect(out.userTurn).toBeNull();
   });
 
-  it('multiple compressed entries (transitional bug state) → keep only the latest', () => {
+  it('compressed entries are excluded from transcript (treated as consumed)', () => {
     const out = renderMemoryToTranscript(
       [
         mem({
           role: 'system', speakerId: 'system', source: 'system',
-          content: '[长期记忆]\n旧 v1', compressed: true, createdAt: tsAt(1, 0),
-        }),
-        mem({
-          role: 'system', speakerId: 'system', source: 'system',
-          content: '[长期记忆]\n新 v2', compressed: true, createdAt: tsAt(2, 0),
+          content: '[长期记忆]\n old compressed entry', compressed: true, createdAt: tsAt(1, 0),
         }),
         mem({ role: 'assistant', speakerId: 'char-001', content: 'hi', createdAt: tsAt(9, 0) }),
       ],
       ctx,
     );
-    expect(out.longTermMemory).toBe('[长期记忆]\n新 v2');
+    // compressed entries are filtered out of live — only the assistant entry appears
+    expect(out.transcriptBlock).toBe('[历史记录]\n[09:00] 我：hi');
+    // no state set → longTermMemory null (legacy compressed entry is ignored)
+    expect(out.longTermMemory).toBeNull();
   });
 
-  it('only compressed entries → transcriptBlock/userTurn null, longTermMemory set', () => {
+  it('only compressed entries → transcriptBlock/userTurn null, longTermMemory null (no state)', () => {
     const out = renderMemoryToTranscript(
       [
         mem({
@@ -267,8 +275,41 @@ describe('renderMemoryToTranscript — long-term memory', () => {
       ],
       ctx,
     );
-    expect(out.longTermMemory).toBe('[长期记忆]\n only summary');
+    // longTermMemory comes from state, not entries — null since state not set
+    expect(out.longTermMemory).toBeNull();
     expect(out.transcriptBlock).toBeNull();
     expect(out.userTurn).toBeNull();
+  });
+});
+
+describe('renderMemoryToTranscript — state-driven long-term memory', () => {
+  beforeEach(async () => { await _resetMemoryStateForTests(); });
+
+  it('episodicSummary 不存在 → longTermMemory=null', () => {
+    const r = renderMemoryToTranscript([], {
+      currentCharId: 'char-1', charactersById: new Map(), personaName: 'me',
+    });
+    expect(r.longTermMemory).toBeNull();
+  });
+
+  it('episodicSummary 存在 → longTermMemory 含[长期记忆]前缀', () => {
+    const s = makeInitialState('char-1');
+    s.episodicSummary = { content: '我们玩得很开心', version: 1, coveringUpTo: 1, lastUpdatedAt: 1 };
+    useMemoryState.getState().set('char-1', s);
+    const r = renderMemoryToTranscript([], {
+      currentCharId: 'char-1', charactersById: new Map(), personaName: 'me',
+    });
+    expect(r.longTermMemory).toContain('[长期记忆]');
+    expect(r.longTermMemory).toContain('我们玩得很开心');
+  });
+
+  it('stateTailBlock 在 state 非空时返回非 null', () => {
+    const s = makeInitialState('char-1');
+    s.relationship.lastUpdatedAt = Date.now();
+    useMemoryState.getState().set('char-1', s);
+    const r = renderMemoryToTranscript([], {
+      currentCharId: 'char-1', charactersById: new Map(), personaName: 'me',
+    });
+    expect(r.stateTailBlock).toContain('[当前关系]');
   });
 });
