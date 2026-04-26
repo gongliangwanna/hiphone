@@ -6,6 +6,7 @@ import { registerBuiltins } from './apps/registerBuiltins';
 import { loadInstalledApps } from './platform/userApp/installer';
 import { mountFakeUserAppIfDev } from './platform/userApp/devIcon';
 import { installDevApi } from './platform/userApp/devInstall';
+import { mountBuiltinUserApps } from './platform/userApp/builtinUserApps';
 
 // Register all builtin apps into the Registry at module load.
 // Safe to run at module scope: registerBuiltins is idempotent.
@@ -16,6 +17,9 @@ export function App() {
     startHeartbeatScheduler();
     // Rebuild installedUserAppsStore + appRegistry from IDB on every startup.
     void loadInstalledApps();
+    // Mount built-in user apps (always — dev AND prod). This is the path
+    // that pulls Sucrase into the production bundle (CLAUDE.md note 4).
+    void mountBuiltinUserApps();
     if (import.meta.env.DEV) {
       // Expose globalThis.__hiphoneInstall for DevTools manual testing.
       installDevApi();
