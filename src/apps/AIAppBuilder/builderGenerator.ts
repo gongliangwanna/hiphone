@@ -17,6 +17,7 @@
 
 import { useAIConfigStore } from '@/platform/stores/aiConfigStore';
 import { chatComplete } from '@/platform/ai/chatComplete';
+import { getAdapter } from '@/platform/ai/providers';
 import type { Message } from '@/platform/userApp/sdk/ai';
 import { useAIAppBuilderConfigStore } from './aiAppBuilderConfigStore';
 import { buildSystemPrompt } from './builderPrompt';
@@ -94,11 +95,24 @@ interface EffectiveConfig {
 function effectiveConfig(): EffectiveConfig {
   const ai = useAIConfigStore.getState();
   const o = useAIAppBuilderConfigStore.getState().modelOverride ?? {};
+  // endpoint precedence: explicit override → user's aiConfig.apiEndpoint →
+  // provider adapter's defaultEndpoint. Mirrors the heartbeat / XingYu chat
+  // pattern (heartbeatAgent.ts, ai.ts requireProvider). Without this fallback
+  // a user with only provider+apiKey set would get an empty endpoint string,
+  // which fetch() resolves against the page origin → "/chat/completions" 404
+  // on localhost dev server.
+  const providerId = o.provider ?? ai.provider ?? '';
+  const adapter = getAdapter(providerId);
+  const endpoint =
+    (o.endpoint && o.endpoint.trim()) ||
+    (ai.apiEndpoint && ai.apiEndpoint.trim()) ||
+    adapter?.defaultEndpoint ||
+    '';
   return {
-    endpoint: o.endpoint ?? ai.apiEndpoint ?? '',
+    endpoint,
     apiKey: o.apiKey ?? ai.apiKey ?? '',
     model: o.model ?? ai.model ?? '',
-    providerId: o.provider ?? ai.provider ?? '',
+    providerId,
     maxTokens: o.maxTokens ?? ai.maxTokens ?? 4000,
     temperature: o.temperature ?? ai.temperature,
   };
