@@ -8,6 +8,10 @@ import {
   startCharacterMemoryIdbSync,
   useCharacterMemory,
 } from '@/platform/ai/characterMemoryStore';
+import {
+  loadMemoryStateFromIdb,
+  startMemoryStateIdbSync,
+} from '@/platform/ai/memoryStateStore';
 import { installAutoCompression } from '@/platform/ai/characterMemoryCompression';
 import { _appendMessage } from '@/platform/ai/memoryWriter';
 import { uid } from '@/platform/utils/uid';
@@ -1364,7 +1368,9 @@ export const useXYData = create<XingYuDataState>()(
           // AI character memory: rehydrate from IDB + start mirroring.
           // Empty on first boot after M4.1 upgrade — intentional (no data migration).
           await loadCharacterMemoryFromIdb();
+          await loadMemoryStateFromIdb();
           startCharacterMemoryIdbSync();
+          startMemoryStateIdbSync();
           installAutoCompression();
         };
       },
