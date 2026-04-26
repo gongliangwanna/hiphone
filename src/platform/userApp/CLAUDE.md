@@ -44,6 +44,7 @@ M1 的 `mountFakeUserApp` 注册时 `globalData: false` —— 这**模拟典型
 
 - **ErrorBoundary in `wrapUserComponent`** (M1 follow-up, commit `315af97`). 用户组件 render 抛错由 `UserAppErrorBoundary` 接住 + 渲染 iOS 风格的 "App crashed" fallback，不冒泡到 device 根。`componentDidCatch` 把 stack log 到 console，配合下面的 source maps 可在 devtools 看到原始 TSX 位置。
 - **Sucrase source maps** (M1 follow-up, commit `30f013c`). `compileTsx` 在编译结果末尾追加 base64 inline sourceMappingURL，browser devtools 自动把 stack trace 映射回原 TSX。零运行时成本，不引入 source-map 库。`compileTsx(source, filePath?)` 新增可选 filePath 参数，threads 到 source map 的 `sources` 字段（`devIcon` 用 `'fake-user-app.tsx'`）。
+- **Built-in user apps via `builtinUserApps.ts`** (S2). 内置 App 如翻译走与上传 App 完全相同的 compile→sandbox→register 链路，注册时 `type: 'builtin'` 防卸载，不进 `installedUserAppsStore` 因此 App Store 不显示。这是用户 APP SDK 上限验证的核心样本。
 - **ModuleResolver stays synchronous** (M1 follow-up, commit `10beecb`). Rationale:
    - Sucrase-compiled user code does `const x = _interopRequireDefault(require('react'))` — the `require` call is synchronous. Making it async would require the sandbox function itself to be async, cascading into user code changes (they'd need to `await require()` which Sucrase doesn't emit).
    - Future SDK surfaces that have async IO (like `@hiphone/storage` backed by IDB) expose async **methods** (`await storage.get('key')`), not async imports. The module namespace itself is always sync-resolvable.
@@ -61,7 +62,7 @@ M1 的 `mountFakeUserApp` 注册时 `globalData: false` —— 这**模拟典型
 1. **Sucrase 的 `imports` transform 在所有模式下都会 drop 未引用的 import**（不只是 production 模式）。测试 "resolver errors propagate" 必须让 binding 被实际引用才能保留 `require()` 调用。
 2. **`Object.hasOwn` 需要 ES2022 lib**，但 tsconfig 用 ES2020。在用到的地方本地 cast（见 `sdk/index.ts`）或用 `Object.prototype.hasOwnProperty.call`。
 3. **Sucrase 的 `_interopRequireDefault` helper 会给 CJS 模块包一层 `{ default: obj }`**。sandbox 的 resolver 返回真实 React namespace，helper 判断 `__esModule` 决定是否包。测试正则匹配时要兼容 `React.createElement` 和 `_react2.default.createElement` 两种形式。
-4. **Vite 生产构建下 `import.meta.env.DEV` 被静态替换为 `false`**，整个 DEV-gated 分支被 DCE。这意味着 `mountFakeUserAppIfDev` 的 Sucrase 动态 import 在生产下不存在，Sucrase 包也不会进 bundle。M2 要让 Sucrase 进生产 bundle 必须让某个非 DEV 路径调用它。
+4. **(S2 已解决)** Vite 生产构建下 `import.meta.env.DEV` 被静态替换为 `false`，整个 DEV-gated 分支被 DCE。M1 阶段这导致 Sucrase 不进生产 bundle。**S2 后**：`mountBuiltinUserApps()` 在 `App.tsx` 启动序列里**无条件**调用 `compileTsx`，把 Sucrase 拉进生产 chunk graph。验证脚本：`pnpm verify:prod-sucrase`。
 
 ## SDK 表面（截至 2026-04-26）
 
