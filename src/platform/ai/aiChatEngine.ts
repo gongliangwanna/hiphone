@@ -178,7 +178,20 @@ export async function runAIChat(opts: AIChatOptions): Promise<AIChatResult> {
       }
     }
 
-    if (textParts.length === 0) break;
+    // Lenient fallback: if the LLM didn't emit any well-formed text item
+    // (parse failed, or items contained only side-effect tools like
+    // update_signature), don't kill the conversation — treat the raw reply
+    // as a single text line. Only break when the reply is genuinely empty.
+    // This matches the resilience of XingYu's S2 retry loop semantically:
+    // we'd rather show a slightly malformed turn than abort the chat.
+    if (textParts.length === 0) {
+      const fallback = filterReply(rawReply.trim());
+      if (fallback) {
+        textParts.push(fallback);
+      } else {
+        break;
+      }
+    }
 
     // Insert all text messages from this turn
     for (const text of textParts) {
