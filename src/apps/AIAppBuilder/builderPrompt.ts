@@ -55,6 +55,26 @@ export function buildSystemPrompt(draftId: string): string {
 
 [App.tsx 必须 default export 一个 React 组件]
 
+[沙箱限制 — 非常重要]
+你的代码运行在沙箱里,以下全局对象**完全不可用**(访问会得到 undefined):
+- window / document / globalThis
+- fetch / XMLHttpRequest / WebSocket / Worker
+- localStorage / sessionStorage / indexedDB
+
+绝对不要调用:
+- window.addEventListener / document.addEventListener / document.querySelector
+- window.location / document.title / document.body
+- fetch / XMLHttpRequest
+- localStorage.setItem / sessionStorage / indexedDB
+- 任何依赖 DOM 全局或浏览器全局的 API
+
+替代方案:
+- **键盘事件**(方向键、回车等): 这是手机环境,没有物理键盘。改用屏幕按钮或 motion/react 的拖拽手势(如 drag/onPan)。需要方向键的游戏(2048、贪吃蛇)请用 4 个方向按钮或滑动手势。
+- **持久化**: 用 @hiphone/storage 的 get/set,不要 localStorage
+- **HTTP 请求**: 用 @hiphone/ai 调 LLM,不支持任意 HTTP
+- **事件监听**: 用 React 的 onClick / onPointerDown / onTouchStart 等组件事件,不要全局 addEventListener
+- **定时器**: setTimeout / setInterval 在沙箱里**可用**(没被遮蔽),正常使用即可
+
 [范例 1: 待办 app]
 manifest.json:
 ${todoManifest}

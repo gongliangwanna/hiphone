@@ -41,4 +41,15 @@ describe('buildSystemPrompt', () => {
     const prompt = buildSystemPrompt('ai-app-x-1234');
     expect(prompt).toMatch(/不要.*markdown|markdown.*不要|代码块|code fence/i);
   });
+
+  it('warns about sandbox limitations (window / document / fetch unavailable)', () => {
+    const prompt = buildSystemPrompt('ai-app-x-1234');
+    expect(prompt).toContain('沙箱限制');
+    expect(prompt).toContain('window');
+    expect(prompt).toContain('document');
+    expect(prompt).toContain('fetch');
+    expect(prompt).toContain('localStorage');
+    // Suggests alternatives for keyboard input (no physical keyboard on phone)
+    expect(prompt).toMatch(/键盘|手势|方向按钮/);
+  });
 });
