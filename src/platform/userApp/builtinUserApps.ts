@@ -14,9 +14,11 @@ import { createUserAppRuntime } from './moduleResolver';
 import { resolveModule } from './sdk';
 import { wrapUserComponent } from './sdk/wrap';
 
-// Translate app source files (S3 — core translate flow; S4/S5 will add sheets + history).
+// Translate app source files (S3 — core translate flow; S4 adds sheets + custom lang entry).
 import translateAppSrc from '@/apps/translate/TranslateApp.tsx?raw';
 import translateLangBarSrc from '@/apps/translate/selectors/LangBar.tsx?raw';
+import translateLangSheetSrc from '@/apps/translate/selectors/LangSheet.tsx?raw';
+import translateCustomLangInputSrc from '@/apps/translate/selectors/CustomLangInput.tsx?raw';
 import translateSourcePanelSrc from '@/apps/translate/panels/SourcePanel.tsx?raw';
 import translateTargetPanelSrc from '@/apps/translate/panels/TargetPanel.tsx?raw';
 import translateUseTranslateSrc from '@/apps/translate/hooks/useTranslate.ts?raw';
@@ -39,6 +41,8 @@ export const BUILTIN_USER_APPS: BuiltinUserApp[] = [
     files: {
       'TranslateApp.tsx': translateAppSrc,
       'selectors/LangBar.tsx': translateLangBarSrc,
+      'selectors/LangSheet.tsx': translateLangSheetSrc,
+      'selectors/CustomLangInput.tsx': translateCustomLangInputSrc,
       'panels/SourcePanel.tsx': translateSourcePanelSrc,
       'panels/TargetPanel.tsx': translateTargetPanelSrc,
       'hooks/useTranslate.ts': translateUseTranslateSrc,

@@ -5,6 +5,8 @@ import { spring } from '@hiphone/motion';
 import { error as toastError } from '@hiphone/toast';
 import { AIUnavailableError } from '@hiphone/ai';
 import { LangBar } from './selectors/LangBar';
+import { LangSheet } from './selectors/LangSheet';
+import { CustomLangInput } from './selectors/CustomLangInput';
 import { SourcePanel } from './panels/SourcePanel';
 import { TargetPanel } from './panels/TargetPanel';
 import { useTranslate } from './hooks/useTranslate';
@@ -28,6 +30,8 @@ export default function TranslateApp() {
   const [targetLang, setTargetLang] = useState<Language>(DEFAULT_TARGET_LANG);
   const [sourceText, setSourceText] = useState('');
   const { targetText, status, error, translate, reset } = useTranslate();
+  const [pickerOpen, setPickerOpen] = useState<'source' | 'target' | null>(null);
+  const [customOpen, setCustomOpen] = useState(false);
 
   const onSwap = useCallback(() => {
     // Don't swap "auto" into target — degrades to 中文 if user swaps an
@@ -55,6 +59,31 @@ export default function TranslateApp() {
     await translate(sourceText, sourceLang, targetLang);
   }, [translate, sourceText, sourceLang, targetLang]);
 
+  const onPickLang = useCallback(
+    (lang: Language) => {
+      if (pickerOpen === 'source') setSourceLang(lang);
+      else if (pickerOpen === 'target') setTargetLang(lang);
+      setPickerOpen(null);
+      reset();
+    },
+    [pickerOpen, reset],
+  );
+
+  const onPickCustom = useCallback(() => {
+    setCustomOpen(true);
+  }, []);
+
+  const onCustomSubmit = useCallback(
+    (lang: Language) => {
+      if (pickerOpen === 'source') setSourceLang(lang);
+      else if (pickerOpen === 'target') setTargetLang(lang);
+      setCustomOpen(false);
+      setPickerOpen(null);
+      reset();
+    },
+    [pickerOpen, reset],
+  );
+
   // Toast on errors. The hook already captures into `error`, here we
   // surface them via the platform toast (spec §3.8).
   React.useEffect(() => {
@@ -77,6 +106,8 @@ export default function TranslateApp() {
         sourceLang={sourceLang}
         targetLang={targetLang}
         onSwap={onSwap}
+        onTapSource={() => setPickerOpen('source')}
+        onTapTarget={() => setPickerOpen('target')}
       />
 
       <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 16 }}>
@@ -117,6 +148,19 @@ export default function TranslateApp() {
           errorMessage={error?.message}
         />
       </div>
+
+      <LangSheet
+        open={pickerOpen !== null && !customOpen}
+        showAuto={pickerOpen === 'source'}
+        onPick={onPickLang}
+        onPickCustom={onPickCustom}
+        onClose={() => setPickerOpen(null)}
+      />
+      <CustomLangInput
+        open={customOpen}
+        onSubmit={onCustomSubmit}
+        onClose={() => setCustomOpen(false)}
+      />
     </div>
   );
 }
