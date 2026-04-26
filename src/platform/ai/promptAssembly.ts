@@ -14,7 +14,7 @@
 
 import { estimateTokens } from './tokenEstimator';
 import type { MemoryEntry } from './characterMemoryStore';
-import type { ToolDefinition } from './toolRegistry';
+import type { ToolBuildContext, ToolDefinition } from './toolRegistry';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -318,6 +318,8 @@ function buildSystemBlock(
   formatOverride?: string,
   availableTools?: ToolDefinition[],
   appSystemPromptSnapshot?: string,
+  currentAppId?: string,
+  currentCharId?: string,
 ): string {
   const chunks: string[] = [];
 
@@ -453,6 +455,31 @@ function buildSystemBlock(
         return `- ${t.type}: ${t.description}${paramLine}`;
       });
       chunks.push(`[可用动作]\n${toolLines.join('\n')}`);
+
+      // 8.5 — [工具状态] inline chunk: aggregate non-tail dynamicContext outputs.
+      // Tail-placed dynamicContext is handled in buildPostHistory (S3).
+      // Skipped when currentCharId is missing (callers without character context).
+      if (currentCharId !== undefined) {
+        // appId fallback: when the caller doesn't supply currentAppId
+        // (e.g. raw assemblePrompt callers without app context), pass ''
+        // rather than throwing — `dynamicContext` authors should treat
+        // empty appId as "no app context"; see ToolBuildContext JSDoc.
+        const toolCtx: ToolBuildContext = {
+          appId: currentAppId ?? '',
+          characterId: currentCharId,
+        };
+        const inlineCtxBlocks: string[] = [];
+        for (const t of availableTools!) {
+          if (!t.dynamicContext || t.contextAtTail) continue;
+          const body = t.dynamicContext(toolCtx);
+          if (body && body.trim()) {
+            inlineCtxBlocks.push(`[${t.type}]\n${body.trim()}`);
+          }
+        }
+        if (inlineCtxBlocks.length > 0) {
+          chunks.push(`[工具状态]\n${inlineCtxBlocks.join('\n\n')}`);
+        }
+      }
     }
   }
 
@@ -535,6 +562,8 @@ export function inspectPrompt(input: PromptInput): PromptInspection {
     formatOverride,
     input.availableTools,
     input.appSystemPromptSnapshot,
+    input.currentAppId,
+    input.currentCharId,
   );
   systemBlock = expandMacros(systemBlock, character, persona, now);
 
@@ -617,6 +646,8 @@ export function assemblePrompt(input: PromptInput): PromptOutput {
     formatOverride,
     input.availableTools,
     input.appSystemPromptSnapshot,
+    input.currentAppId,
+    input.currentCharId,
   );
   systemBlock = expandMacros(systemBlock, character, persona, now);
 

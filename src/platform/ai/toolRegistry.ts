@@ -16,6 +16,12 @@
  */
 
 export interface ToolBuildContext {
+  /**
+   * The app this tool belongs to. Empty string `''` means the prompt
+   * is being assembled without an app context (e.g. raw assemblePrompt
+   * callers). `dynamicContext` authors that branch on appId should
+   * treat `''` as "unknown" rather than assume a real id.
+   */
   appId: string;
   /**
    * 本次 prompt 是为哪个角色组装的。对 heartbeat 就是正在跑心跳的那个角色;

@@ -146,6 +146,76 @@ describe('promptAssembly chunks 7 / 8 (M4.2.5 unified)', () => {
   });
 });
 
+describe('[工具状态] inline chunk (dynamicContext, default placement)', () => {
+  it('aggregates non-tail dynamicContext into system block after [可用动作]', () => {
+    const tools: ToolDefinition[] = [
+      { type: 'tool_a', description: 'does A', param: 'string' },
+      {
+        type: 'tool_b',
+        description: 'does B',
+        param: '',
+        dynamicContext: (ctx) => `state for ${ctx.characterId}`,
+      },
+    ];
+    const sys = systemBlock({ ...BASE, currentAppId: 'test-app', availableTools: tools });
+
+    // [可用动作] stays static
+    expect(sys).toContain('[可用动作]');
+    expect(sys).toContain('- tool_a: does A');
+    expect(sys).toContain('- tool_b: does B');
+
+    // [工具状态] appears after [可用动作]
+    const actionsIdx = sys.indexOf('[可用动作]');
+    const stateIdx = sys.indexOf('[工具状态]');
+    expect(stateIdx).toBeGreaterThan(actionsIdx);
+
+    // Each tool's dynamicContext is wrapped with [toolType] header
+    expect(sys).toContain('[tool_b]\nstate for char-001');
+  });
+
+  it('skips [工具状态] chunk entirely when all dynamicContext return null/empty', () => {
+    const tools: ToolDefinition[] = [
+      { type: 'tool_a', description: 'A', param: '', dynamicContext: () => null },
+      { type: 'tool_b', description: 'B', param: '', dynamicContext: () => '' },
+      { type: 'tool_c', description: 'C', param: '', dynamicContext: () => '  ' },
+    ];
+    const sys = systemBlock({ ...BASE, currentAppId: 'test-app', availableTools: tools });
+    expect(sys).not.toContain('[工具状态]');
+  });
+
+  it('skips tools marked contextAtTail from inline chunk', () => {
+    const tools: ToolDefinition[] = [
+      { type: 'inline', description: '', param: '', dynamicContext: () => 'I am inline' },
+      { type: 'tail', description: '', param: '', dynamicContext: () => 'I am tail', contextAtTail: true },
+    ];
+    const sys = systemBlock({ ...BASE, currentAppId: 'test-app', availableTools: tools });
+    expect(sys).toContain('I am inline');
+    expect(sys).not.toContain('I am tail');
+  });
+
+  it('passes {appId, characterId: currentCharId} to the dynamicContext fn', () => {
+    let capturedCtx: { appId: string; characterId: string } | null = null;
+    const tools: ToolDefinition[] = [
+      {
+        type: 't',
+        description: '',
+        param: '',
+        dynamicContext: (ctx) => {
+          capturedCtx = ctx;
+          return null;
+        },
+      },
+    ];
+    assemblePrompt({
+      ...BASE,
+      currentCharId: 'char-xyz',
+      currentAppId: 'my-app',
+      availableTools: tools,
+    });
+    expect(capturedCtx).toEqual({ appId: 'my-app', characterId: 'char-xyz' });
+  });
+});
+
 describe('PromptInput.sceneHint', () => {
   it('sceneHint is appended to the post-history system message', () => {
     const out = assemblePrompt({
