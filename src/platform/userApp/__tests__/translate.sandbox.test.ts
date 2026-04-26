@@ -178,6 +178,44 @@ describe('translate user-app — sandbox smoke', () => {
     cleanup();
   });
 
+  it('changing target language while translate is in-flight abandons the in-flight (no stale lang pair in history)', async () => {
+    // Issue 2 analysis: onPickLang calls reset() which increments tokenRef,
+    // causing the in-flight translate to discard its result via token check
+    // (myToken !== tokenRef.current → return early, status stays loading/idle,
+    // never becomes 'success'). Therefore the history-write effect never fires
+    // with a stale language pair. This test documents that invariant.
+    let resolveAi: (s: string) => void = () => {};
+    completeMock.mockImplementationOnce(
+      () => new Promise<string>((r) => { resolveAi = r; }),
+    );
+    await mountBuiltinUserApps();
+    render(React.createElement(appRegistry.get('translate')!.component));
+
+    // Type and click translate (default: auto → en).
+    fireEvent.change(screen.getByPlaceholderText(/输入要翻译的文本/), {
+      target: { value: '你好' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '翻译' }));
+    // AI is now in-flight (pending resolveAi).
+
+    // While in-flight, change target language to 日本語. This calls
+    // onPickLang → reset() → tokenRef++ → supersedes the in-flight request.
+    fireEvent.click(screen.getByLabelText(/目标语言/));
+    fireEvent.click(screen.getByText('日本語'));
+
+    // Now resolve the AI — but it should be discarded (token superseded).
+    resolveAi('Hello');
+
+    // Give microtasks and effects time to settle.
+    await new Promise((r) => setTimeout(r, 50));
+
+    // History should NOT have been written with stale 'en' result because
+    // reset() cleared status back to idle before success could fire.
+    const stored = storageMap.get('history') as Array<{ targetLang: { code: string } }> | undefined;
+    expect(stored).toBeUndefined();
+    cleanup();
+  });
+
   it('star button toggles favorite for current translation', async () => {
     completeMock.mockResolvedValueOnce('Hello');
     await mountBuiltinUserApps();
