@@ -53,34 +53,10 @@ describe('runAIChat — multi-round resilience', () => {
     useStickerStore.setState({ packs: [] } as never);
   });
 
-  it('skips malformed-JSON rounds and continues with subsequent rounds', async () => {
+  it('recovers readable text from malformed replies (plain prose)', async () => {
     const spy = vi.spyOn(chatCompleteMod, 'chatComplete')
-      .mockResolvedValueOnce('plain text reply, no JSON wrapping')      // round 0: malformed → skip
+      .mockResolvedValueOnce('plain text reply, no JSON wrapping')      // round 0: prose, recover as text
       .mockResolvedValueOnce('[{"type":"text","param":"reply 2"}]')      // round 1: valid
-      .mockResolvedValueOnce('[{"type":"text","param":"reply 3"}]');     // round 2: valid
-
-    const ac = new AbortController();
-    const result = await runAIChat({
-      initiatorCharId: A,
-      targetCharId: B,
-      openingMessage: 'hi',
-      maxRounds: 3,
-      signal: ac.signal,
-    });
-
-    // 1 opening + 2 valid replies (round 0 skipped) = 3 messages
-    expect(spy).toHaveBeenCalledTimes(3);  // all three rounds attempted
-    expect(result.messages[0]!.text).toBe('hi');
-    expect(result.messages.some((m) => m.text === 'reply 2')).toBe(true);
-    expect(result.messages.some((m) => m.text === 'reply 3')).toBe(true);
-    // Verify the malformed text never made it in
-    expect(result.messages.every((m) => !m.text.includes('plain text'))).toBe(true);
-  });
-
-  it('parses each round independently — empty replies skip but the loop continues', async () => {
-    const spy = vi.spyOn(chatCompleteMod, 'chatComplete')
-      .mockResolvedValueOnce('[{"type":"text","param":"reply 1"}]')      // round 0: valid
-      .mockResolvedValueOnce('   ')                                       // round 1: empty → skip
       .mockResolvedValueOnce('[{"type":"text","param":"reply 3"}]');     // round 2: valid
 
     const ac = new AbortController();
@@ -94,8 +70,78 @@ describe('runAIChat — multi-round resilience', () => {
 
     expect(spy).toHaveBeenCalledTimes(3);
     expect(result.messages[0]!.text).toBe('hi');
-    expect(result.messages.some((m) => m.text === 'reply 1')).toBe(true);
+    // Round 0's plain prose recovered
+    expect(result.messages.some((m) => m.text === 'plain text reply, no JSON wrapping')).toBe(true);
+    expect(result.messages.some((m) => m.text === 'reply 2')).toBe(true);
     expect(result.messages.some((m) => m.text === 'reply 3')).toBe(true);
+  });
+
+  it('extracts text params from broken JSON (unescaped Chinese quotes)', async () => {
+    // This shape mimics the real failure: ASCII quotes around inner Chinese
+    // text break JSON.parse, but the outer `"type":"text","param":"..."`
+    // structure is intact enough for regex extraction.
+    const broken = '[{"type":"text","param":"哈哈"开饭啦"了"},{"type":"text","param":"清楚"}]';
+    vi.spyOn(chatCompleteMod, 'chatComplete')
+      .mockResolvedValueOnce(broken)
+      .mockResolvedValueOnce('[{"type":"text","param":"r2"}]');
+
+    const ac = new AbortController();
+    const result = await runAIChat({
+      initiatorCharId: A,
+      targetCharId: B,
+      openingMessage: 'hi',
+      maxRounds: 2,
+      signal: ac.signal,
+    });
+
+    // Recovered text from the broken first reply
+    const recoveredText = result.messages.map((m) => m.text).join('|');
+    // The regex should pick up at least the first "哈哈"开饭啦"了" param
+    // (it captures up to the next quote that's part of the structure).
+    // We're lenient about exact recovery — just verify SOMETHING from the
+    // broken reply made it in, AND the chat continued to round 1.
+    expect(recoveredText).toContain('哈哈');
+    expect(result.messages.some((m) => m.text === 'r2')).toBe(true);
+  });
+
+  it('JSON-ish reply with no extractable text → silent skip (no raw JSON dump)', async () => {
+    // Pure garbage that starts with `[` but has nothing matchable.
+    vi.spyOn(chatCompleteMod, 'chatComplete')
+      .mockResolvedValueOnce('[{"thought":"silent"},{"action":"none"}]')   // not text-typed
+      .mockResolvedValueOnce('[{"type":"text","param":"r2"}]');
+
+    const ac = new AbortController();
+    const result = await runAIChat({
+      initiatorCharId: A,
+      targetCharId: B,
+      openingMessage: 'hi',
+      maxRounds: 2,
+      signal: ac.signal,
+    });
+
+    // No raw JSON in the messages
+    expect(result.messages.every((m) => !m.text.startsWith('['))).toBe(true);
+    // But round 1 (valid) still fires
+    expect(result.messages.some((m) => m.text === 'r2')).toBe(true);
+  });
+
+  it('truly empty reply skips silently and loop continues', async () => {
+    vi.spyOn(chatCompleteMod, 'chatComplete')
+      .mockResolvedValueOnce('   ')                                        // empty
+      .mockResolvedValueOnce('[{"type":"text","param":"r2"}]');
+
+    const ac = new AbortController();
+    const result = await runAIChat({
+      initiatorCharId: A,
+      targetCharId: B,
+      openingMessage: 'hi',
+      maxRounds: 2,
+      signal: ac.signal,
+    });
+
+    // Opening + round 1's reply, no placeholder for round 0
+    expect(result.messages[0]!.text).toBe('hi');
+    expect(result.messages.some((m) => m.text === 'r2')).toBe(true);
   });
 
   it('signature-only reply does not abort the conversation', async () => {

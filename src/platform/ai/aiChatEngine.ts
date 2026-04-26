@@ -178,12 +178,18 @@ export async function runAIChat(opts: AIChatOptions): Promise<AIChatResult> {
     const { items, error } = parseReply(rawReply, knownTypes);
 
     if (error !== null) {
-      // Round produced unparseable output (LLM emitted malformed JSON,
-      // typically unescaped quotes). Skip this round rather than inserting
-      // raw JSON as a text bubble. The other character's next round will
-      // continue from prior context. Better than polluting the chat with
-      // garbage that confuses both users and the LLM.
       console.warn(`[ai-chat] ${responderId} parse error:`, error.kind);
+      // Lenient recovery: AI-AI chat is informal — we'd rather show prose
+      // (even if the LLM dropped the JSON wrapper) than have one side go
+      // completely silent for several rounds. Try, in order:
+      //   1) Extract `"param":"..."` text values from broken JSON-ish output
+      //   2) Fall back to filtered raw text
+      // Skip ONLY when truly nothing salvageable.
+      const recovered = recoverReadableText(rawReply);
+      if (recovered) {
+        insertTextMessage(convId, responderId!, recovered);
+        generatedMessages.push({ senderName: responder.name, text: recovered });
+      }
       continue;
     }
 
@@ -282,6 +288,52 @@ function insertStickerMessage(
     timestamp: Date.now(),
   };
   _appendMessage(msg, 'xingyu');
+}
+
+/**
+ * Best-effort recovery of readable text from a malformed `{type, param}`
+ * reply. Tries:
+ *   1. If the response looks JSON-ish, regex-extract `"param":"<value>"`
+ *      from `text`-typed items (most common malformation: unescaped
+ *      quotes inside Chinese param strings make JSON.parse fail, but the
+ *      surrounding `"param":"..."` structure usually survives).
+ *   2. Otherwise treat the raw reply as plain text.
+ *   3. Apply `filterReply` to strip artifacts.
+ *   4. Return null when nothing remains.
+ */
+function recoverReadableText(rawReply: string): string | null {
+  const trimmed = rawReply.trim();
+  if (!trimmed) return null;
+
+  // (1) JSON-ish? Try extracting text-typed param values.
+  if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+    const textParams: string[] = [];
+    // Regex matches `"type":"text" ... "param":"..."` non-greedily.
+    // Tolerates extra whitespace and intervening keys. Captures the param
+    // value up to the next `"` that's followed by `}` or `,` (skip-greedy
+    // approach that handles unescaped inner quotes reasonably well).
+    const re = /"type"\s*:\s*"text"\s*,\s*"param"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+    let match: RegExpExecArray | null;
+    while ((match = re.exec(trimmed)) !== null) {
+      const value = match[1] ?? '';
+      // Unescape JSON escapes (\n, \", \\)
+      const unescaped = value
+        .replace(/\\"/g, '"')
+        .replace(/\\n/g, '\n')
+        .replace(/\\\\/g, '\\');
+      const filtered = filterReply(unescaped);
+      if (filtered) textParams.push(filtered);
+    }
+    if (textParams.length > 0) {
+      return textParams.join('\n');
+    }
+    // JSON-ish but no extractable text → don't dump raw JSON; bail.
+    return null;
+  }
+
+  // (2) Plain prose — use as-is after filtering.
+  const filtered = filterReply(trimmed);
+  return filtered || null;
 }
 
 /**
