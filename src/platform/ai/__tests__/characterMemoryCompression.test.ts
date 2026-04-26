@@ -1,181 +1,94 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { runCompressionIfNeeded, installAutoCompression } from '../characterMemoryCompression';
-import { useCharacterMemory, setPostAppendHook } from '../characterMemoryStore';
+import 'fake-indexeddb/auto';
+import { runCompressionIfNeeded, runCompressionForce } from '../characterMemoryCompression';
+import { useCharacterMemory, _resetCharacterMemoryForTests } from '../characterMemoryStore';
+import { useMemoryState, _resetMemoryStateForTests } from '../memoryStateStore';
 import { useAIConfigStore } from '@/platform/stores/aiConfigStore';
 import { useCharacterStore } from '@/platform/stores/characterStore';
-import { usePersonaStore } from '@/platform/stores/personaStore';
-import * as summarizer from '../summarizer';
+import * as pipeline from '../compressionPipeline';
+import { makeInitialState } from '../memoryStateTypes';
 
-beforeEach(() => {
-  useCharacterMemory.getState().clearAll();
-  useCharacterStore.setState({
-    characters: [{ id: 'char-001', name: '小星' } as never],
-  });
-  usePersonaStore.setState({
-    activePersonaId: null,
-    personas: [{ id: 'p', name: '小米', description: '' }],
-    getActivePersona: () => ({ id: 'p', name: '小米', description: '' }),
-  } as never);
-});
+describe('characterMemoryCompression', () => {
+  let pipelineSpy: ReturnType<typeof vi.spyOn>;
 
-afterEach(() => {
-  setPostAppendHook(null);
-});
-
-describe('runCompressionIfNeeded', () => {
-  it('no-op when entries are under token threshold', async () => {
+  beforeEach(async () => {
+    await _resetCharacterMemoryForTests();
+    await _resetMemoryStateForTests();
     useAIConfigStore.setState({
-      apiKey: 'sk', model: 'x', provider: 'openrouter', apiEndpoint: '',
-      contextWindow: 100_000, maxTokens: 2000,
-      summarizeThreshold: 0.8, keepRecentMessages: 10,
+      apiKey: 'sk-test',
+      apiEndpoint: 'https://x',
+      model: 'gpt-4',
+      provider: 'openrouter',
+      contextWindow: 1000,
+      summarizeThreshold: 0.5,
+      maxTokens: 500,
+      keepRecentMessages: 0,
     } as never);
-    const spy = vi.spyOn(summarizer, 'compressHistory').mockResolvedValue('should-not-be-called');
-    useCharacterMemory.getState().append('char-001', {
-      role: 'user', speakerId: 'me', content: 'short', source: 'xingyu',
+    useCharacterStore.setState({
+      characters: [{ id: 'char-1', name: '小美' } as never],
+    } as never);
+    pipelineSpy = vi.spyOn(pipeline, 'runCompressionPipeline');
+  });
+  afterEach(() => pipelineSpy.mockRestore());
+
+  function pushMessages(count: number): void {
+    const big = 'x'.repeat(500);
+    for (let i = 0; i < count; i++) {
+      useCharacterMemory.getState().append('char-1', {
+        role: 'user', speakerId: 'me', content: big, source: 'xingyu',
+      });
+    }
+  }
+
+  it('未超阈值不触发', async () => {
+    pushMessages(1);
+    await runCompressionIfNeeded('char-1');
+    expect(pipelineSpy).not.toHaveBeenCalled();
+  });
+
+  it('超阈值触发，state 写入', async () => {
+    pipelineSpy.mockImplementation(async () => {
+      const s = makeInitialState('char-1');
+      s.episodicSummary = { content: 'mock', version: 1, coveringUpTo: 1, lastUpdatedAt: 1 };
+      return s;
     });
-
-    await runCompressionIfNeeded('char-001');
-
-    expect(spy).not.toHaveBeenCalled();
-    spy.mockRestore();
+    pushMessages(5);
+    await runCompressionIfNeeded('char-1');
+    expect(pipelineSpy).toHaveBeenCalledOnce();
+    expect(useMemoryState.getState().get('char-1')?.episodicSummary?.content).toBe('mock');
   });
 
-  it('compresses the oldest batch and inserts a summary when over threshold', async () => {
-    useAIConfigStore.setState({
-      apiKey: 'sk', model: 'x', provider: 'openrouter', apiEndpoint: '',
-      contextWindow: 1000, maxTokens: 100,
-      summarizeThreshold: 0.5, keepRecentMessages: 2,
-    } as never);
-    const api = useCharacterMemory.getState();
-    const long = 'x'.repeat(2000);
-    const e1 = api.append('char-001', { role: 'user', speakerId: 'me', content: long, source: 'xingyu' });
-    /* e2 */ api.append('char-001', { role: 'assistant', speakerId: 'char-001', content: long, source: 'xingyu' });
-    const e3 = api.append('char-001', { role: 'user', speakerId: 'me', content: long, source: 'xingyu' });
-    const e4 = api.append('char-001', { role: 'assistant', speakerId: 'char-001', content: 'recent1', source: 'xingyu' });
-    const e5 = api.append('char-001', { role: 'user', speakerId: 'me', content: 'recent2', source: 'xingyu' });
-
-    const spy = vi
-      .spyOn(summarizer, 'compressHistory')
-      .mockResolvedValue('他们聊了很久。');
-
-    await runCompressionIfNeeded('char-001');
-
-    const remaining = useCharacterMemory.getState().getAll('char-001');
-    // First 3 (e1-e3) collapsed to one summary entry; recent 2 (e4, e5) kept verbatim.
-    expect(remaining).toHaveLength(3);
-    expect(remaining[0]!).toMatchObject({
-      role: 'system',
-      compressed: true,
-      source: 'system',
-      content: expect.stringContaining('他们聊了很久。'),
-    });
-    expect(remaining[1]!.id).toBe(e4.id);
-    expect(remaining[2]!.id).toBe(e5.id);
-
-    expect(spy).toHaveBeenCalledOnce();
-    void e1; // entry var kept for readability
-    void e3;
-    spy.mockRestore();
+  it('成功后旧 entries 被标 compressed', async () => {
+    pipelineSpy.mockImplementation(async () => makeInitialState('char-1'));
+    pushMessages(5);
+    await runCompressionIfNeeded('char-1');
+    const all = useCharacterMemory.getState().getAll('char-1');
+    expect(all.every((e) => e.compressed)).toBe(true);
   });
 
-  it('dedups concurrent invocations for the same charId', async () => {
-    useAIConfigStore.setState({
-      apiKey: 'sk', model: 'x', provider: 'openrouter', apiEndpoint: '',
-      contextWindow: 1000, maxTokens: 100,
-      summarizeThreshold: 0.5, keepRecentMessages: 2,
-    } as never);
-    useCharacterMemory.getState().batchAppend('char-001',
-      Array.from({ length: 5 }, (_, i) => ({
-        role: (i % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
-        speakerId: i % 2 === 0 ? 'me' : 'char-001',
-        content: 'x'.repeat(500),
-        source: 'xingyu' as const,
-      })),
-    );
-    const spy = vi
-      .spyOn(summarizer, 'compressHistory')
-      .mockResolvedValue('summary');
-
-    await Promise.all([
-      runCompressionIfNeeded('char-001'),
-      runCompressionIfNeeded('char-001'),
-      runCompressionIfNeeded('char-001'),
-    ]);
-
-    expect(spy).toHaveBeenCalledOnce();
-    spy.mockRestore();
+  it('pipeline 失败 → entries 保持未压', async () => {
+    pipelineSpy.mockRejectedValue(new Error('boom'));
+    pushMessages(5);
+    await runCompressionIfNeeded('char-1');
+    const all = useCharacterMemory.getState().getAll('char-1');
+    expect(all.every((e) => !e.compressed)).toBe(true);
   });
 
-  it('second compression replaces the prior long-term memory entry (bug fix)', async () => {
-    useAIConfigStore.setState({
-      apiKey: 'sk', model: 'x', provider: 'openrouter', apiEndpoint: '',
-      contextWindow: 1000, maxTokens: 100,
-      summarizeThreshold: 0.5, keepRecentMessages: 2,
-    } as never);
-    const api = useCharacterMemory.getState();
-    const long = 'x'.repeat(2000);
-
-    // Round 1: fill up beyond threshold.
-    api.append('char-001', { role: 'user', speakerId: 'me', content: long, source: 'xingyu' });
-    api.append('char-001', { role: 'assistant', speakerId: 'char-001', content: long, source: 'xingyu' });
-    api.append('char-001', { role: 'user', speakerId: 'me', content: long, source: 'xingyu' });
-    api.append('char-001', { role: 'assistant', speakerId: 'char-001', content: 'recent1', source: 'xingyu' });
-    api.append('char-001', { role: 'user', speakerId: 'me', content: 'recent2', source: 'xingyu' });
-
-    const spy = vi
-      .spyOn(summarizer, 'compressHistory')
-      .mockResolvedValueOnce('round1-summary')
-      .mockResolvedValueOnce('round2-summary');
-
-    await runCompressionIfNeeded('char-001');
-
-    // After round 1: should have 1 compressed + 2 recent.
-    let remaining = useCharacterMemory.getState().getAll('char-001');
-    expect(remaining.filter((e) => e.compressed)).toHaveLength(1);
-
-    // Round 2: append more and trigger again.
-    api.append('char-001', { role: 'user', speakerId: 'me', content: long, source: 'xingyu' });
-    api.append('char-001', { role: 'assistant', speakerId: 'char-001', content: long, source: 'xingyu' });
-    api.append('char-001', { role: 'user', speakerId: 'me', content: 'recent3', source: 'xingyu' });
-
-    await runCompressionIfNeeded('char-001');
-
-    remaining = useCharacterMemory.getState().getAll('char-001');
-    // Critical: ≤1 compressed entry ever, even after multiple rounds.
-    expect(remaining.filter((e) => e.compressed)).toHaveLength(1);
-    // And the one we have is the latest (round2-summary is in content).
-    const latest = remaining.find((e) => e.compressed)!;
-    expect(latest.content).toContain('round2-summary');
-
-    spy.mockRestore();
+  it('runCompressionForce 即使未超阈值也跑', async () => {
+    pipelineSpy.mockImplementation(async () => makeInitialState('char-1'));
+    pushMessages(1);
+    await runCompressionForce('char-1');
+    expect(pipelineSpy).toHaveBeenCalledOnce();
   });
-});
 
-describe('installAutoCompression — post-append hook wiring', () => {
-  it('append schedules a compression check', async () => {
-    const spy = vi
-      .spyOn(summarizer, 'compressHistory')
-      .mockResolvedValue('summary');
-    useAIConfigStore.setState({
-      apiKey: 'sk', model: 'x', provider: 'openrouter', apiEndpoint: '',
-      contextWindow: 1000, maxTokens: 100,
-      summarizeThreshold: 0.5, keepRecentMessages: 1,
-    } as never);
-
-    installAutoCompression();
-
-    const api = useCharacterMemory.getState();
-    api.batchAppend('char-001',
-      Array.from({ length: 6 }, (_, _i) => ({
-        role: 'user' as const,
-        speakerId: 'me',
-        content: 'x'.repeat(2000),
-        source: 'xingyu' as const,
-      })),
-    );
-    await new Promise((r) => setTimeout(r, 50));
-
-    expect(spy).toHaveBeenCalled();
-    spy.mockRestore();
+  it('in-flight dedup', async () => {
+    let resolve: (v: never) => void = null!;
+    pipelineSpy.mockImplementation(() => new Promise((r) => { resolve = r as never; }));
+    pushMessages(5);
+    const a = runCompressionIfNeeded('char-1');
+    const b = runCompressionIfNeeded('char-1');
+    expect(a).toBe(b);
+    resolve(makeInitialState('char-1') as never);
+    await a;
   });
 });
