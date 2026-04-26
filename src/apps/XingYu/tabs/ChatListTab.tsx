@@ -36,8 +36,6 @@ interface ConvPeer {
   online: boolean;
   isGroup: boolean;
   memberCount?: number;
-  /** True for AI-AI conversations — drives the "AI 互动" badge. */
-  isAIChat?: boolean;
 }
 
 export function ChatListTab() {
@@ -64,8 +62,6 @@ export function ChatListTab() {
   // 按时间倒序排列,根据视角过滤对话:
   //   玩家手机 → 排除 AI-AI 后台对话(玩家不应看到 AI 之间的私聊)
   //   AI 手机   → 包括 user-AI + AI-AI(都是 AI 的真实通讯记录)
-  // AI-AI 行通过 peer.isAIChat 标记后,在列表渲染时显示"AI 互动"小标签,
-  // 避免和"和用户的对话"混淆。
   const sorted = useMemo(() => {
     const filtered = phoneOwnerId === null
       ? conversations.filter((c) => !c.aiChatParticipants)
@@ -334,7 +330,6 @@ function ConvRow({ conv, isOpen, onOpen, onCloseRequest, onTap, onDelete }: Conv
           ringIndex: 0,
           online: true,
           isGroup: false,
-          isAIChat: true,
         };
       }
       return {
@@ -343,7 +338,6 @@ function ConvRow({ conv, isOpen, onOpen, onCloseRequest, onTap, onDelete }: Conv
         ringIndex: 0,
         online: true,
         isGroup: false,
-        isAIChat: true,
       };
     }
     // 用户自建群聊
@@ -572,20 +566,6 @@ function ConvRow({ conv, isOpen, onOpen, onCloseRequest, onTap, onDelete }: Conv
                   }}
                 >
                   {peer.memberCount}人
-                </span>
-              )}
-              {peer.isAIChat && (
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 600,
-                    color: '#8B5CF6',
-                    background: 'rgba(139, 92, 246, 0.1)',
-                    borderRadius: T.r.xs,
-                    padding: '2px 6px',
-                  }}
-                >
-                  AI 互动
                 </span>
               )}
             </div>
