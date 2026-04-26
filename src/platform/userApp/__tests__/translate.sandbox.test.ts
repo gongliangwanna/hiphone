@@ -3,6 +3,7 @@
  * render → click translate → see result.
  *
  * Mocks @hiphone/ai's complete() so the test doesn't hit a real LLM.
+ * Mocks @hiphone/storage so the test doesn't need IDB.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
@@ -24,10 +25,26 @@ vi.mock('@/platform/userApp/sdk/ai', async () => {
   };
 });
 
+// Mock storage SDK so tests don't need IDB and can inspect written values.
+const storageMap = new Map<string, unknown>();
+vi.mock('@/platform/userApp/sdk/storage', async () => ({
+  get: vi.fn(async (k: string) => storageMap.get(k)),
+  set: vi.fn(async (k: string, v: unknown) => {
+    storageMap.set(k, v);
+  }),
+  remove: vi.fn(async (k: string) => {
+    storageMap.delete(k);
+  }),
+  list: vi.fn(async () => Array.from(storageMap.keys())),
+  globalGet: vi.fn(),
+  globalSet: vi.fn(),
+}));
+
 describe('translate user-app — sandbox smoke', () => {
   beforeEach(() => {
     appRegistry.unregister('translate');
     completeMock.mockReset();
+    storageMap.clear();
   });
 
   it('compiles, registers, and renders without throwing', async () => {
@@ -109,6 +126,77 @@ describe('translate user-app — sandbox smoke', () => {
     expect(completeMock).toHaveBeenCalledTimes(1);
     const messages = completeMock.mock.calls[0]![0] as Array<{ role: string; content: string }>;
     expect(messages[0]!.content).toContain('Klingon');
+    cleanup();
+  });
+
+  it('successful translate writes a history entry', async () => {
+    completeMock.mockResolvedValueOnce('Hello');
+    await mountBuiltinUserApps();
+    render(React.createElement(appRegistry.get('translate')!.component));
+
+    fireEvent.change(screen.getByPlaceholderText(/输入要翻译的文本/), {
+      target: { value: '你好' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '翻译' }));
+
+    await waitFor(() => expect(screen.getByText('Hello')).toBeTruthy());
+    await waitFor(() => {
+      const stored = storageMap.get('history') as
+        | Array<{ sourceText: string; targetText: string }>
+        | undefined;
+      expect(stored).toBeDefined();
+      expect(stored![0]!.sourceText).toBe('你好');
+      expect(stored![0]!.targetText).toBe('Hello');
+    });
+    cleanup();
+  });
+
+  it('opening history sheet shows past entry; clicking it restores source text', async () => {
+    // Pre-seed storage so hook hydrates on mount
+    storageMap.set('history', [
+      {
+        id: 'preset-1',
+        sourceText: 'preset-source',
+        targetText: 'preset-target',
+        sourceLang: { code: 'zh', name: '中文', native: '中文' },
+        targetLang: { code: 'en', name: '英语', native: 'English' },
+        ts: Date.now(),
+      },
+    ]);
+    await mountBuiltinUserApps();
+    render(React.createElement(appRegistry.get('translate')!.component));
+
+    // Wait for the history button to appear (hydration complete)
+    await waitFor(() => expect(screen.getByTestId('open-history')).toBeTruthy());
+    fireEvent.click(screen.getByTestId('open-history'));
+    await waitFor(() => expect(screen.getByText('preset-source')).toBeTruthy());
+
+    fireEvent.click(screen.getByLabelText('恢复此条历史'));
+    // Sheet closes, source textarea shows preset-source
+    const ta = screen.getByPlaceholderText(/输入要翻译的文本/) as HTMLTextAreaElement;
+    await waitFor(() => expect(ta.value).toBe('preset-source'));
+    cleanup();
+  });
+
+  it('star button toggles favorite for current translation', async () => {
+    completeMock.mockResolvedValueOnce('Hello');
+    await mountBuiltinUserApps();
+    render(React.createElement(appRegistry.get('translate')!.component));
+
+    fireEvent.change(screen.getByPlaceholderText(/输入要翻译的文本/), {
+      target: { value: '你好' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '翻译' }));
+    await waitFor(() => expect(screen.getByText('Hello')).toBeTruthy());
+    await waitFor(() => expect(storageMap.get('history')).toBeDefined());
+
+    // Star button is rendered after history entry attached; aria label is "收藏"
+    const star = await screen.findByLabelText('收藏');
+    fireEvent.click(star);
+    await waitFor(() => {
+      const favs = storageMap.get('favorites') as unknown[] | undefined;
+      expect(favs?.length).toBe(1);
+    });
     cleanup();
   });
 });
