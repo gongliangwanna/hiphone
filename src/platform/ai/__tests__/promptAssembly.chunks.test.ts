@@ -216,6 +216,140 @@ describe('[工具状态] inline chunk (dynamicContext, default placement)', () =
   });
 });
 
+describe('[工具状态] tail chunk (dynamicContext with contextAtTail:true)', () => {
+  it('appears as a system message right before the user turn', () => {
+    const out = assemblePrompt({
+      ...BASE,
+      currentAppId: 'test-app',
+      currentCharId: 'char-001',
+      memoryEntries: [
+        {
+          id: 'u1', characterId: 'char-001', role: 'user', speakerId: 'me',
+          content: 'hello', source: 'xingyu', createdAt: Date.now(),
+        },
+      ],
+      availableTools: [
+        {
+          type: 'alert',
+          description: 'notify',
+          param: '',
+          dynamicContext: () => 'You have 3 unread messages',
+          contextAtTail: true,
+        },
+      ],
+    });
+
+    // Find the last system message before the user turn.
+    const roles = out.messages.map((m) => m.role);
+    const userIdx = roles.indexOf('user');
+    expect(userIdx).toBeGreaterThanOrEqual(0);
+    const lastSysBeforeUser = out.messages
+      .slice(0, userIdx)
+      .reverse()
+      .find((m) => m.role === 'system');
+    const content = lastSysBeforeUser!.content as string;
+    expect(content).toContain('[工具状态]');
+    expect(content).toContain('[alert]\nYou have 3 unread messages');
+  });
+
+  it('keeps tail separate from inline — both placements coexist correctly', () => {
+    const out = assemblePrompt({
+      ...BASE,
+      currentAppId: 'test-app',
+      availableTools: [
+        { type: 'inline_tool', description: '', param: '',
+          dynamicContext: () => 'inline body' },
+        { type: 'tail_tool', description: '', param: '',
+          dynamicContext: () => 'tail body', contextAtTail: true },
+      ],
+    });
+
+    // First system block is the big system block — should contain inline body, NOT tail body.
+    const firstSys = out.messages[0]!;
+    const sys1 = firstSys.content as string;
+    expect(sys1).toContain('inline body');
+    expect(sys1).not.toContain('tail body');
+
+    // Aggregate all message contents — tail body must show up somewhere.
+    const allContent = out.messages
+      .map((m) => typeof m.content === 'string' ? m.content : '')
+      .join('\n');
+    expect(allContent).toContain('tail body');
+  });
+
+  it('skips tail chunk entirely when all tail tools return null', () => {
+    const out = assemblePrompt({
+      ...BASE,
+      currentAppId: 'test-app',
+      availableTools: [
+        { type: 't', description: '', param: '',
+          dynamicContext: () => null, contextAtTail: true },
+      ],
+    });
+    const allContent = out.messages
+      .map((m) => typeof m.content === 'string' ? m.content : '')
+      .join('\n');
+    // The inline [工具状态] might be absent too; the point is tail doesn't
+    // spuriously produce an empty chunk.
+    expect(allContent.match(/\[工具状态\]/g) ?? []).toHaveLength(0);
+  });
+
+  it('tail [工具状态] appears AFTER sceneHint in post-history', () => {
+    const out = assemblePrompt({
+      ...BASE,
+      currentAppId: 'test-app',
+      sceneHint: '[当前场景] 私聊中',
+      availableTools: [
+        {
+          type: 'alert',
+          description: '',
+          param: '',
+          dynamicContext: () => 'unread',
+          contextAtTail: true,
+        },
+      ],
+    });
+    // The post-history system message contains both sceneHint and tail chunk.
+    const postSys = out.messages.find(
+      (m) =>
+        m.role === 'system' &&
+        typeof m.content === 'string' &&
+        (m.content as string).includes('[当前场景]'),
+    );
+    const c = postSys!.content as string;
+    expect(c.indexOf('[当前场景]')).toBeLessThan(c.indexOf('[工具状态]'));
+  });
+
+  it('multiple contextAtTail tools concatenate in registration order', () => {
+    const out = assemblePrompt({
+      ...BASE,
+      currentAppId: 'test-app',
+      availableTools: [
+        { type: 'first',  description: '', param: '',
+          dynamicContext: () => 'first body',  contextAtTail: true },
+        { type: 'second', description: '', param: '',
+          dynamicContext: () => 'second body', contextAtTail: true },
+        { type: 'third',  description: '', param: '',
+          dynamicContext: () => 'third body',  contextAtTail: true },
+      ],
+    });
+    // Find the tail [工具状态] chunk (post-history contains it after deviceContext etc.)
+    const allContent = out.messages
+      .map((m) => (typeof m.content === 'string' ? m.content : ''))
+      .join('\n');
+    const idxFirst  = allContent.indexOf('first body');
+    const idxSecond = allContent.indexOf('second body');
+    const idxThird  = allContent.indexOf('third body');
+    expect(idxFirst).toBeGreaterThan(-1);
+    expect(idxFirst).toBeLessThan(idxSecond);
+    expect(idxSecond).toBeLessThan(idxThird);
+    // Verify they're in the same chunk (separated by the tool-type headers)
+    expect(allContent).toContain('[first]\nfirst body');
+    expect(allContent).toContain('[second]\nsecond body');
+    expect(allContent).toContain('[third]\nthird body');
+  });
+});
+
 describe('PromptInput.sceneHint', () => {
   it('sceneHint is appended to the post-history system message', () => {
     const out = assemblePrompt({

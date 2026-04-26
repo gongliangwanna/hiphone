@@ -490,12 +490,35 @@ function buildSystemBlock(
 // Phase 3: Post-history instructions
 // ---------------------------------------------------------------------------
 
+/**
+ * Aggregate the `contextAtTail: true` tools' `dynamicContext` outputs into a
+ * single `[工具状态]` chunk for post-history tail placement. Returns
+ * `undefined` when no tool produced non-empty output.
+ */
+function buildTailToolStateChunk(
+  tools: readonly ToolDefinition[] | undefined,
+  ctx: ToolBuildContext,
+): string | undefined {
+  if (!tools) return undefined;
+  const blocks: string[] = [];
+  for (const t of tools) {
+    if (!t.dynamicContext || !t.contextAtTail) continue;
+    const body = t.dynamicContext(ctx);
+    if (body && body.trim()) {
+      blocks.push(`[${t.type}]\n${body.trim()}`);
+    }
+  }
+  if (blocks.length === 0) return undefined;
+  return `[工具状态]\n${blocks.join('\n\n')}`;
+}
+
 function buildPostHistory(
   character: PromptCharacter,
   aiConfig: PromptAIConfig,
   now: Date,
   deviceContext?: string,
   sceneHint?: string,
+  tailContext?: string,
 ): string {
   const parts: string[] = [];
 
@@ -521,6 +544,13 @@ function buildPostHistory(
 
   if (sceneHint?.trim()) {
     parts.push(sceneHint.trim());
+  }
+
+  // Tail context — dynamicContext outputs of tools with contextAtTail:true.
+  // Placed AFTER deviceContext / sceneHint so it sits closest to the user
+  // turn (maximum LLM attention).
+  if (tailContext?.trim()) {
+    parts.push(tailContext.trim());
   }
 
   return parts.join('\n\n');
@@ -567,7 +597,17 @@ export function inspectPrompt(input: PromptInput): PromptInspection {
   );
   systemBlock = expandMacros(systemBlock, character, persona, now);
 
-  let postHistory = buildPostHistory(character, aiConfig, now, deviceContext, input.sceneHint);
+  // PromptInput.currentCharId is non-optional, so no undefined guard needed
+  // here (cf. buildSystemBlock which takes currentCharId?: string for
+  // private-call flexibility).
+  const toolBuildCtx: ToolBuildContext = {
+    appId: input.currentAppId ?? '',
+    characterId: input.currentCharId,
+  };
+  const tailContext = buildTailToolStateChunk(input.availableTools, toolBuildCtx);
+  let postHistory = buildPostHistory(
+    character, aiConfig, now, deviceContext, input.sceneHint, tailContext,
+  );
   postHistory = expandMacros(postHistory, character, persona, now);
 
   const systemTokens = estimateTokens(systemBlock);
@@ -653,7 +693,17 @@ export function assemblePrompt(input: PromptInput): PromptOutput {
 
   // Phase 3 — Post-history (built before Phase 2 so we can subtract its cost
   // from the history budget).
-  let postHistory = buildPostHistory(character, aiConfig, now, deviceContext, input.sceneHint);
+  // PromptInput.currentCharId is non-optional, so no undefined guard needed
+  // here (cf. buildSystemBlock which takes currentCharId?: string for
+  // private-call flexibility).
+  const toolBuildCtx: ToolBuildContext = {
+    appId: input.currentAppId ?? '',
+    characterId: input.currentCharId,
+  };
+  const tailContext = buildTailToolStateChunk(input.availableTools, toolBuildCtx);
+  let postHistory = buildPostHistory(
+    character, aiConfig, now, deviceContext, input.sceneHint, tailContext,
+  );
   postHistory = expandMacros(postHistory, character, persona, now);
 
   // Compute token budgets.
