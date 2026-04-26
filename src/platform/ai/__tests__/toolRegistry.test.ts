@@ -5,22 +5,57 @@ import {
   getTools,
   unregisterApp,
   _resetToolRegistryForTests,
+  type ToolBuildContext,
   type ToolDefinition,
 } from '../toolRegistry';
 
-const SAMPLE: ToolDefinition[] = [
-  { type: 'bid_call', description: '宣布叫价', param: '{item: string, min: number}' },
-  { type: 'hammer_down', description: '落槌', param: '{item: string, final: number}' },
-];
-
-beforeEach(() => {
-  _resetToolRegistryForTests();
-});
-
 describe('toolRegistry', () => {
-  it('register + get round-trips the tool definitions', () => {
-    registerTools('ai-auction', SAMPLE);
-    expect(getTools('ai-auction')).toEqual(SAMPLE);
+  beforeEach(() => {
+    _resetToolRegistryForTests();
+  });
+
+  it('registers and retrieves tools with static fields only', () => {
+    registerTools('app-a', [
+      { type: 'do_x', description: 'does x', param: 'string' },
+    ]);
+    expect(getTools('app-a')).toEqual([
+      { type: 'do_x', description: 'does x', param: 'string' },
+    ]);
+  });
+
+  it('preserves dynamicContext + contextAtTail on the registered tool', () => {
+    const ctxFn = (ctx: ToolBuildContext) => `for ${ctx.characterId}`;
+    registerTools('app-b', [
+      {
+        type: 'do_y',
+        description: 'does y',
+        param: '',
+        dynamicContext: ctxFn,
+        contextAtTail: true,
+      },
+    ]);
+    const tools = getTools('app-b');
+    expect(tools).toHaveLength(1);
+    expect(tools[0]!.dynamicContext).toBe(ctxFn);
+    expect(tools[0]!.contextAtTail).toBe(true);
+    expect(
+      tools[0]!.dynamicContext!({ appId: 'app-b', characterId: 'char-001' }),
+    ).toBe('for char-001');
+  });
+
+  it('getTools returns a defensive copy (mutation does not leak)', () => {
+    registerTools('app-c', [
+      { type: 'a', description: '', param: '' },
+    ]);
+    const snapshot = getTools('app-c');
+    snapshot.push({ type: 'b', description: '', param: '' });
+    expect(getTools('app-c')).toHaveLength(1);
+  });
+
+  it('unregisterApp wipes the slot', () => {
+    registerTools('app-d', [{ type: 'a', description: '', param: '' }]);
+    unregisterApp('app-d');
+    expect(getTools('app-d')).toEqual([]);
   });
 
   it('get returns [] for an unregistered appId', () => {
@@ -28,33 +63,26 @@ describe('toolRegistry', () => {
   });
 
   it('register replaces the previous registration for the same appId (not additive)', () => {
-    registerTools('ai-auction', SAMPLE);
-    registerTools('ai-auction', [{ type: 'x', description: 'y', param: '' }]);
-    expect(getTools('ai-auction')).toEqual([{ type: 'x', description: 'y', param: '' }]);
-  });
-
-  it('unregisterApp clears the slot', () => {
-    registerTools('ai-auction', SAMPLE);
-    unregisterApp('ai-auction');
-    expect(getTools('ai-auction')).toEqual([]);
+    registerTools('app-a', [
+      { type: 'first', description: 'a', param: '' },
+    ]);
+    registerTools('app-a', [
+      { type: 'second', description: 'b', param: '' },
+    ]);
+    expect(getTools('app-a')).toEqual([
+      { type: 'second', description: 'b', param: '' },
+    ]);
   });
 
   it('unregisterApp is a no-op for unknown appId', () => {
     expect(() => unregisterApp('never-registered')).not.toThrow();
   });
 
-  it('apps are isolated — one app’s tools do not leak into another', () => {
+  it('apps are isolated - one app\'s tools do not leak into another', () => {
     registerTools('app-a', [{ type: 'tool_a', description: '', param: '' }]);
     registerTools('app-b', [{ type: 'tool_b', description: '', param: '' }]);
     expect(getTools('app-a').map((t) => t.type)).toEqual(['tool_a']);
     expect(getTools('app-b').map((t) => t.type)).toEqual(['tool_b']);
-  });
-
-  it('getTools returns a defensive copy (caller mutation must not affect registry)', () => {
-    registerTools('app-a', SAMPLE);
-    const retrieved = getTools('app-a');
-    retrieved.push({ type: 'injected', description: '', param: '' });
-    expect(getTools('app-a')).toEqual(SAMPLE); // unchanged
   });
 
   it('register defensive-copies the input array (caller push after register does not affect registry)', () => {
