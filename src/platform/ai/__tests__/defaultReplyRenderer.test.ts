@@ -20,18 +20,14 @@ describe('defaultReplyRenderer — unified {type, param}', () => {
     expect(defaultReplyRenderer.render(raw, ctx)).toBe('早上好\n今天天气不错');
   });
 
-  it('sticker → human-readable "发送表情包 \\"<content>\\" (stickerId=<id>)"', () => {
+  it('sticker → human-readable "发了一个"<content>"的表情包" (stickerId hidden from history)', () => {
     const raw = '[{"type":"sticker","param":{"stickerId":"s1","content":"笑"}}]';
-    expect(defaultReplyRenderer.render(raw, ctx)).toBe(
-      '发送表情包 "笑" (stickerId=s1)',
-    );
+    expect(defaultReplyRenderer.render(raw, ctx)).toBe('发了一个"笑"的表情包');
   });
 
   it('sticker with missing content falls back to "表情"', () => {
     const raw = '[{"type":"sticker","param":{"stickerId":"s9"}}]';
-    expect(defaultReplyRenderer.render(raw, ctx)).toBe(
-      '发送表情包 "表情" (stickerId=s9)',
-    );
+    expect(defaultReplyRenderer.render(raw, ctx)).toBe('发了一个"表情"的表情包');
   });
 
   it('non-text / non-sticker with object param → JSON.stringify via generic branch', () => {
@@ -60,7 +56,7 @@ describe('defaultReplyRenderer — unified {type, param}', () => {
     expect(defaultReplyRenderer.render(raw, ctx)).toBe(
       [
         '哈哈',
-        '发送表情包 "开心" (stickerId=s2)',
+        '发了一个"开心"的表情包',
         '真的',
       ].join('\n'),
     );

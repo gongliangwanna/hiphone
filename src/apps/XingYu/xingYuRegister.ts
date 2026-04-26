@@ -63,7 +63,8 @@ export function registerXingYuAi(): void {
 
     if (stickers.length > 0) {
       lines.push(
-        '- 表情包适度穿插在文字消息之间能提升活人感,不要每条都发;stickerId 必须从下方清单里选,不要编造',
+        '- 表情包请克制使用:整段对话最多 0-1 个表情包,绝不每条文字都跟一个表情。如果不确定要不要发,就不发。',
+        '- stickerId 必须从下方【当前可用表情】清单里**逐字复制**,绝对不要自己拼接 stk-XXX 之类的 ID——你想象不到的 ID 一定不存在,用了用户看不到。',
         '',
         '当前可用表情:',
         ...stickers.map((s) => `${s.id}: ${s.description}`),

@@ -222,9 +222,12 @@ export async function runAIChat(opts: AIChatOptions): Promise<AIChatResult> {
           });
           producedAny = true;
         } else if (desc || stickerId) {
-          // Sticker id not in registry — fall back to a text bubble
-          // describing it (matches the renderer's stable contract).
-          const fallbackText = `[表情:${desc || stickerId}]`;
+          // Sticker id not in registry (LLM hallucinated an id, or sticker was
+          // uninstalled). Fall back to plain text using the description, matching
+          // XingYu's buildStickerBubble fallback. No "[表情:]" prefix — the
+          // prefix made hallucinated stickers look like deliberate "broken
+          // sticker" markers, which is uglier than just showing the text.
+          const fallbackText = desc || `[表情]`;
           insertTextMessage(convId, responderId!, fallbackText);
           generatedMessages.push({ senderName: responderName, text: fallbackText });
           producedAny = true;

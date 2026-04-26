@@ -7,7 +7,7 @@
  *
  * Rules (M4.2.5 unified shape):
  *   - text (param is string)  → `<param>`
- *   - sticker (param is obj)  → `发送表情包 "<content>" (stickerId=<id>)`
+ *   - sticker (param is obj)  → `发了一个"<content>"的表情包`
  *   - everything else         → `【<type>】<JSON.stringify(param)>`
  *
  * The renderer returns content ONLY — speaker-name prefixing is the
@@ -34,9 +34,8 @@ function renderOne(item: { type: string; param: unknown }): string {
     typeof item.param === 'object'
   ) {
     const p = item.param as { stickerId?: unknown; content?: unknown };
-    const sid = typeof p.stickerId === 'string' ? p.stickerId : '?';
     const desc = typeof p.content === 'string' && p.content ? p.content : '表情';
-    return `发送表情包 "${desc}" (stickerId=${sid})`;
+    return `发了一个"${desc}"的表情包`;
   }
   const paramStr =
     typeof item.param === 'string' ? item.param : JSON.stringify(item.param);

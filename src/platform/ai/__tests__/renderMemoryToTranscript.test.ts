@@ -91,7 +91,7 @@ describe('renderMemoryToTranscript — row formatting', () => {
         mem({
           role: 'assistant',
           speakerId: 'char-001',
-          content: '你好呀\n发送表情包 "笑脸" (stickerId=s1)',
+          content: '你好呀\n发了一个"笑脸"的表情包',
           createdAt: tsAt(2, 0),
         }),
         mem({ role: 'user', speakerId: 'me', content: '好的', createdAt: tsAt(2, 1) }),
@@ -101,7 +101,7 @@ describe('renderMemoryToTranscript — row formatting', () => {
     // Each content-line needs a speaker label so the next prompt can tell text
     // turns from sticker turns when the reply contains multiple tool items.
     expect(out.transcriptBlock).toBe(
-      '[历史记录]\n[02:00] 我：你好呀\n我：发送表情包 "笑脸" (stickerId=s1)',
+      '[历史记录]\n[02:00] 我：你好呀\n我：发了一个"笑脸"的表情包',
     );
     expect(out.userTurn).toEqual({ role: 'user', content: '小米：好的' });
   });
