@@ -15,3 +15,8 @@ host vitest 直接当 module 引（用于 hook / pure-logic 单测）。
 hook 和 pure logic 文件可以直接被 host 测试（`*.test.ts(x)` 走 vitest）。
 组件级测试在 `src/platform/userApp/__tests__/` 用沙箱 smoke 跑（验证字符串
 源能 compile + render，不抛错就算通过）。
+
+## S4：sheet 接线
+- LangSheet：精选 10 + auto + 自定义入口；点击行 → onPick 回调；点击 backdrop → onClose
+- CustomLangInput：二级抽屉，构造 `{ code: 'custom:<text>', ... }` Language，code 前缀供 S5 历史区分
+- 关闭手势 deferred：M2 SheetGesture 是 system 层，沙箱拿不到；点击 backdrop / 取消按钮已经够 iOS-fidelity
