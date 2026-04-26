@@ -1,15 +1,19 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { NavBar } from '@hiphone/ui';
 import { motion } from '@hiphone/motion';
 import { spring } from '@hiphone/motion';
 import { error as toastError } from '@hiphone/toast';
 import { AIUnavailableError } from '@hiphone/ai';
+import { Clock, Star as StarIcon } from 'lucide-react';
 import { LangBar } from './selectors/LangBar';
 import { LangSheet } from './selectors/LangSheet';
 import { CustomLangInput } from './selectors/CustomLangInput';
 import { SourcePanel } from './panels/SourcePanel';
 import { TargetPanel } from './panels/TargetPanel';
 import { useTranslate } from './hooks/useTranslate';
+import { useHistory, type HistoryEntry } from './hooks/useHistory';
+import { RecentsSheet } from './recents/RecentsSheet';
+import { FavoritesSheet } from './recents/FavoritesSheet';
 import {
   CURATED_LANGUAGES,
   AUTO_LANG,
@@ -32,6 +36,36 @@ export default function TranslateApp() {
   const { targetText, status, error, translate, reset } = useTranslate();
   const [pickerOpen, setPickerOpen] = useState<'source' | 'target' | null>(null);
   const [customOpen, setCustomOpen] = useState(false);
+
+  // History + favorites
+  const { history, favorites, addEntry, deleteHistory, isFavorited, toggleFavorite } = useHistory();
+  const [currentEntry, setCurrentEntry] = useState<HistoryEntry | null>(null);
+  const [sheetOpen, setSheetOpen] = useState<'history' | 'favorites' | null>(null);
+
+  // Track translate completion → write history
+  const lastSettledRef = useRef<{ text: string; status: string }>({ text: '', status: 'idle' });
+  React.useEffect(() => {
+    if (
+      status === 'success' &&
+      targetText &&
+      (lastSettledRef.current.text !== targetText || lastSettledRef.current.status !== 'success')
+    ) {
+      lastSettledRef.current = { text: targetText, status: 'success' };
+      void (async () => {
+        const entry = await addEntry({
+          sourceText: sourceText.trim(),
+          targetText,
+          sourceLang,
+          targetLang,
+        });
+        setCurrentEntry(entry);
+      })();
+    }
+    if (status === 'idle' || status === 'loading') {
+      setCurrentEntry(null);
+      lastSettledRef.current = { text: '', status };
+    }
+  }, [status, targetText, sourceText, sourceLang, targetLang, addEntry]);
 
   const onSwap = useCallback(() => {
     // Don't swap "auto" into target — degrades to 中文 if user swaps an
@@ -84,6 +118,21 @@ export default function TranslateApp() {
     [pickerOpen, reset],
   );
 
+  const onPickHistory = useCallback(
+    (entry: HistoryEntry) => {
+      setSourceLang(entry.sourceLang);
+      setTargetLang(entry.targetLang);
+      setSourceText(entry.sourceText);
+      reset(); // clear current target panel; user can re-translate
+      setCurrentEntry(entry);
+    },
+    [reset],
+  );
+
+  const onToggleCurrentFavorite = useCallback(() => {
+    if (currentEntry) void toggleFavorite(currentEntry);
+  }, [currentEntry, toggleFavorite]);
+
   // Toast on errors. The hook already captures into `error`, here we
   // surface them via the platform toast (spec §3.8).
   React.useEffect(() => {
@@ -100,7 +149,21 @@ export default function TranslateApp() {
 
   return (
     <div style={APP_STYLE}>
-      <NavBar title="翻译" />
+      <NavBar
+        title="翻译"
+        rightButtons={[
+          {
+            icon: <Clock size={20} strokeWidth={2} />,
+            onClick: () => setSheetOpen('history'),
+            testId: 'open-history',
+          },
+          {
+            icon: <StarIcon size={20} strokeWidth={2} />,
+            onClick: () => setSheetOpen('favorites'),
+            testId: 'open-favorites',
+          },
+        ]}
+      />
 
       <LangBar
         sourceLang={sourceLang}
@@ -146,6 +209,8 @@ export default function TranslateApp() {
           text={targetText}
           status={status}
           errorMessage={error?.message}
+          isFavorited={currentEntry ? isFavorited(currentEntry.id) : false}
+          onToggleFavorite={currentEntry ? onToggleCurrentFavorite : undefined}
         />
       </div>
 
@@ -160,6 +225,24 @@ export default function TranslateApp() {
         open={customOpen}
         onSubmit={onCustomSubmit}
         onClose={() => setCustomOpen(false)}
+      />
+
+      <RecentsSheet
+        open={sheetOpen === 'history'}
+        history={history}
+        isFavorited={isFavorited}
+        onPick={onPickHistory}
+        onToggleFavorite={(entry) => void toggleFavorite(entry)}
+        onDelete={(id) => void deleteHistory(id)}
+        onClose={() => setSheetOpen(null)}
+      />
+      <FavoritesSheet
+        open={sheetOpen === 'favorites'}
+        favorites={favorites}
+        isFavorited={isFavorited}
+        onPick={onPickHistory}
+        onToggleFavorite={(entry) => void toggleFavorite(entry)}
+        onClose={() => setSheetOpen(null)}
       />
     </div>
   );

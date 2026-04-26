@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from '@hiphone/motion';
 import { spring } from '@hiphone/motion';
-import { Copy } from 'lucide-react';
+import { Copy, Star } from 'lucide-react';
 import { show as toastShow, error as toastError } from '@hiphone/toast';
 
 export type TargetStatus = 'idle' | 'loading' | 'success' | 'error';
@@ -10,6 +10,8 @@ export interface TargetPanelProps {
   text: string;
   status: TargetStatus;
   errorMessage?: string;
+  isFavorited?: boolean;
+  onToggleFavorite?: () => void;
 }
 
 const CONTAINER_STYLE: React.CSSProperties = {
@@ -22,7 +24,7 @@ const CONTAINER_STYLE: React.CSSProperties = {
   color: 'var(--color-label)',
 };
 
-export function TargetPanel({ text, status, errorMessage }: TargetPanelProps) {
+export function TargetPanel({ text, status, errorMessage, isFavorited, onToggleFavorite }: TargetPanelProps) {
   const onCopy = async () => {
     if (!text) return;
     try {
@@ -110,6 +112,33 @@ export function TargetPanel({ text, status, errorMessage }: TargetPanelProps) {
           }}
         >
           <Copy size={16} strokeWidth={2.2} />
+        </motion.button>
+      )}
+
+      {text && status !== 'loading' && onToggleFavorite && (
+        <motion.button
+          type="button"
+          aria-label={isFavorited ? '取消收藏' : '收藏'}
+          onClick={onToggleFavorite}
+          whileTap={{ scale: 1.3 }}
+          transition={spring.bouncy}
+          style={{
+            position: 'absolute',
+            right: 48,
+            bottom: 8,
+            width: 32,
+            height: 32,
+            borderRadius: 16,
+            border: 'none',
+            background: 'var(--color-tertiarySystemFill)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            color: isFavorited ? 'var(--color-systemYellow)' : 'var(--color-systemBlue)',
+          }}
+        >
+          <Star size={16} strokeWidth={2.2} fill={isFavorited ? 'currentColor' : 'none'} />
         </motion.button>
       )}
     </div>
