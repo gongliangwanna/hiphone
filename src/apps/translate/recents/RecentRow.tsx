@@ -20,6 +20,12 @@ const ROW_OUTER: React.CSSProperties = {
 };
 
 const ROW_INNER: React.CSSProperties = {
+  // position:relative is load-bearing — without it, the row paints BEFORE
+  // the absolutely-positioned delete bg (per CSS paint order: non-positioned
+  // elements draw under positioned ones), and the delete bg covers the
+  // entire row content. Making this positioned puts both siblings in the
+  // same paint layer; source order then puts the row on top.
+  position: 'relative',
   display: 'flex',
   alignItems: 'flex-start',
   width: '100%',
