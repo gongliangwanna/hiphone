@@ -12,6 +12,11 @@ declare module '*.css' {
 // never touch the namespace — only `import()` for the side effect.
 declare module '@tailwindcss/browser';
 
+declare module '*?raw' {
+  const content: string;
+  export default content;
+}
+
 declare module 'lunar-javascript' {
   export class Solar {
     static fromDate(date: Date): Solar;
