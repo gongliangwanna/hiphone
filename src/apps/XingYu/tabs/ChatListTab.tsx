@@ -36,6 +36,8 @@ interface ConvPeer {
   online: boolean;
   isGroup: boolean;
   memberCount?: number;
+  /** True for AI-AI conversations — drives the "AI 互动" badge. */
+  isAIChat?: boolean;
 }
 
 export function ChatListTab() {
@@ -59,17 +61,19 @@ export function ChatListTab() {
     setSearchPage(1);
   }, [query]);
 
-  // 按时间倒序排列,根据视角过滤对话。信箱永远只展示"和真实用户/玩家"
-  // 之间的对话,AI-AI 后台会话(c-ai2ai-…)不进信箱——它们由 heartbeat
-  // 等系统自动产生,以聊天预览形式出现在信箱里会让用户误以为"AI 给我
-  // 发了消息",事实上是 AI 之间在相互聊天。
-  //   玩家手机 → 过滤掉 AI-AI 对话
-  //   AI 手机   → 只显示该 AI 与用户(玩家)的对话,不展示该 AI 的 AI-AI
-  //              后台会话
+  // 按时间倒序排列,根据视角过滤对话:
+  //   玩家手机 → 排除 AI-AI 后台对话(玩家不应看到 AI 之间的私聊)
+  //   AI 手机   → 包括 user-AI + AI-AI(都是 AI 的真实通讯记录)
+  // AI-AI 行通过 peer.isAIChat 标记后,在列表渲染时显示"AI 互动"小标签,
+  // 避免和"和用户的对话"混淆。
   const sorted = useMemo(() => {
     const filtered = phoneOwnerId === null
       ? conversations.filter((c) => !c.aiChatParticipants)
-      : conversations.filter((c) => c.characterId === phoneOwnerId);
+      : conversations.filter(
+          (c) =>
+            c.characterId === phoneOwnerId ||
+            c.aiChatParticipants?.includes(phoneOwnerId),
+        );
     return [...filtered].sort((a, b) => b.lastTime - a.lastTime);
   }, [conversations, phoneOwnerId]);
 
@@ -330,6 +334,7 @@ function ConvRow({ conv, isOpen, onOpen, onCloseRequest, onTap, onDelete }: Conv
           ringIndex: 0,
           online: true,
           isGroup: false,
+          isAIChat: true,
         };
       }
       return {
@@ -338,6 +343,7 @@ function ConvRow({ conv, isOpen, onOpen, onCloseRequest, onTap, onDelete }: Conv
         ringIndex: 0,
         online: true,
         isGroup: false,
+        isAIChat: true,
       };
     }
     // 用户自建群聊
@@ -566,6 +572,20 @@ function ConvRow({ conv, isOpen, onOpen, onCloseRequest, onTap, onDelete }: Conv
                   }}
                 >
                   {peer.memberCount}人
+                </span>
+              )}
+              {peer.isAIChat && (
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 600,
+                    color: '#8B5CF6',
+                    background: 'rgba(139, 92, 246, 0.1)',
+                    borderRadius: T.r.xs,
+                    padding: '2px 6px',
+                  }}
+                >
+                  AI 互动
                 </span>
               )}
             </div>

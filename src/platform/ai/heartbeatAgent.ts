@@ -90,6 +90,8 @@ const ACTION_LABELS: Record<string, (p: ReplyItem, selfId: string) => string> = 
   },
   view_user_signature: () => '查看了用户的个性签名',
   view_user_signature_history: () => '查看了用户的历史签名',
+  view_unread_messages: () => '查看了未读消息',
+  view_unread_interactions: () => '查看了未读互动',
   view_notes: () => '查看了自己的备忘录',
   create_note: (p) => {
     const title = (p.param as { title?: unknown })?.title;
@@ -319,15 +321,19 @@ async function runHeartbeat(
         );
         narrativeSummary = narrativeSummary.trim();
       } catch {
-        // Fallback when the summary LLM call fails: synthesize a brief
-        // narrative from the action labels we collected during the loop,
-        // so the heartbeat_log still gets written. Joining with ';'
-        // keeps it on one short line.
-        narrativeSummary = actionsTaken.map((a) => a.detail).join(';');
+        // Fallback when the summary LLM call fails: synthesize from
+        // write-action labels only. Read-only actions (view_*) are
+        // excluded — a list of "查看了X、查看了Y" is robotic noise.
+        // If there were no write actions, return empty → silent skip.
+        narrativeSummary = writeActions.length > 0
+          ? writeActions.map((a) => a.detail).join(';')
+          : '';
       }
     } else {
-      // Aborted before summary could run — best-effort fallback from action labels.
-      narrativeSummary = actionsTaken.map((a) => a.detail).join(';');
+      // Aborted before summary could run — same fallback semantic.
+      narrativeSummary = writeActions.length > 0
+        ? writeActions.map((a) => a.detail).join(';')
+        : '';
     }
 
     const parts: string[] = [];
