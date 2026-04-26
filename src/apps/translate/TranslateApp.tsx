@@ -36,12 +36,19 @@ export default function TranslateApp() {
       targetLang.code === AUTO_LANG.code
         ? CURATED_LANGUAGES.find((l) => l.code === 'zh')!
         : targetLang;
+    const nextTarget: Language =
+      sourceLang.code === AUTO_LANG.code
+        ? CURATED_LANGUAGES.find((l) => l.code === 'zh')!
+        : sourceLang;
     setSourceLang(nextSource);
-    setTargetLang(sourceLang.code === AUTO_LANG.code ? CURATED_LANGUAGES.find((l) => l.code === 'zh')! : sourceLang);
+    setTargetLang(nextTarget);
     if (targetText) {
       setSourceText(targetText);
-      reset();
     }
+    // Always reset — even when no targetText yet, an in-flight request
+    // started under the old language pair must be abandoned, otherwise
+    // its result lands in the post-swap state with mismatched directions.
+    reset();
   }, [sourceLang, targetLang, targetText, reset]);
 
   const onTranslate = useCallback(async () => {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { complete, AIUnavailableError } from '@hiphone/ai';
+import { complete } from '@hiphone/ai';
 import type { Language } from '../constants/languages';
 
 export type TranslateStatus = 'idle' | 'loading' | 'success' | 'error';
@@ -37,10 +37,6 @@ export function buildTranslateMessages(
     { role: 'user', content: sourceText },
   ];
 }
-
-// Suppress unused import warning — AIUnavailableError is imported for
-// re-use by consumers (TranslateApp.tsx) that also import this module.
-void AIUnavailableError;
 
 export function useTranslate(): UseTranslateResult {
   const [targetText, setTargetText] = useState('');
@@ -83,7 +79,7 @@ export function useTranslate(): UseTranslateResult {
       setStatus('loading');
       setError(null);
       try {
-        const messages = buildTranslateMessages(sourceText, sourceLang, targetLang);
+        const messages = buildTranslateMessages(trimmed, sourceLang, targetLang);
         const reply = await complete(messages, { temperature: 0.3 });
         if (myToken !== tokenRef.current) return; // superseded
         setTargetText(reply);

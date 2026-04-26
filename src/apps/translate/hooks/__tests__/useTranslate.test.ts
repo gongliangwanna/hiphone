@@ -38,6 +38,16 @@ describe('useTranslate', () => {
     vi.mocked(aiMock.complete).mockReset();
   });
 
+  it('trims leading/trailing whitespace before sending to the AI', async () => {
+    vi.mocked(aiMock.complete).mockResolvedValueOnce('Hello');
+    const { result } = renderHook(() => useTranslate());
+    await act(async () => {
+      await result.current.translate('  你好  ', ZH, EN);
+    });
+    const messages = vi.mocked(aiMock.complete).mock.calls[0]![0];
+    expect(messages[1]!.content).toBe('你好');
+  });
+
   it('starts idle, loading on translate, success when complete resolves', async () => {
     vi.mocked(aiMock.complete).mockResolvedValueOnce('Hello');
     const { result } = renderHook(() => useTranslate());
