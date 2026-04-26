@@ -53,8 +53,9 @@ describe('translate user-app — sandbox smoke', () => {
     fireEvent.click(translateBtn);
 
     expect(completeMock).toHaveBeenCalledTimes(1);
-    const messages = completeMock.mock.calls[0][0];
-    expect(messages[1].content).toBe('你好');
+    const firstCall = completeMock.mock.calls[0]!;
+    const messages = firstCall[0] as Array<{ role: string; content: string }>;
+    expect(messages[1]!.content).toBe('你好');
 
     await waitFor(() => {
       expect(screen.getByText('Hello')).toBeTruthy();
