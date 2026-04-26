@@ -63,3 +63,25 @@ M1 的 `mountFakeUserApp` 注册时 `globalData: false` —— 这**模拟典型
 3. **Sucrase 的 `_interopRequireDefault` helper 会给 CJS 模块包一层 `{ default: obj }`**。sandbox 的 resolver 返回真实 React namespace，helper 判断 `__esModule` 决定是否包。测试正则匹配时要兼容 `React.createElement` 和 `_react2.default.createElement` 两种形式。
 4. **Vite 生产构建下 `import.meta.env.DEV` 被静态替换为 `false`**，整个 DEV-gated 分支被 DCE。这意味着 `mountFakeUserAppIfDev` 的 Sucrase 动态 import 在生产下不存在，Sucrase 包也不会进 bundle。M2 要让 Sucrase 进生产 bundle 必须让某个非 DEV 路径调用它。
 
+## SDK 表面（截至 2026-04-26）
+
+| 模块 | 来源 | 说明 |
+|------|------|------|
+| `react` | host React | 完整命名空间 |
+| `lucide-react` | host lucide | 完整图标库 |
+| `@hiphone/ui` | `sdk/ui.ts` | NavBar |
+| `@hiphone/ai` | `sdk/ai.ts` | complete / streamComplete / chatWithCharacter |
+| `@hiphone/storage` | `sdk/storage.ts` | per-owner + global KV |
+| `@hiphone/perspective` | `sdk/perspective.ts` | useCurrentOwner / getCurrentOwner |
+| `@hiphone/hooks` | `sdk/hooks.ts` | 跨层 React hook |
+| `@hiphone/nav` | `sdk/nav.ts` | 应用内导航 |
+| `@hiphone/toast` | `sdk/toast.ts` | show |
+| `@hiphone/banner` | `sdk/banner.ts` | 顶部横幅 |
+| `@hiphone/services` | `sdk/services.ts` | 服务注册 |
+| `@hiphone/motion` | `sdk/motion.ts` | motion/react 表面 + design-token spring/duration/ease |
+
+新增 `@hiphone/motion` 的动机：用户 APP 写 iOS-fidelity 动效需要 motion/react，
+但裸 import 在沙箱里会被 resolveModule 拒绝。motion/react 在 host 已经被 bundle，
+re-export 是零额外成本。spring/duration/ease 直接 re-export 自
+`@/platform/design-tokens/motion`，不复制数值，token 演进自动跟随。
+
