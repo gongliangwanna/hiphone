@@ -118,6 +118,13 @@ export function SettingsHome() {
           chevron
         />
         <ListRow
+          icon={<Wrench size={18} />}
+          iconColor="#5AC8FA"
+          title="工坊代码模型"
+          onClick={() => push('aiBuilderModel')}
+          chevron
+        />
+        <ListRow
           icon={<BookOpen size={18} />}
           iconColor="#34C759"
           title="世界书"
