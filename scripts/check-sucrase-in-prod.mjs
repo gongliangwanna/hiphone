@@ -36,10 +36,12 @@ try {
 
 let foundChunk = null;
 
+// Use .some() — Vite/Rolldown is free to split Sucrase across multiple
+// dynamic chunks, in which case no single chunk contains every marker.
+// Any one marker present anywhere in dist proves Sucrase shipped.
 for (const file of files) {
   const content = readFileSync(join(DIST_DIR, file), 'utf8');
-  const allFound = MARKERS.every((marker) => content.includes(marker));
-  if (allFound) {
+  if (MARKERS.some((marker) => content.includes(marker))) {
     foundChunk = file;
     break;
   }
@@ -48,7 +50,7 @@ for (const file of files) {
 if (!foundChunk) {
   console.error(
     `FAIL — Sucrase NOT found in production bundle.\n` +
-    `Searched ${files.length} JS chunk(s) in dist/assets/ for all of:\n` +
+    `Searched ${files.length} JS chunk(s) in dist/assets/ for any of:\n` +
     MARKERS.map((m) => `  - ${m}`).join('\n') +
     `\n\nFix: ensure mountBuiltinUserApps() is called outside any import.meta.env.DEV gate in App.tsx.`,
   );

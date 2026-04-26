@@ -72,6 +72,10 @@ describe('mountBuiltinUserApps', () => {
       expect(translateEntry).toBeDefined();
       expect(translateEntry!.type).toBe('builtin');
 
+      // The broken app must NOT register — guards against future refactors
+      // that register partial/corrupt entries before throwing.
+      expect(appRegistry.has('__broken__')).toBe(false);
+
       // console.error should have been called for the broken app
       expect(errSpy).toHaveBeenCalledWith(
         expect.stringContaining('[builtinUserApps] failed to mount "__broken__"'),
