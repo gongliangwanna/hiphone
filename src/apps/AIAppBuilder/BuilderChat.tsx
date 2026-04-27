@@ -36,6 +36,8 @@ interface BuilderChatProps {
   onAbort?: () => void;
 }
 
+type ToolGroupPos = 'only' | 'first' | 'middle' | 'last';
+
 export function BuilderChat({ onSend, onAbort }: BuilderChatProps) {
   const chatHistory = useAIAppBuilderStore((s) => s.chatHistory);
   const status = useAIAppBuilderStore((s) => s.status);
@@ -74,6 +76,35 @@ export function BuilderChat({ onSend, onAbort }: BuilderChatProps) {
     return stale;
   }, [chatHistory]);
 
+  // Group consecutive tool-call turns into a single iOS Reminders–style
+  // card by tagging each tool-call with its position in the group. Stale
+  // plan-updates render null, so they don't break visual adjacency.
+  const toolGroupPosition = useMemo(() => {
+    const visibleKinds: { idx: number; kind: ChatTurn['kind'] }[] = [];
+    for (let i = 0; i < chatHistory.length; i++) {
+      const t = chatHistory[i]!;
+      if (t.kind === 'plan-update' && stalePlanIndices.has(i)) continue;
+      visibleKinds.push({ idx: i, kind: t.kind });
+    }
+    const map = new Map<number, ToolGroupPos>();
+    for (let r = 0; r < visibleKinds.length; r++) {
+      if (visibleKinds[r]!.kind !== 'tool-call') continue;
+      const prevIsTool = r > 0 && visibleKinds[r - 1]!.kind === 'tool-call';
+      const nextIsTool =
+        r < visibleKinds.length - 1 && visibleKinds[r + 1]!.kind === 'tool-call';
+      const pos: ToolGroupPos =
+        prevIsTool && nextIsTool
+          ? 'middle'
+          : prevIsTool
+            ? 'last'
+            : nextIsTool
+              ? 'first'
+              : 'only';
+      map.set(visibleKinds[r]!.idx, pos);
+    }
+    return map;
+  }, [chatHistory, stalePlanIndices]);
+
   const handleSend = () => {
     if (!canSend) return;
     const text = input.trim();
@@ -110,7 +141,13 @@ export function BuilderChat({ onSend, onAbort }: BuilderChatProps) {
             case 'agent-text':
               return <ChatBubble key={i} turn={turn} />;
             case 'tool-call':
-              return <ToolCallCard key={i} turn={turn} />;
+              return (
+                <ToolCallCard
+                  key={i}
+                  turn={turn}
+                  groupPos={toolGroupPosition.get(i) ?? 'only'}
+                />
+              );
             case 'plan-update':
               if (stalePlanIndices.has(i)) return null;
               return <PlanCard key={i} turn={turn} />;
@@ -355,13 +392,22 @@ function summarizeToolArgs(tool: string, args: unknown): string {
 
 function ToolCallCard({
   turn,
+  groupPos,
 }: {
   turn: Extract<ChatTurn, { kind: 'tool-call' }>;
+  groupPos: ToolGroupPos;
 }) {
   const [expanded, setExpanded] = useState(false);
   const summary = summarizeToolArgs(turn.tool, turn.args);
   const Icon = turn.ok ? Wrench : XCircle;
   const iconColor = turn.ok ? 'var(--color-secondaryLabel)' : 'var(--color-systemRed)';
+
+  // iOS Reminders cells: 12px outer radius, hairlines between rows in a group
+  const radTop = groupPos === 'only' || groupPos === 'first' ? 12 : 0;
+  const radBottom = groupPos === 'only' || groupPos === 'last' ? 12 : 0;
+  const showTopBorder = groupPos === 'middle' || groupPos === 'last';
+  const dropBottomBorder = groupPos === 'first' || groupPos === 'middle';
+  const stackedSpacing = groupPos === 'only' || groupPos === 'last' ? 6 : 0;
 
   return (
     <motion.div
@@ -371,14 +417,23 @@ function ToolCallCard({
       style={{
         display: 'flex',
         justifyContent: 'flex-start',
-        marginBottom: 6,
+        marginBottom: stackedSpacing,
       }}
     >
       <div
         style={{
           maxWidth: '90%',
-          borderRadius: 8,
+          borderTopLeftRadius: radTop,
+          borderTopRightRadius: radTop,
+          borderBottomLeftRadius: radBottom,
+          borderBottomRightRadius: radBottom,
           border: '0.5px solid var(--color-separator)',
+          borderTop: showTopBorder
+            ? '0.5px solid var(--color-separator)'
+            : '0.5px solid var(--color-separator)',
+          borderBottom: dropBottomBorder
+            ? 'none'
+            : '0.5px solid var(--color-separator)',
           backgroundColor: 'var(--color-tertiarySystemBackground)',
           fontSize: 13,
           color: 'var(--color-label)',
@@ -464,6 +519,8 @@ function safeStringify(value: unknown): string {
 }
 
 function PlanCard({ turn }: { turn: Extract<ChatTurn, { kind: 'plan-update' }> }) {
+  const total = turn.steps.length;
+  const done = turn.steps.filter((s) => s.status === 'done').length;
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.96, y: 8 }}
@@ -478,14 +535,26 @@ function PlanCard({ turn }: { turn: Extract<ChatTurn, { kind: 'plan-update' }> }
       <div
         style={{
           maxWidth: '90%',
-          borderRadius: 8,
+          borderRadius: 12,
           border: '0.5px solid var(--color-separator)',
           backgroundColor: 'var(--color-tertiarySystemBackground)',
           padding: '8px 12px',
           color: 'var(--color-label)',
         }}
       >
-        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>计划</div>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'baseline',
+            justifyContent: 'space-between',
+            marginBottom: 6,
+          }}
+        >
+          <span style={{ fontSize: 14, fontWeight: 600 }}>计划</span>
+          <span style={{ fontSize: 12, color: 'var(--color-secondaryLabel)' }}>
+            {done}/{total}
+          </span>
+        </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {turn.steps.map((step) => {
             const StepIcon =
@@ -555,11 +624,14 @@ function FinishBubble({ turn }: { turn: Extract<ChatTurn, { kind: 'finish' }> })
           gap: 6,
         }}
       >
-        <CheckCircle2
-          size={14}
-          color="var(--color-systemGreen)"
-          style={{ flexShrink: 0, marginTop: 3 }}
-        />
+        <motion.span
+          initial={{ scale: 0, rotate: -45 }}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={{ ...spring.bouncy, delay: 0.15 }}
+          style={{ flexShrink: 0, marginTop: 3, display: 'inline-flex' }}
+        >
+          <CheckCircle2 size={14} color="var(--color-systemGreen)" />
+        </motion.span>
         <span>{turn.summary}</span>
       </div>
     </motion.div>
