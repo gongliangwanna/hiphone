@@ -40,3 +40,25 @@ export async function installDraft(
   const blob = await packDraftZip(draftId, files);
   return install(blob);
 }
+
+/**
+ * Pack the draft and trigger a browser download of `<draftId>.zip` via
+ * a transient anchor element. Used by the drafts sheet's "导出" action.
+ */
+export async function triggerDraftZipDownload(
+  draftId: string,
+  files: Record<string, string>,
+): Promise<void> {
+  const blob = await packDraftZip(draftId, files);
+  const url = URL.createObjectURL(blob);
+  try {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${draftId}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
