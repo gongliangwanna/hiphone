@@ -179,7 +179,10 @@ function EmptyState() {
 }
 
 function ChatBubble({ turn }: { turn: ChatTurn }) {
-  const isUser = turn.role === 'user';
+  // S6: tool-call / plan-update / finish kinds get proper rendering in S8.
+  // For now, only user + agent-text bubbles render; other kinds are skipped.
+  if (turn.kind !== 'user' && turn.kind !== 'agent-text') return null;
+  const isUser = turn.kind === 'user';
   return (
     <div
       style={{

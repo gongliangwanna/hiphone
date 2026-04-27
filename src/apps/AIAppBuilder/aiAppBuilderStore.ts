@@ -5,12 +5,18 @@
  * wipes the slate. Multiple concurrent drafts (history) are out of
  * scope for V1 — see V1.1 follow-up in the design doc.
  *
+ * V1.5 update: this store now backs the agent loop. `ChatTurn` is a
+ * discriminated union over five kinds (user / agent-text / tool-call /
+ * plan-update / finish). The loop runner (S7) appends tool/plan/finish
+ * turns; V1's one-shot generator only produces user + agent-text.
+ *
  * See docs/superpowers/specs/2026-04-27-ai-app-builder-v1-design.md
  */
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { idbStorage } from '@/platform/storage/idbStorage';
+import type { PlanStep } from './agent/builderPlanStore';
 
 export type BuilderStatus =
   | 'idle'           // no draft yet
@@ -19,11 +25,12 @@ export type BuilderStatus =
   | 'compile-error'  // last generation produced uncompilable code
   | 'install-error'; // installer.install threw
 
-export interface ChatTurn {
-  role: 'user' | 'builder';
-  text: string;
-  timestamp: number;
-}
+export type ChatTurn =
+  | { kind: 'user';        text: string;          timestamp: number }
+  | { kind: 'agent-text';  text: string;          timestamp: number }
+  | { kind: 'tool-call';   tool: string; args: unknown; result: unknown; ok: boolean; timestamp: number }
+  | { kind: 'plan-update'; steps: PlanStep[];     timestamp: number }
+  | { kind: 'finish';      summary: string;       timestamp: number };
 
 export interface AIAppBuilderState {
   /** null = no session yet. Locked once startNewDraft fires. */
@@ -36,7 +43,11 @@ export interface AIAppBuilderState {
 
   startNewDraft: (firstUserPrompt: string) => void;
   appendUserMessage: (text: string) => void;
-  appendBuilderMessage: (text: string, files?: Record<string, string>) => void;
+  appendAgentMessage: (text: string) => void;
+  appendToolCall: (tool: string, args: unknown, result: unknown, ok: boolean) => void;
+  appendPlanUpdate: (steps: PlanStep[]) => void;
+  appendFinish: (summary: string) => void;
+  setDraftFiles: (files: Record<string, string>) => void;
   setStatus: (status: BuilderStatus) => void;
   setError: (error: string | null) => void;
 }
@@ -75,7 +86,7 @@ export const useAIAppBuilderStore = create<AIAppBuilderState>()(
         set({
           draftId: makeDraftId(firstUserPrompt),
           draftFiles: {},
-          chatHistory: [{ role: 'user', text: firstUserPrompt, timestamp: Date.now() }],
+          chatHistory: [{ kind: 'user', text: firstUserPrompt, timestamp: Date.now() }],
           status: 'generating',
           lastError: null,
         });
@@ -86,15 +97,39 @@ export const useAIAppBuilderStore = create<AIAppBuilderState>()(
           throw new Error('appendUserMessage: no active draft (call startNewDraft first)');
         }
         set((s) => ({
-          chatHistory: [...s.chatHistory, { role: 'user', text, timestamp: Date.now() }],
+          chatHistory: [...s.chatHistory, { kind: 'user', text, timestamp: Date.now() }],
         }));
       },
 
-      appendBuilderMessage: (text, files) => {
+      appendAgentMessage: (text) => {
         set((s) => ({
-          chatHistory: [...s.chatHistory, { role: 'builder', text, timestamp: Date.now() }],
-          ...(files ? { draftFiles: files } : {}),
+          chatHistory: [...s.chatHistory, { kind: 'agent-text', text, timestamp: Date.now() }],
         }));
+      },
+
+      appendToolCall: (tool, args, result, ok) => {
+        set((s) => ({
+          chatHistory: [
+            ...s.chatHistory,
+            { kind: 'tool-call', tool, args, result, ok, timestamp: Date.now() },
+          ],
+        }));
+      },
+
+      appendPlanUpdate: (steps) => {
+        set((s) => ({
+          chatHistory: [...s.chatHistory, { kind: 'plan-update', steps, timestamp: Date.now() }],
+        }));
+      },
+
+      appendFinish: (summary) => {
+        set((s) => ({
+          chatHistory: [...s.chatHistory, { kind: 'finish', summary, timestamp: Date.now() }],
+        }));
+      },
+
+      setDraftFiles: (files) => {
+        set({ draftFiles: files });
       },
 
       setStatus: (status) => set({ status }),
@@ -108,7 +143,7 @@ export const useAIAppBuilderStore = create<AIAppBuilderState>()(
       },
     }),
     {
-      name: 'hiPhone-ai-app-builder',
+      name: 'hiPhone-ai-app-builder-v2',
       storage: idbStorage,
       partialize: (s) => ({
         draftId: s.draftId,

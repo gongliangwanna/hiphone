@@ -20,7 +20,7 @@ describe('aiAppBuilderStore', () => {
       expect(useAIAppBuilderStore.getState().draftFiles).toEqual({});
       expect(useAIAppBuilderStore.getState().chatHistory).toHaveLength(1);
       expect(useAIAppBuilderStore.getState().chatHistory[0]!).toMatchObject({
-        role: 'user',
+        kind: 'user',
         text: '我想要一个番茄钟',
       });
     });
@@ -50,13 +50,13 @@ describe('aiAppBuilderStore', () => {
   });
 
   describe('appendUserMessage', () => {
-    it('appends a user-role chat turn', () => {
+    it('appends a user-kind chat turn', () => {
       const s = useAIAppBuilderStore.getState();
       s.startNewDraft('番茄钟');
       s.appendUserMessage('加个暂停');
       const history = useAIAppBuilderStore.getState().chatHistory;
       expect(history).toHaveLength(2);
-      expect(history[1]).toMatchObject({ role: 'user', text: '加个暂停' });
+      expect(history[1]).toMatchObject({ kind: 'user', text: '加个暂停' });
     });
 
     it('throws if no active draft', () => {
@@ -65,46 +65,76 @@ describe('aiAppBuilderStore', () => {
     });
   });
 
-  describe('appendBuilderMessage', () => {
-    it('appends a builder-role chat turn AND updates draftFiles', () => {
+  describe('appendAgentMessage', () => {
+    it('appends an agent-text turn', () => {
       const s = useAIAppBuilderStore.getState();
       s.startNewDraft('番茄钟');
-      s.appendBuilderMessage('已生成,请预览', {
-        'manifest.json': '{}',
-        'App.tsx': 'export default () => null;',
-      });
-      const state = useAIAppBuilderStore.getState();
-      expect(state.chatHistory).toHaveLength(2);
-      expect(state.chatHistory[1]).toMatchObject({ role: 'builder', text: '已生成,请预览' });
-      expect(state.draftFiles).toEqual({
-        'manifest.json': '{}',
-        'App.tsx': 'export default () => null;',
-      });
+      s.appendAgentMessage('hi');
+      const history = useAIAppBuilderStore.getState().chatHistory;
+      expect(history).toHaveLength(2);
+      expect(history[1]).toMatchObject({ kind: 'agent-text', text: 'hi' });
     });
 
-    it('replaces draftFiles entirely (does not merge)', () => {
+    it('does NOT touch draftFiles', () => {
       const s = useAIAppBuilderStore.getState();
       s.startNewDraft('番茄钟');
-      s.appendBuilderMessage('v1', {
+      s.appendAgentMessage('已生成');
+      expect(useAIAppBuilderStore.getState().draftFiles).toEqual({});
+    });
+  });
+
+  describe('setDraftFiles', () => {
+    it('replaces draftFiles wholesale', () => {
+      const s = useAIAppBuilderStore.getState();
+      s.startNewDraft('番茄钟');
+      s.setDraftFiles({
         'manifest.json': '{}',
         'App.tsx': 'old',
         'utils.ts': 'old utils',
       });
-      s.appendBuilderMessage('v2', {
+      s.setDraftFiles({
         'manifest.json': '{}',
         'App.tsx': 'new',
       });
-      // utils.ts removed; full replace
-      expect(Object.keys(useAIAppBuilderStore.getState().draftFiles).sort()).toEqual(['App.tsx', 'manifest.json']);
+      expect(Object.keys(useAIAppBuilderStore.getState().draftFiles).sort()).toEqual([
+        'App.tsx',
+        'manifest.json',
+      ]);
     });
+  });
 
-    it('appends builder message without files when files arg omitted', () => {
+  describe('appendToolCall / appendPlanUpdate / appendFinish', () => {
+    it('appendToolCall pushes a tool-call turn', () => {
       const s = useAIAppBuilderStore.getState();
       s.startNewDraft('番茄钟');
-      s.appendBuilderMessage('解析失败,请重试');
-      const state = useAIAppBuilderStore.getState();
-      expect(state.chatHistory[1]!.text).toBe('解析失败,请重试');
-      expect(state.draftFiles).toEqual({});
+      s.appendToolCall('write_file', { path: 'a.ts' }, { ok: true }, true);
+      const history = useAIAppBuilderStore.getState().chatHistory;
+      expect(history[1]).toMatchObject({
+        kind: 'tool-call',
+        tool: 'write_file',
+        args: { path: 'a.ts' },
+        result: { ok: true },
+        ok: true,
+      });
+    });
+
+    it('appendPlanUpdate pushes a plan-update turn', () => {
+      const s = useAIAppBuilderStore.getState();
+      s.startNewDraft('番茄钟');
+      s.appendPlanUpdate([{ id: 's1', title: '写manifest', status: 'pending' }]);
+      const history = useAIAppBuilderStore.getState().chatHistory;
+      expect(history[1]).toMatchObject({
+        kind: 'plan-update',
+        steps: [{ id: 's1', title: '写manifest', status: 'pending' }],
+      });
+    });
+
+    it('appendFinish pushes a finish turn', () => {
+      const s = useAIAppBuilderStore.getState();
+      s.startNewDraft('番茄钟');
+      s.appendFinish('已生成');
+      const history = useAIAppBuilderStore.getState().chatHistory;
+      expect(history[1]).toMatchObject({ kind: 'finish', summary: '已生成' });
     });
   });
 

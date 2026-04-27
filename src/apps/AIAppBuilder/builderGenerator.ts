@@ -75,10 +75,12 @@ function buildMessages(draftId: string, chatHistory: ChatTurn[]): Message[] {
     { role: 'system', content: buildSystemPrompt(draftId) },
   ];
   for (const turn of chatHistory) {
-    messages.push({
-      role: turn.role === 'user' ? 'user' : 'assistant',
-      content: turn.text,
-    });
+    if (turn.kind === 'user') {
+      messages.push({ role: 'user', content: turn.text });
+    } else if (turn.kind === 'agent-text') {
+      messages.push({ role: 'assistant', content: turn.text });
+    }
+    // tool-call, plan-update, finish kinds are skipped (V1 generator never produces them)
   }
   return messages;
 }

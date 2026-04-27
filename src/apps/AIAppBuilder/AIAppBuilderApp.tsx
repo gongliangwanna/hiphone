@@ -56,22 +56,23 @@ export function AIAppBuilderApp() {
     const after = useAIAppBuilderStore.getState();
     switch (result.kind) {
       case 'success':
-        after.appendBuilderMessage('已生成,请在上方预览', result.files);
+        after.appendAgentMessage('已生成,请在上方预览');
+        after.setDraftFiles(result.files);
         after.setStatus('ready');
         break;
       case 'parse-error':
-        after.appendBuilderMessage('生成结果格式不对,自动重试也失败了。请重新描述或换个说法。');
+        after.appendAgentMessage('生成结果格式不对,自动重试也失败了。请重新描述或换个说法。');
         after.setStatus('idle');
         break;
       case 'api-error':
-        after.appendBuilderMessage(`API 错误: ${result.message}`);
+        after.appendAgentMessage(`API 错误: ${result.message}`);
         after.setStatus('idle');
         break;
       case 'compile-error':
-        after.appendBuilderMessage(
+        after.appendAgentMessage(
           `代码编译失败:\`${result.failedPath}\`\n${result.compileMessage}\n\n自动重试也未恢复,请重新描述你的需求或换个说法。`,
-          result.files,
         );
+        after.setDraftFiles(result.files);
         after.setError(`${result.failedPath}: ${result.compileMessage}`);
         break;
     }
@@ -105,7 +106,7 @@ export function AIAppBuilderApp() {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       toastShow(`安装失败: ${msg}`);
-      useAIAppBuilderStore.getState().appendBuilderMessage(`安装失败: ${msg}`);
+      useAIAppBuilderStore.getState().appendAgentMessage(`安装失败: ${msg}`);
     }
   }, [draftId, draftFiles, goHome]);
 

@@ -29,7 +29,7 @@ describe('generateDraft', () => {
     );
     const result = await generateDraft({
       draftId: 'ai-app-x-1234',
-      chatHistory: [{ role: 'user', text: '番茄钟', timestamp: 1 }],
+      chatHistory: [{ kind: 'user', text: '番茄钟', timestamp: 1 }],
     });
     expect(result.kind).toBe('success');
     if (result.kind === 'success') {
@@ -48,7 +48,7 @@ describe('generateDraft', () => {
       }));
     const result = await generateDraft({
       draftId: 'ai-app-x-1234',
-      chatHistory: [{ role: 'user', text: 'x', timestamp: 1 }],
+      chatHistory: [{ kind: 'user', text: 'x', timestamp: 1 }],
     });
     expect(spy).toHaveBeenCalledTimes(2);
     expect(result.kind).toBe('success');
@@ -59,7 +59,7 @@ describe('generateDraft', () => {
       .mockResolvedValue('not JSON');
     const result = await generateDraft({
       draftId: 'ai-app-x-1234',
-      chatHistory: [{ role: 'user', text: 'x', timestamp: 1 }],
+      chatHistory: [{ kind: 'user', text: 'x', timestamp: 1 }],
     });
     expect(result.kind).toBe('parse-error');
   });
@@ -68,7 +68,7 @@ describe('generateDraft', () => {
     vi.spyOn(chatCompleteMod, 'chatComplete').mockRejectedValue(new Error('rate limit'));
     const result = await generateDraft({
       draftId: 'ai-app-x-1234',
-      chatHistory: [{ role: 'user', text: 'x', timestamp: 1 }],
+      chatHistory: [{ kind: 'user', text: 'x', timestamp: 1 }],
     });
     expect(result.kind).toBe('api-error');
     if (result.kind === 'api-error') {
@@ -86,7 +86,7 @@ describe('generateDraft', () => {
     );
     await generateDraft({
       draftId: 'ai-app-x-1234',
-      chatHistory: [{ role: 'user', text: 'y', timestamp: 1 }],
+      chatHistory: [{ kind: 'user', text: 'y', timestamp: 1 }],
     });
     const call = spy.mock.calls[0]!;
     expect(call[0]!.model).toBe('special-code-model');
@@ -109,7 +109,7 @@ describe('generateDraft', () => {
       }));
     const result = await generateDraft({
       draftId: 'ai-app-x-1234',
-      chatHistory: [{ role: 'user', text: 'x', timestamp: 1 }],
+      chatHistory: [{ kind: 'user', text: 'x', timestamp: 1 }],
     });
     expect(result.kind).toBe('compile-error');
   });
@@ -130,7 +130,7 @@ describe('generateDraft', () => {
       }));
     const result = await generateDraft({
       draftId: 'ai-app-x-1234',
-      chatHistory: [{ role: 'user', text: 'x', timestamp: 1 }],
+      chatHistory: [{ kind: 'user', text: 'x', timestamp: 1 }],
     });
     expect(spy).toHaveBeenCalledTimes(2);
     expect(result.kind).toBe('success');
@@ -143,9 +143,9 @@ describe('generateDraft', () => {
     await generateDraft({
       draftId: 'ai-app-x-1234',
       chatHistory: [
-        { role: 'user', text: '番茄钟', timestamp: 1 },
-        { role: 'builder', text: '已生成', timestamp: 2 },
-        { role: 'user', text: '加暂停按钮', timestamp: 3 },
+        { kind: 'user', text: '番茄钟', timestamp: 1 },
+        { kind: 'agent-text', text: '已生成', timestamp: 2 },
+        { kind: 'user', text: '加暂停按钮', timestamp: 3 },
       ],
     });
     const messages = spy.mock.calls[0]![1];
