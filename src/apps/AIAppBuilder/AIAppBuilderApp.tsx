@@ -8,9 +8,10 @@
  *   │ Chat pane    (50%)                       │
  *   └──────────────────────────────────────────┘
  *
- * Owns the generate-orchestrate-store glue. BuilderChat reports
- * onSend; this component decides startNewDraft vs appendUserMessage,
- * fires generateDraft, and threads the result back into the store.
+ * Owns the agent-loop orchestration. BuilderChat reports onSend; this
+ * component decides startNewDraft vs appendUserMessage, dispatches
+ * runBuilderAgent, and lets the agent's onTurn events stream through
+ * to the store via append* helpers.
  */
 
 import { useCallback, useRef } from 'react';
@@ -19,7 +20,7 @@ import { AppScreen, NavBar } from '@/system';
 import { show as toastShow } from '@/platform/userApp/sdk/toast';
 import { useAppRuntimeStore } from '@/platform/stores/appRuntimeStore';
 import { useAIAppBuilderStore } from './aiAppBuilderStore';
-import { generateDraft } from './builderGenerator';
+import { runBuilderAgent } from './agent/builderAgent';
 import { installDraft } from './builderInstaller';
 import { BuilderPreview } from './BuilderPreview';
 import { BuilderChat } from './BuilderChat';
@@ -33,48 +34,56 @@ export function AIAppBuilderApp() {
   const abortRef = useRef<AbortController | null>(null);
 
   const handleSend = useCallback(async (text: string) => {
-    // Abort any in-flight generation from a prior send (defensive — UI also
-    // disables the button while generating).
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
     const store = useAIAppBuilderStore.getState();
     if (!store.draftId) {
-      // First message → start new draft
       store.startNewDraft(text);
     } else {
       store.appendUserMessage(text);
       store.setStatus('generating');
     }
 
-    const { draftId: id, chatHistory } = useAIAppBuilderStore.getState();
-    if (!id) return; // shouldn't happen
+    const { draftId: id } = useAIAppBuilderStore.getState();
+    if (!id) return;
 
-    const result = await generateDraft({ draftId: id, chatHistory, signal: controller.signal });
+    try {
+      await runBuilderAgent({
+        draftId: id,
+        userMessage: text,
+        signal: controller.signal,
+        onTurn: (event) => {
+          const s = useAIAppBuilderStore.getState();
+          switch (event.kind) {
+            case 'agent-text':
+              s.appendAgentMessage(event.text);
+              break;
+            case 'tool-call':
+              s.appendToolCall(event.tool, event.args, event.result, event.ok);
+              break;
+            case 'plan-update':
+              s.appendPlanUpdate(event.steps);
+              break;
+            case 'finish':
+              s.appendFinish(event.summary);
+              s.setStatus('ready');
+              break;
+          }
+        },
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      useAIAppBuilderStore.getState().appendAgentMessage(`[运行失败] ${msg}`);
+      useAIAppBuilderStore.getState().setStatus('idle');
+    }
 
-    const after = useAIAppBuilderStore.getState();
-    switch (result.kind) {
-      case 'success':
-        after.appendAgentMessage('已生成,请在上方预览');
-        after.setDraftFiles(result.files);
-        after.setStatus('ready');
-        break;
-      case 'parse-error':
-        after.appendAgentMessage('生成结果格式不对,自动重试也失败了。请重新描述或换个说法。');
-        after.setStatus('idle');
-        break;
-      case 'api-error':
-        after.appendAgentMessage(`API 错误: ${result.message}`);
-        after.setStatus('idle');
-        break;
-      case 'compile-error':
-        after.appendAgentMessage(
-          `代码编译失败:\`${result.failedPath}\`\n${result.compileMessage}\n\n自动重试也未恢复,请重新描述你的需求或换个说法。`,
-        );
-        after.setDraftFiles(result.files);
-        after.setError(`${result.failedPath}: ${result.compileMessage}`);
-        break;
+    // Defensive: if the loop exited without a finish event (e.g., abort, max-iter),
+    // make sure we don't leave the UI stuck in 'generating'.
+    const finalState = useAIAppBuilderStore.getState();
+    if (finalState.status === 'generating') {
+      finalState.setStatus('idle');
     }
   }, []);
 
