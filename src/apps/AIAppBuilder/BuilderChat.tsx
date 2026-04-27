@@ -18,6 +18,7 @@ import { useState, useRef, useEffect, useMemo, type KeyboardEvent } from 'react'
 import { motion } from 'motion/react';
 import {
   Send,
+  Sparkles,
   Wrench,
   XCircle,
   CheckCircle,
@@ -46,11 +47,17 @@ export function BuilderChat({ onSend, onAbort }: BuilderChatProps) {
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom on new turns
+  // Auto-scroll to bottom on new turns. First-mount stays instant; subsequent
+  // additions glide so message arrival doesn't feel like a hard cut.
+  const hasScrolledRef = useRef(false);
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({
+      top: el.scrollHeight,
+      behavior: hasScrolledRef.current ? 'smooth' : 'auto',
+    });
+    hasScrolledRef.current = true;
   }, [chatHistory.length, status]);
 
   const isGenerating = status === 'generating';
@@ -134,7 +141,9 @@ export function BuilderChat({ onSend, onAbort }: BuilderChatProps) {
           backgroundColor: 'var(--color-secondarySystemBackground)',
         }}
       >
-        {chatHistory.length === 0 && <EmptyState />}
+        {chatHistory.length === 0 && (
+          <EmptyState onPickSuggestion={(text) => setInput(text)} />
+        )}
         {chatHistory.map((turn, i) => {
           switch (turn.kind) {
             case 'user':
@@ -257,28 +266,100 @@ export function BuilderChat({ onSend, onAbort }: BuilderChatProps) {
   );
 }
 
-function EmptyState() {
+const SUGGESTIONS = [
+  '番茄钟,25 分钟工作 5 分钟休息',
+  '习惯打卡,每天最多 5 个习惯',
+  '简易记账,按分类汇总',
+] as const;
+
+function EmptyState({
+  onPickSuggestion,
+}: {
+  onPickSuggestion: (text: string) => void;
+}) {
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={spring.smooth}
       style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
         textAlign: 'center',
-        color: 'var(--color-secondaryLabel)',
-        fontSize: 14,
-        padding: '40px 16px',
-        lineHeight: 1.6,
+        padding: '48px 16px 16px',
       }}
     >
-      <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8, color: 'var(--color-label)' }}>
+      <div
+        style={{
+          width: 64,
+          height: 64,
+          borderRadius: 16,
+          background:
+            'linear-gradient(135deg, var(--color-systemBlue) 0%, var(--color-systemPurple) 100%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginBottom: 16,
+          boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+        }}
+      >
+        <Sparkles size={32} color="white" strokeWidth={2} />
+      </div>
+      <div
+        style={{
+          fontSize: 20,
+          fontWeight: 600,
+          color: 'var(--color-label)',
+          marginBottom: 6,
+        }}
+      >
         AI 工坊
       </div>
-      <div>用一句话描述你想要的 app — AI 会生成代码,你预览满意后一键安装。</div>
-      <div style={{ marginTop: 12, fontSize: 13 }}>
-        例如:
-        <br />· 番茄钟,25 分钟工作 5 分钟休息
-        <br />· 习惯打卡,每天最多 5 个习惯
-        <br />· 简易记账,按分类汇总
+      <div
+        style={{
+          fontSize: 14,
+          color: 'var(--color-secondaryLabel)',
+          lineHeight: 1.5,
+          maxWidth: 280,
+          marginBottom: 20,
+        }}
+      >
+        用一句话描述你想要的 app, AI 会生成代码并一键安装到桌面。
       </div>
-    </div>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+          width: '100%',
+          maxWidth: 320,
+        }}
+      >
+        {SUGGESTIONS.map((text) => (
+          <motion.button
+            key={text}
+            type="button"
+            onClick={() => onPickSuggestion(text)}
+            whileTap={{ scale: 0.96 }}
+            transition={spring.snappy}
+            style={{
+              padding: '10px 14px',
+              borderRadius: 18,
+              border: '0.5px solid var(--color-separator)',
+              backgroundColor: 'var(--color-tertiarySystemBackground)',
+              color: 'var(--color-label)',
+              fontSize: 14,
+              cursor: 'pointer',
+              textAlign: 'left',
+              fontFamily: 'inherit',
+            }}
+          >
+            {text}
+          </motion.button>
+        ))}
+      </div>
+    </motion.div>
   );
 }
 
