@@ -6,13 +6,9 @@ import { usePersonaStore } from '@/platform/stores/personaStore';
 import { useWorldBookStore } from '@/platform/stores/worldBookStore';
 import { useXYData } from '@/apps/XingYu/xingYuDataStore';
 import { useStickerStore } from '@/apps/XingYu/stickerStore';
-import { useCharacterMemory, type MemoryEntry } from '@/platform/ai/characterMemoryStore';
-import { runCompressionIfNeeded } from '@/platform/ai/characterMemoryCompression';
-
-// Stable empty reference for the no-entries case. Returning a fresh `[]`
-// from the selector on every call breaks useSyncExternalStore's snapshot
-// stability contract and triggers "Maximum update depth exceeded".
-const EMPTY_ENTRIES: readonly MemoryEntry[] = [];
+import { useCharacterMemory } from '@/platform/ai/characterMemoryStore';
+import { runCompressionForce } from '@/platform/ai/characterMemoryCompression';
+import { useMemoryState } from '@/platform/ai/memoryStateStore';
 import { buildDeviceContext } from '@/platform/ai/deviceContext';
 import { inspectPrompt, type PromptSection } from '@/platform/ai/promptAssembly';
 
@@ -22,6 +18,7 @@ import { inspectPrompt, type PromptSection } from '@/platform/ai/promptAssembly'
 
 const SECTION_ICONS: Record<string, typeof Brain> = {
   'System 提示词': Brain,
+  '状态层(关系/事实/Loops/Highlights)': Cpu,
   '长期记忆': FileText,
   '历史记录': MessageSquare,
   'Post-history 指令': Clock,
@@ -215,34 +212,25 @@ export function PromptViewerPage() {
 
   const convId = char ? `c-char-${char.id}` : '';
   const msgCount = useXYData((s) => s.messages.filter((m) => m.convId === convId).length);
-  const memoryEntriesForChar = useCharacterMemory((s) =>
-    char ? (s.entries[char.id] ?? EMPTY_ENTRIES) : EMPTY_ENTRIES,
+  // Latest compression summary now lives in CharacterMemoryStateRecord.episodicSummary
+  // (M5). Subscribe to the per-character state so this re-renders when compression
+  // pipeline writes a new summary.
+  const episodicSummary = useMemoryState((s) =>
+    char ? s.states[char.id]?.episodicSummary ?? null : null,
   );
-  const latestSummary = useMemo(
-    () => [...memoryEntriesForChar].reverse().find((e) => e.compressed) ?? null,
-    [memoryEntriesForChar],
-  );
+  const latestSummary = episodicSummary;
 
   const handleCompress = useCallback(async () => {
     if (!char || compressing) return;
     const ai = useAIConfigStore.getState();
     if (!ai.apiKey) return;
 
-    const prevCompressedCount = useCharacterMemory
-      .getState()
-      .getAll(char.id)
-      .filter((e) => e.compressed).length;
-
     setCompressing(true);
     try {
-      await runCompressionIfNeeded(char.id);
+      await runCompressionForce(char.id);
     } finally {
       setCompressing(false);
     }
-
-    // Note: if runCompressionIfNeeded decided not to compress (under threshold),
-    // the compressed-count stays the same — UI just re-renders same summary.
-    void prevCompressedCount; // kept for potential future delta-detection use
   }, [char, compressing]);
 
   if (!char || !inspection) {
@@ -374,7 +362,7 @@ export function PromptViewerPage() {
             <span style={{ fontSize: 13, color: 'var(--color-secondaryLabel)' }}>覆盖至</span>
             <span style={{ fontSize: 13, color: 'var(--color-label)' }}>
               {(() => {
-                const d = new Date(latestSummary.createdAt);
+                const d = new Date(latestSummary.lastUpdatedAt);
                 return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
               })()}
             </span>
