@@ -55,6 +55,19 @@ export function buildAgentSystemPrompt(draftId: string): string {
 - @hiphone/banner: show({title,...}) — 顶部横幅通知
 - @hiphone/motion: motion.div 等 motion/react 组件 + spring/duration/ease tokens
 
+[import 规则 — 非常重要]
+只能 import 这两类:
+1. 上面 SDK 白名单中的裸模块名(react / lucide-react / @hiphone/*)
+2. 你自己用 write_file 创建的 .tsx / .ts 文件的相对路径(如 "./utils" 或 "./components/Card")
+
+绝对不要 import:
+- **任何 .css / .scss / .less 文件**(沙箱不支持样式表)。改用 inline style 或 Tailwind className(项目已注入 twind 运行时,常用 utility 类直接生效)。
+- 任意 npm 包(lodash / dayjs / axios / zod / etc.)。沙箱只暴露上面的白名单,其它一律解析失败。
+- 图片 / 字体 / 任意非代码资源。
+- 绝对路径(如 "/utils.ts")。只支持相对路径。
+
+每次 write_file 后调用 compile_check,它会检测所有 import 是否能被解析(语法正确 + 路径解析得通 + SDK 名命中)。在 finish 前必须看到 compile_check 返回 errors 为空。
+
 [沙箱限制 — 非常重要]
 你的代码运行在沙箱里,以下全局对象**完全不可用**(访问会得到 undefined):
 - window / document / globalThis

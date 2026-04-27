@@ -20,7 +20,7 @@ import * as hiphoneMotion from './motion';
  * Expanding this table adds new SDK surface. M1 is intentionally tiny
  * so errors from missing modules surface clearly during development.
  */
-const moduleMap: Record<string, unknown> = {
+export const moduleMap: Record<string, unknown> = {
   react: React,
   // Host-provided UI icon library (project convention: all icons from
   // lucide-react, never hand-drawn SVG). Zero bundle cost — host already

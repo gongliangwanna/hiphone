@@ -83,6 +83,52 @@ describe('builderTools', () => {
     }
   });
 
+  it('compile_check: rejects an unresolvable relative import (e.g. ./App.css)', async () => {
+    useAIAppBuilderStore.setState({
+      draftFiles: {
+        'App.tsx':
+          'import "./App.css";\nexport default function App() { return null; }',
+      },
+    });
+    const r = await executeTool('compile_check', { path: 'App.tsx' }, ctx);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const data = r.data as { errors: { path: string; message: string }[] };
+      expect(data.errors.length).toBeGreaterThan(0);
+      expect(data.errors[0]!.path).toBe('App.tsx');
+      expect(data.errors[0]!.message).toMatch(/cannot resolve.*App\.css/);
+    }
+  });
+
+  it('compile_check: rejects a bare specifier outside the SDK whitelist', async () => {
+    useAIAppBuilderStore.setState({
+      draftFiles: {
+        'App.tsx':
+          'import _ from "lodash";\nexport default function App() { return _ ? null : null; }',
+      },
+    });
+    const r = await executeTool('compile_check', { path: 'App.tsx' }, ctx);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const data = r.data as { errors: { path: string; message: string }[] };
+      expect(data.errors.length).toBeGreaterThan(0);
+      expect(data.errors[0]!.message).toMatch(/lodash/);
+      expect(data.errors[0]!.message).toMatch(/SDK whitelist/);
+    }
+  });
+
+  it('compile_check: accepts a valid relative import that resolves to a sibling file', async () => {
+    useAIAppBuilderStore.setState({
+      draftFiles: {
+        'App.tsx':
+          'import { greet } from "./utils";\nexport default function App() { return greet() ? null : null; }',
+        'utils.ts': 'export function greet() { return "hi"; }',
+      },
+    });
+    const r = await executeTool('compile_check', {}, ctx);
+    expect(r).toEqual({ ok: true, data: { errors: [] } });
+  });
+
   it('read_fixture: returns the todo-app file map', async () => {
     const r = await executeTool('read_fixture', { name: 'todo-app' }, ctx);
     expect(r.ok).toBe(true);

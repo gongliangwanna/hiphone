@@ -22,6 +22,8 @@ import { useAIAppBuilderStore } from '../aiAppBuilderStore';
 import { useBuilderPlanStore } from './builderPlanStore';
 import { compileTsx } from '@/platform/userApp/compiler';
 import { validateManifest } from '@/platform/userApp/manifest';
+import { moduleMap } from '@/platform/userApp/sdk';
+import { resolveRelativePath } from '@/platform/userApp/moduleResolver';
 
 import todoManifest from '@/platform/userApp/__tests__/fixtures/todo-app/manifest.json?raw';
 import todoApp from '@/platform/userApp/__tests__/fixtures/todo-app/App.tsx?raw';
@@ -141,11 +143,18 @@ async function tool_compile_check(args: unknown): Promise<ToolResult> {
   const errors: { path: string; message: string }[] = [];
   for (const [path, content] of entries) {
     if (path.endsWith('.tsx') || path.endsWith('.ts')) {
+      let compiled: string | null = null;
       try {
-        await compileTsx(content, path);
+        compiled = await compileTsx(content, path);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         errors.push({ path, message: msg });
+      }
+      if (compiled !== null) {
+        for (const specifier of extractRequires(compiled)) {
+          const importErr = checkImportResolves(specifier, path, files);
+          if (importErr) errors.push({ path, message: importErr });
+        }
       }
     } else if (path === 'manifest.json') {
       try {
@@ -160,6 +169,39 @@ async function tool_compile_check(args: unknown): Promise<ToolResult> {
   }
 
   return { ok: true, data: { errors } };
+}
+
+// Sucrase emits CommonJS `require("specifier")` calls. Pull every literal
+// specifier out of the compiled JS so we can validate it against the SDK
+// whitelist + the in-progress draft tree — this catches LLM mistakes like
+// `import './App.css'` (no CSS support in the sandbox) BEFORE the user
+// installs and the moduleResolver throws at mount time.
+function extractRequires(compiled: string): string[] {
+  const out: string[] = [];
+  const re = /\brequire\(\s*["']([^"']+)["']\s*\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(compiled)) !== null) out.push(m[1]!);
+  return out;
+}
+
+function checkImportResolves(
+  specifier: string,
+  fromPath: string,
+  files: Record<string, string>,
+): string | null {
+  if (specifier.startsWith('.')) {
+    try {
+      resolveRelativePath(fromPath, specifier, files);
+      return null;
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(moduleMap, specifier)) return null;
+  return (
+    `import "${specifier}" not in SDK whitelist. ` +
+    `Available: ${Object.keys(moduleMap).join(', ')}.`
+  );
 }
 
 function tool_read_fixture(args: unknown): ToolResult {
