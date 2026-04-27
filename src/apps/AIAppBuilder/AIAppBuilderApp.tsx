@@ -12,8 +12,8 @@
  * to the store via append* helpers.
  */
 
-import { useCallback, useRef } from 'react';
-import { Plus, Download } from 'lucide-react';
+import { useCallback, useRef, useState } from 'react';
+import { Plus, Download, Layers } from 'lucide-react';
 import { AppScreen, NavBar } from '@/system';
 import { show as toastShow } from '@/platform/userApp/sdk/toast';
 import { useAppRuntimeStore } from '@/platform/stores/appRuntimeStore';
@@ -21,12 +21,15 @@ import { useAIAppBuilderStore } from './aiAppBuilderStore';
 import { runBuilderAgent } from './agent/builderAgent';
 import { installDraft } from './builderInstaller';
 import { BuilderChat } from './BuilderChat';
+import { DraftsSheet } from './DraftsSheet';
 
 export function AIAppBuilderApp() {
   const draftId = useAIAppBuilderStore((s) => s.draftId);
   const draftFiles = useAIAppBuilderStore((s) => s.draftFiles);
   const status = useAIAppBuilderStore((s) => s.status);
+  const draftCount = useAIAppBuilderStore((s) => Object.keys(s.drafts).length);
   const goHome = useAppRuntimeStore((s) => s.goHome);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
 
@@ -37,7 +40,14 @@ export function AIAppBuilderApp() {
 
     const store = useAIAppBuilderStore.getState();
     if (!store.draftId) {
-      store.startNewDraft(text);
+      // No active draft: create one seeded with this user prompt.
+      store.createDraft(text);
+    } else if (store.chatHistory.length === 0) {
+      // Active draft is empty (created by clicking "+" with no message yet).
+      // Re-seed it with the user prompt instead of appending — keeps the
+      // chat history clean and gives the agent a proper first turn.
+      store.appendUserMessage(text);
+      store.setStatus('generating');
     } else {
       store.appendUserMessage(text);
       store.setStatus('generating');
@@ -86,17 +96,13 @@ export function AIAppBuilderApp() {
 
   const handleNewDraft = useCallback(() => {
     if (status === 'generating') {
-      toastShow('生成中,无法新建');
+      toastShow('生成中,请稍后再新建');
       return;
     }
-    if (!confirm('新建会丢弃当前草稿,确定继续吗?')) return;
-    useAIAppBuilderStore.setState({
-      draftId: null,
-      draftFiles: {},
-      chatHistory: [],
-      status: 'idle',
-      lastError: null,
-    });
+    // V1.1: non-destructive. The previous draft stays in `drafts`; a new
+    // empty draft becomes active and the chat clears. The user can return
+    // to the prior draft via the drafts sheet.
+    useAIAppBuilderStore.getState().createDraft('');
   }, [status]);
 
   const handleInstall = useCallback(async () => {
@@ -118,10 +124,14 @@ export function AIAppBuilderApp() {
 
   const canInstall = draftId !== null && Object.keys(draftFiles).length > 0 && status !== 'generating';
 
-  // NavBar's rightButtons[] takes {icon, onClick}. Conditional render for the
-  // install button so it just disappears when not available — NavBar doesn't
-  // surface a disabled state visually.
+  // NavBar.rightButtons[]: drafts list (always), then new, then install
+  // (only when canInstall — NavBar has no disabled state, so we just hide).
   const rightButtons = [
+    {
+      icon: <Layers size={18} />,
+      onClick: () => setSheetOpen(true),
+      testId: 'builder-drafts-list',
+    },
     { icon: <Plus size={18} />, onClick: handleNewDraft, testId: 'builder-new-draft' },
     ...(canInstall
       ? [{ icon: <Download size={18} />, onClick: handleInstall, testId: 'builder-install' }]
@@ -130,11 +140,20 @@ export function AIAppBuilderApp() {
 
   return (
     <AppScreen backgroundColor="var(--color-systemBackground)">
-      <NavBar title="AI 工坊" rightButtons={rightButtons} />
+      <NavBar
+        title={draftCount > 1 ? `AI 工坊 · ${draftCount} 草稿` : 'AI 工坊'}
+        rightButtons={rightButtons}
+      />
 
       <div style={{ flex: 1, minHeight: 0 }}>
         <BuilderChat onSend={handleSend} onAbort={() => abortRef.current?.abort()} />
       </div>
+
+      <DraftsSheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        onCreateNew={handleNewDraft}
+      />
     </AppScreen>
   );
 }
