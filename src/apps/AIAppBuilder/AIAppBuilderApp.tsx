@@ -1,12 +1,10 @@
 /**
  * AI 工坊 builtin app — top-level composition.
  *
- * Layout:
- *   ┌──────── NavBar (新建 + 安装到桌面) ────────┐
- *   │ Preview pane (50%)                       │
- *   ├──────────────────────────────────────────┤
- *   │ Chat pane    (50%)                       │
- *   └──────────────────────────────────────────┘
+ * Full-screen chat layout. Generated apps are not previewed in-place
+ * (the half-screen sandbox preview broke too many user-app layouts on
+ * narrow phone widths). The flow is: chat → install → springboard,
+ * where the user opens the new app from its springboard icon.
  *
  * Owns the agent-loop orchestration. BuilderChat reports onSend; this
  * component decides startNewDraft vs appendUserMessage, dispatches
@@ -22,7 +20,6 @@ import { useAppRuntimeStore } from '@/platform/stores/appRuntimeStore';
 import { useAIAppBuilderStore } from './aiAppBuilderStore';
 import { runBuilderAgent } from './agent/builderAgent';
 import { installDraft } from './builderInstaller';
-import { BuilderPreview } from './BuilderPreview';
 import { BuilderChat } from './BuilderChat';
 
 export function AIAppBuilderApp() {
@@ -135,13 +132,8 @@ export function AIAppBuilderApp() {
     <AppScreen backgroundColor="var(--color-systemBackground)">
       <NavBar title="AI 工坊" rightButtons={rightButtons} />
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-        <div style={{ flex: 1, minHeight: 0, borderBottom: '0.5px solid var(--color-separator)' }}>
-          <BuilderPreview />
-        </div>
-        <div style={{ flex: 1, minHeight: 0 }}>
-          <BuilderChat onSend={handleSend} onAbort={() => abortRef.current?.abort()} />
-        </div>
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <BuilderChat onSend={handleSend} onAbort={() => abortRef.current?.abort()} />
       </div>
     </AppScreen>
   );
