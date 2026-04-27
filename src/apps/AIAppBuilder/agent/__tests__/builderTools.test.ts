@@ -117,6 +117,60 @@ describe('builderTools', () => {
     }
   });
 
+  it('compile_check (full tree): catches an unbound name (e.g. useCallback used without import) via dry-render', async () => {
+    const manifest = JSON.stringify({
+      id: 'placeholder',
+      name: '游戏',
+      version: '1.0.0',
+      entry: 'App.tsx',
+    });
+    useAIAppBuilderStore.setState({
+      draftFiles: {
+        'manifest.json': manifest,
+        // useCallback referenced but never imported. Sucrase compiles fine,
+        // but the first render throws ReferenceError.
+        'App.tsx':
+          'import React from "react";\n' +
+          'export default function Game() {\n' +
+          '  const onTap = useCallback(() => {}, []);\n' +
+          '  return React.createElement("div", { onClick: onTap }, "hi");\n' +
+          '}\n',
+      },
+    });
+    const r = await executeTool('compile_check', {}, ctx);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const data = r.data as { errors: { path: string; message: string }[] };
+      expect(data.errors.length).toBeGreaterThan(0);
+      const err = data.errors[0]!;
+      expect(err.path).toBe('App.tsx');
+      expect(err.message).toMatch(/runtime render failed/);
+      expect(err.message).toMatch(/useCallback/);
+    }
+  });
+
+  it('compile_check (full tree): passes dry-render for a well-formed component', async () => {
+    const manifest = JSON.stringify({
+      id: 'placeholder',
+      name: '示例',
+      version: '1.0.0',
+      entry: 'App.tsx',
+    });
+    useAIAppBuilderStore.setState({
+      draftFiles: {
+        'manifest.json': manifest,
+        'App.tsx':
+          'import React, { useState } from "react";\n' +
+          'export default function App() {\n' +
+          '  const [n] = useState(0);\n' +
+          '  return React.createElement("div", null, String(n));\n' +
+          '}\n',
+      },
+    });
+    const r = await executeTool('compile_check', {}, ctx);
+    expect(r).toEqual({ ok: true, data: { errors: [] } });
+  });
+
   it('compile_check: accepts a valid relative import that resolves to a sibling file', async () => {
     useAIAppBuilderStore.setState({
       draftFiles: {

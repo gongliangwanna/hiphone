@@ -18,12 +18,18 @@
  * See docs/plan/2026-04-27-0245-ai-app-builder-v1.5-agentic-impl.md S4
  */
 
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { useAIAppBuilderStore } from '../aiAppBuilderStore';
 import { useBuilderPlanStore } from './builderPlanStore';
 import { compileTsx } from '@/platform/userApp/compiler';
 import { validateManifest } from '@/platform/userApp/manifest';
-import { moduleMap } from '@/platform/userApp/sdk';
-import { resolveRelativePath } from '@/platform/userApp/moduleResolver';
+import { moduleMap, resolveModule } from '@/platform/userApp/sdk';
+import {
+  resolveRelativePath,
+  evaluateUserAppModule,
+} from '@/platform/userApp/moduleResolver';
+import { withUserAppContext } from '@/platform/userApp/sdk/context';
 
 import todoManifest from '@/platform/userApp/__tests__/fixtures/todo-app/manifest.json?raw';
 import todoApp from '@/platform/userApp/__tests__/fixtures/todo-app/App.tsx?raw';
@@ -123,7 +129,10 @@ function tool_list_files(): ToolResult {
   return { ok: true, data: { paths } };
 }
 
-async function tool_compile_check(args: unknown): Promise<ToolResult> {
+async function tool_compile_check(
+  args: unknown,
+  ctx: ToolContext,
+): Promise<ToolResult> {
   const files = useAIAppBuilderStore.getState().draftFiles;
   const targetPath =
     isObj(args) && typeof args.path === 'string' && args.path.length > 0
@@ -141,6 +150,7 @@ async function tool_compile_check(args: unknown): Promise<ToolResult> {
   }
 
   const errors: { path: string; message: string }[] = [];
+  const compiledMap: Record<string, string> = {};
   for (const [path, content] of entries) {
     if (path.endsWith('.tsx') || path.endsWith('.ts')) {
       let compiled: string | null = null;
@@ -151,6 +161,7 @@ async function tool_compile_check(args: unknown): Promise<ToolResult> {
         errors.push({ path, message: msg });
       }
       if (compiled !== null) {
+        compiledMap[path] = compiled;
         for (const specifier of extractRequires(compiled)) {
           const importErr = checkImportResolves(specifier, path, files);
           if (importErr) errors.push({ path, message: importErr });
@@ -166,6 +177,16 @@ async function tool_compile_check(args: unknown): Promise<ToolResult> {
       }
     }
     // other files (assets, etc.) skipped silently
+  }
+
+  // Full-tree check (no targetPath) AND no per-file errors so far → also do a
+  // dry render. SSR pass catches ReferenceError-class bugs (e.g. `useCallback`
+  // used without being imported) that compile fine syntactically but throw at
+  // first render. Skipped on single-file checks because we wouldn't have a
+  // complete compiled map.
+  if (targetPath === null && errors.length === 0) {
+    const renderErr = tryDryRender(files, compiledMap, ctx.draftId);
+    if (renderErr) errors.push(renderErr);
   }
 
   return { ok: true, data: { errors } };
@@ -202,6 +223,57 @@ function checkImportResolves(
     `import "${specifier}" not in SDK whitelist. ` +
     `Available: ${Object.keys(moduleMap).join(', ')}.`
   );
+}
+
+// Dry-render: actually mount the entry component once via SSR. Sucrase only
+// catches syntax + we already validate imports, but unbound names (e.g.
+// `useCallback` referenced without importing) and undefined-deref bugs only
+// surface at runtime. SSR pass evaluates module bodies + renders the default
+// export once, catching ReferenceError / TypeError before install.
+//
+// Returns null if the render succeeds (or preconditions aren't met — silently
+// skipped); otherwise returns a {path, message} error to push into the
+// compile_check errors array.
+function tryDryRender(
+  files: Record<string, string>,
+  compiledMap: Record<string, string>,
+  draftId: string,
+): { path: string; message: string } | null {
+  const manifestRaw = files['manifest.json'];
+  if (typeof manifestRaw !== 'string') return null; // no manifest → skip
+  let entry: string;
+  try {
+    const m = validateManifest(JSON.parse(manifestRaw));
+    entry = m.entry;
+  } catch {
+    return null; // manifest invalid → already surfaced as a separate error
+  }
+  if (!compiledMap[entry]) return null; // entry not compiled → likewise
+
+  try {
+    const exports = evaluateUserAppModule(
+      compiledMap,
+      entry,
+      resolveModule,
+      draftId,
+    );
+    const Component = exports.default as unknown;
+    if (typeof Component !== 'function') {
+      return {
+        path: entry,
+        message: `entry "${entry}" must default-export a React component (got ${typeof Component})`,
+      };
+    }
+    withUserAppContext(draftId, () => {
+      renderToStaticMarkup(
+        React.createElement(Component as React.ComponentType),
+      );
+    });
+    return null;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return { path: entry, message: `runtime render failed: ${message}` };
+  }
 }
 
 function tool_read_fixture(args: unknown): ToolResult {
