@@ -15,9 +15,9 @@
  */
 
 import { useState, useRef, useEffect, useMemo, type KeyboardEvent } from 'react';
+import { motion } from 'motion/react';
 import {
   Send,
-  Loader2,
   Wrench,
   XCircle,
   CheckCircle,
@@ -28,6 +28,7 @@ import {
   ChevronRight,
   Square,
 } from 'lucide-react';
+import { spring } from '@/platform/design-tokens/motion';
 import { useAIAppBuilderStore, type ChatTurn } from './aiAppBuilderStore';
 
 interface BuilderChatProps {
@@ -119,21 +120,7 @@ export function BuilderChat({ onSend, onAbort }: BuilderChatProps) {
               return null;
           }
         })}
-        {isGenerating && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              color: 'var(--color-secondaryLabel)',
-              fontSize: 13,
-              padding: '8px 0',
-            }}
-          >
-            <Loader2 size={14} className="animate-spin" />
-            生成中...
-          </div>
-        )}
+        {isGenerating && <TypingIndicator />}
         {status === 'compile-error' && lastError && (
           <div
             style={{
@@ -167,46 +154,48 @@ export function BuilderChat({ onSend, onAbort }: BuilderChatProps) {
             style={{
               flex: 1,
               resize: 'none',
-              fontSize: 14,
-              padding: '8px 12px',
-              borderRadius: 8,
-              border: '0.5px solid var(--color-separator)',
-              backgroundColor: 'var(--color-systemBackground)',
+              fontSize: 15,
+              lineHeight: 1.4,
+              padding: '10px 14px',
+              borderRadius: 22,
+              border: 'none',
+              backgroundColor: 'var(--color-tertiarySystemBackground)',
               color: 'var(--color-label)',
               outline: 'none',
               fontFamily: 'inherit',
             }}
           />
           {isGenerating && onAbort ? (
-            <button
+            <motion.button
               type="button"
               onClick={handleAbort}
+              whileTap={{ scale: 0.92 }}
+              transition={spring.snappy}
+              aria-label="停止生成"
               style={{
+                width: 36,
                 height: 36,
-                padding: '0 12px',
                 borderRadius: 18,
                 border: 'none',
-                backgroundColor: 'var(--color-separator)',
-                color: 'var(--color-systemRed)',
+                backgroundColor: 'var(--color-systemRed)',
+                color: 'white',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: 4,
                 flexShrink: 0,
-                fontSize: 13,
-                fontWeight: 600,
               }}
               data-testid="builder-chat-abort"
             >
               <Square size={12} fill="currentColor" />
-              停止
-            </button>
+            </motion.button>
           ) : (
-            <button
+            <motion.button
               type="button"
               onClick={handleSend}
               disabled={!canSend}
+              whileTap={canSend ? { scale: 0.92 } : undefined}
+              transition={spring.snappy}
               style={{
                 width: 36,
                 height: 36,
@@ -219,10 +208,11 @@ export function BuilderChat({ onSend, onAbort }: BuilderChatProps) {
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexShrink: 0,
+                transition: 'background-color 200ms ease',
               }}
             >
               <Send size={16} />
-            </button>
+            </motion.button>
           )}
         </div>
       </div>
@@ -260,7 +250,10 @@ function ChatBubble({ turn }: { turn: ChatTurn }) {
   if (turn.kind !== 'user' && turn.kind !== 'agent-text') return null;
   const isUser = turn.kind === 'user';
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, scale: 0.96, y: 8 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={isUser ? spring.snappy : spring.smooth}
       style={{
         display: 'flex',
         justifyContent: isUser ? 'flex-end' : 'flex-start',
@@ -284,7 +277,53 @@ function ChatBubble({ turn }: { turn: ChatTurn }) {
       >
         {turn.text}
       </div>
-    </div>
+    </motion.div>
+  );
+}
+
+function TypingIndicator() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={spring.smooth}
+      style={{
+        display: 'flex',
+        justifyContent: 'flex-start',
+        marginBottom: 8,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '10px 14px',
+          borderRadius: 18,
+          backgroundColor: 'var(--color-tertiarySystemBackground)',
+        }}
+      >
+        {[0, 1, 2].map((i) => (
+          <motion.span
+            key={i}
+            style={{
+              width: 6,
+              height: 6,
+              borderRadius: 3,
+              backgroundColor: 'var(--color-secondaryLabel)',
+              display: 'inline-block',
+            }}
+            animate={{ y: [0, -3, 0], opacity: [0.3, 0.9, 0.3] }}
+            transition={{
+              duration: 1,
+              repeat: Infinity,
+              delay: i * 0.16,
+              ease: 'easeInOut',
+            }}
+          />
+        ))}
+      </div>
+    </motion.div>
   );
 }
 
@@ -325,7 +364,10 @@ function ToolCallCard({
   const iconColor = turn.ok ? 'var(--color-secondaryLabel)' : 'var(--color-systemRed)';
 
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, scale: 0.96, y: 8 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={spring.smooth}
       style={{
         display: 'flex',
         justifyContent: 'flex-start',
@@ -383,7 +425,7 @@ function ToolCallCard({
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -423,7 +465,10 @@ function safeStringify(value: unknown): string {
 
 function PlanCard({ turn }: { turn: Extract<ChatTurn, { kind: 'plan-update' }> }) {
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, scale: 0.96, y: 8 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={spring.smooth}
       style={{
         display: 'flex',
         justifyContent: 'flex-start',
@@ -477,13 +522,16 @@ function PlanCard({ turn }: { turn: Extract<ChatTurn, { kind: 'plan-update' }> }
           })}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
 function FinishBubble({ turn }: { turn: Extract<ChatTurn, { kind: 'finish' }> }) {
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, scale: 0.96, y: 8 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      transition={spring.smooth}
       style={{
         display: 'flex',
         justifyContent: 'flex-start',
@@ -514,6 +562,6 @@ function FinishBubble({ turn }: { turn: Extract<ChatTurn, { kind: 'finish' }> })
         />
         <span>{turn.summary}</span>
       </div>
-    </div>
+    </motion.div>
   );
 }
