@@ -131,7 +131,7 @@ export function AIAppBuilderApp() {
           <BuilderPreview />
         </div>
         <div style={{ flex: 1, minHeight: 0 }}>
-          <BuilderChat onSend={handleSend} />
+          <BuilderChat onSend={handleSend} onAbort={() => abortRef.current?.abort()} />
         </div>
       </div>
     </AppScreen>
