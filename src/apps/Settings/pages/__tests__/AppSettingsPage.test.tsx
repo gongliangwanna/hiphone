@@ -428,7 +428,15 @@ describe('AppSettingsPage', () => {
 
     expect(await screen.findByTestId('app-icon-crop-area')).toBeInTheDocument();
     expect(screen.getByTestId('app-icon-crop-frame')).toBeInTheDocument();
-    expect(screen.getByTestId('app-icon-crop-mask')).toBeInTheDocument();
+    const cropMask = screen.getByTestId('app-icon-crop-mask');
+    expect(cropMask.tagName.toLowerCase()).toBe('svg');
+    const cropMaskCutout = cropMask.querySelector('mask rect[fill="black"]');
+    expect(cropMaskCutout).toHaveAttribute('x', '16');
+    expect(cropMaskCutout).toHaveAttribute('y', '16');
+    expect(cropMaskCutout).toHaveAttribute('width', '68');
+    expect(cropMaskCutout).toHaveAttribute('height', '68');
+    expect(cropMaskCutout).toHaveAttribute('rx', '12');
+    expect(cropMaskCutout).toHaveAttribute('ry', '12');
     expect(screen.getByTestId('app-icon-preview-image')).toHaveAttribute(
       'src',
       'data:image/png;base64,UPLOADED_ICON',

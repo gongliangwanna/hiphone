@@ -27,6 +27,9 @@ const PREVIEW_FALLBACK_SIZE = 240;
 const CROP_FRAME_RATIO = 0.68;
 const CROP_FRAME_PERCENT = CROP_FRAME_RATIO * 100;
 const CROP_FRAME_INSET_PERCENT = (100 - CROP_FRAME_PERCENT) / 2;
+const CROP_FRAME_RADIUS_STAGE_PERCENT = 12;
+const CROP_FRAME_RADIUS_PERCENT =
+  (CROP_FRAME_RADIUS_STAGE_PERCENT / CROP_FRAME_PERCENT) * 100;
 const MIN_SCALE = 1;
 const MAX_SCALE = 5;
 
@@ -736,6 +739,7 @@ function IconPreview({
 }) {
   const cropAreaRef = useRef<HTMLDivElement>(null);
   const imageStyle = getPreviewImageStyle(source, crop);
+  const maskId = `app-icon-crop-mask-${app.id}`;
 
   useEffect(() => {
     const element = cropAreaRef.current;
@@ -776,40 +780,44 @@ function IconPreview({
         className="absolute max-w-none select-none"
         style={imageStyle}
       />
-      <div data-testid="app-icon-crop-mask" className="pointer-events-none absolute inset-0">
-        <div
-          className="absolute left-0 right-0 top-0"
-          style={{
-            height: `${CROP_FRAME_INSET_PERCENT}%`,
-            backgroundColor: 'rgba(0,0,0,0.34)',
-          }}
+      <svg
+        data-testid="app-icon-crop-mask"
+        className="pointer-events-none absolute inset-0"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        <defs>
+          <mask
+            id={maskId}
+            x="0"
+            y="0"
+            width="100"
+            height="100"
+            maskUnits="userSpaceOnUse"
+            maskContentUnits="userSpaceOnUse"
+          >
+            <rect x="0" y="0" width="100" height="100" fill="white" />
+            <rect
+              x={CROP_FRAME_INSET_PERCENT}
+              y={CROP_FRAME_INSET_PERCENT}
+              width={CROP_FRAME_PERCENT}
+              height={CROP_FRAME_PERCENT}
+              rx={CROP_FRAME_RADIUS_STAGE_PERCENT}
+              ry={CROP_FRAME_RADIUS_STAGE_PERCENT}
+              fill="black"
+            />
+          </mask>
+        </defs>
+        <rect
+          x="0"
+          y="0"
+          width="100"
+          height="100"
+          fill="rgba(0,0,0,0.34)"
+          mask={`url(#${maskId})`}
         />
-        <div
-          className="absolute bottom-0 left-0 right-0"
-          style={{
-            height: `${CROP_FRAME_INSET_PERCENT}%`,
-            backgroundColor: 'rgba(0,0,0,0.34)',
-          }}
-        />
-        <div
-          className="absolute left-0"
-          style={{
-            top: `${CROP_FRAME_INSET_PERCENT}%`,
-            width: `${CROP_FRAME_INSET_PERCENT}%`,
-            height: `${CROP_FRAME_PERCENT}%`,
-            backgroundColor: 'rgba(0,0,0,0.34)',
-          }}
-        />
-        <div
-          className="absolute right-0"
-          style={{
-            top: `${CROP_FRAME_INSET_PERCENT}%`,
-            width: `${CROP_FRAME_INSET_PERCENT}%`,
-            height: `${CROP_FRAME_PERCENT}%`,
-            backgroundColor: 'rgba(0,0,0,0.34)',
-          }}
-        />
-      </div>
+      </svg>
       <div
         data-testid="app-icon-crop-frame"
         className="pointer-events-none absolute"
@@ -818,7 +826,7 @@ function IconPreview({
           top: `${CROP_FRAME_INSET_PERCENT}%`,
           width: `${CROP_FRAME_PERCENT}%`,
           height: `${CROP_FRAME_PERCENT}%`,
-          borderRadius: 38,
+          borderRadius: `${CROP_FRAME_RADIUS_PERCENT}%`,
           border: '2px solid rgba(255,255,255,0.96)',
           boxShadow:
             '0 0 0 1px rgba(0,0,0,0.18), inset 0 0 0 1px rgba(0,0,0,0.12)',
