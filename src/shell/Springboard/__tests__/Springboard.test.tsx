@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { Springboard } from '../Springboard';
+import { useInstalledUserAppsStore } from '@/platform/stores/installedUserAppsStore';
 
 vi.mock('motion/react', async () => {
   const actual = await vi.importActual<typeof import('motion/react')>('motion/react');
@@ -18,6 +19,21 @@ vi.mock('motion/react', async () => {
 
 function expectActivePage(page: number) {
   expect(screen.getByTestId(`page-dot-${page}`)).toHaveStyle({ opacity: 1 });
+}
+
+function seedUserApps(count: number) {
+  useInstalledUserAppsStore.setState({
+    apps: Array.from({ length: count }, (_, i) => ({
+      id: `test-user-app-${i}`,
+      name: `测试 ${i}`,
+      iconDataUrl: null,
+      page: Math.floor(i / 20) + 1,
+      perspectiveAware: false,
+      version: '1.0.0',
+      installedAt: 1_700_000_000_000 + i,
+      sizeBytes: 0,
+    })),
+  });
 }
 
 function swipe(
@@ -66,10 +82,14 @@ function swipe(
 }
 
 describe('Springboard', () => {
+  beforeEach(() => {
+    useInstalledUserAppsStore.setState({ apps: [] });
+  });
+
   it('uses compact metrics for short mobile widths', () => {
     render(<Springboard sizeTier="compact" viewportWidth={360} />);
 
-    const firstIcon = screen.getByTestId('app-icon-messages');
+    const firstIcon = screen.getByTestId('app-icon-calendar');
     const iconMask = firstIcon.querySelector('div');
     const dock = screen.getByTestId('dock');
 
@@ -81,7 +101,7 @@ describe('Springboard', () => {
   it('uses large metrics for wide mobile widths', () => {
     render(<Springboard sizeTier="large" viewportWidth={430} />);
 
-    const firstIcon = screen.getByTestId('app-icon-messages');
+    const firstIcon = screen.getByTestId('app-icon-calendar');
     const iconMask = firstIcon.querySelector('div');
     const dock = screen.getByTestId('dock');
 
@@ -91,6 +111,7 @@ describe('Springboard', () => {
   });
 
   it('commits to the next page after a slow drag crosses distance threshold', () => {
+    seedUserApps(30);
     render(<Springboard sizeTier="regular" viewportWidth={390} />);
 
     swipe(screen.getByTestId('springboard-gesture-surface'), {
@@ -134,6 +155,7 @@ describe('Springboard', () => {
   });
 
   it('commits back to the previous page after a rightward swipe from page 1', () => {
+    seedUserApps(30);
     render(<Springboard sizeTier="regular" viewportWidth={390} />);
 
     const surface = screen.getByTestId('springboard-gesture-surface');
@@ -170,6 +192,7 @@ describe('Springboard', () => {
   });
 
   it('stays on the last page after overscrolling past the trailing edge', () => {
+    seedUserApps(30);
     render(<Springboard sizeTier="regular" viewportWidth={390} />);
 
     const surface = screen.getByTestId('springboard-gesture-surface');
