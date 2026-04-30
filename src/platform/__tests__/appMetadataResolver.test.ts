@@ -6,6 +6,7 @@ import {
   listResolvedAppMetadata,
   resolveAppDisplayName,
 } from '../appMetadataResolver';
+import { apps as catalogApps, dock } from '../appCatalog';
 
 describe('appMetadataResolver', () => {
   beforeEach(() => {
@@ -18,6 +19,7 @@ describe('appMetadataResolver', () => {
 
     expect(apps.find((app) => app.id === 'settings')?.kind).toBe('system');
     expect(apps.find((app) => app.id === 'gomoku')?.kind).toBe('preinstalled');
+    expect(apps.find((app) => app.id === 'xingyu')?.kind).toBe('preinstalled');
     expect(apps.filter((app) => app.id === 'music')).toHaveLength(1);
     expect(apps.find((app) => app.id === 'music-dock')).toBeUndefined();
   });
@@ -41,6 +43,16 @@ describe('appMetadataResolver', () => {
     expect(safari?.displayName).toBe('网页');
     expect(safari?.displayIcon).toBe('data:image/png;base64,custom');
     expect(resolveAppDisplayName('safari-dock')).toBe('网页');
+  });
+
+  it('keeps dock-only preinstalled apps categorized by product kind', () => {
+    expect(catalogApps.find((app) => app.id === 'xingyu')).toBeUndefined();
+    expect(dock.find((app) => app.id === 'xingyu')?.isDock).toBe(true);
+
+    expect(getResolvedAppMetadata('xingyu')).toMatchObject({
+      id: 'xingyu',
+      kind: 'preinstalled',
+    });
   });
 
   it('includes installed user apps with user kind', () => {

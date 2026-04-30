@@ -1,11 +1,12 @@
 import { canonicalizeAppId, useAppProfileStore } from './stores/appProfileStore';
+import { useInstalledUserAppsStore } from './stores/installedUserAppsStore';
 import {
+  DEFAULT_USER_APP_ICON,
   apps as builtinApps,
   dock,
-  getAppsWithUserInstalled,
   type AppInfo,
   type AppKind,
-} from '@/shell/Springboard/apps.data';
+} from './appCatalog';
 
 export type { AppKind };
 
@@ -21,8 +22,22 @@ export interface ResolvedAppMetadata {
 
 function inferKind(app: AppInfo): AppKind {
   if (app.kind) return app.kind;
-  const builtin = builtinApps.find((candidate) => candidate.id === app.id);
-  return builtin?.kind ?? 'user';
+  const catalogApp = [...builtinApps, ...dock].find(
+    (candidate) => canonicalizeAppId(candidate.id) === canonicalizeAppId(app.id),
+  );
+  return catalogApp?.kind ?? 'user';
+}
+
+function getInstalledUserAppInfos(): AppInfo[] {
+  return useInstalledUserAppsStore.getState().apps.map(
+    (u): AppInfo => ({
+      id: u.id,
+      name: u.name,
+      icon: u.iconDataUrl ?? DEFAULT_USER_APP_ICON,
+      page: u.page,
+      kind: 'user',
+    }),
+  );
 }
 
 function toResolved(app: AppInfo): ResolvedAppMetadata {
@@ -41,7 +56,7 @@ function toResolved(app: AppInfo): ResolvedAppMetadata {
 
 export function listResolvedAppMetadata(): ResolvedAppMetadata[] {
   const byId = new Map<string, ResolvedAppMetadata>();
-  const all = [...getAppsWithUserInstalled(), ...dock];
+  const all = [...builtinApps, ...getInstalledUserAppInfos(), ...dock];
   for (const app of all) {
     const id = canonicalizeAppId(app.id);
     if (!byId.has(id)) {
