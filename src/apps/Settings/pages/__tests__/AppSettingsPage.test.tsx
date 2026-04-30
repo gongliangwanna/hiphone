@@ -418,7 +418,6 @@ describe('AppSettingsPage', () => {
 
     expect(await screen.findByTestId('app-icon-current-preview')).toBeInTheDocument();
     expect(screen.queryByTestId('app-icon-crop-area')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('app-icon-output-size')).not.toBeInTheDocument();
     expect(screen.queryByTestId('app-icon-save')).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByTestId('app-icon-upload'), {
@@ -428,13 +427,14 @@ describe('AppSettingsPage', () => {
     });
 
     expect(await screen.findByTestId('app-icon-crop-area')).toBeInTheDocument();
+    expect(screen.getByTestId('app-icon-crop-frame')).toBeInTheDocument();
+    expect(screen.getByTestId('app-icon-crop-mask')).toBeInTheDocument();
     expect(screen.getByTestId('app-icon-preview-image')).toHaveAttribute(
       'src',
       'data:image/png;base64,UPLOADED_ICON',
     );
-    expect(screen.getByTestId('app-icon-output-size')).toHaveTextContent(
-      '512 x 512',
-    );
+    expect(screen.queryByTestId('app-icon-output-size')).not.toBeInTheDocument();
+    expect(screen.queryByText('Safari')).not.toBeInTheDocument();
     expect(screen.queryByText('原图尺寸')).not.toBeInTheDocument();
     expect(screen.queryByText('原图大小')).not.toBeInTheDocument();
     expect(screen.queryByText('缩放')).not.toBeInTheDocument();

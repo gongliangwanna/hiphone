@@ -24,6 +24,9 @@ const ICON_OUTPUT_MIME_TYPE = 'image/jpeg';
 const ICON_OUTPUT_QUALITY = 0.82;
 const ICON_OUTPUT_BACKGROUND = '#fff';
 const PREVIEW_FALLBACK_SIZE = 240;
+const CROP_FRAME_RATIO = 0.68;
+const CROP_FRAME_PERCENT = CROP_FRAME_RATIO * 100;
+const CROP_FRAME_INSET_PERCENT = (100 - CROP_FRAME_PERCENT) / 2;
 const MIN_SCALE = 1;
 const MAX_SCALE = 5;
 
@@ -419,12 +422,15 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
     clientY: number,
   ) => {
     const rect = element.getBoundingClientRect();
-    const previewSize = rect.width || PREVIEW_FALLBACK_SIZE;
-    const scale = ICON_OUTPUT_SIZE / previewSize;
+    const stageSize = rect.width || PREVIEW_FALLBACK_SIZE;
+    const frameSize = stageSize * CROP_FRAME_RATIO;
+    const stageCenterX = rect.left + stageSize / 2;
+    const stageCenterY = rect.top + stageSize / 2;
+    const scale = ICON_OUTPUT_SIZE / frameSize;
 
     return {
-      x: (clientX - rect.left - previewSize / 2) * scale,
-      y: (clientY - rect.top - previewSize / 2) * scale,
+      x: (clientX - stageCenterX) * scale,
+      y: (clientY - stageCenterY) * scale,
     };
   };
 
@@ -569,26 +575,16 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
           ) : (
             <CurrentIconPreview app={app} source={source} />
           )}
-          <div
-            className="mt-4 max-w-full truncate text-center"
-            style={{
-              color: 'var(--color-label)',
-              fontSize: 'var(--font-size-title3)',
-              fontWeight: 'var(--font-weight-semibold)',
-            }}
-          >
-            {app.displayName}
-          </div>
-          {isEditingIcon && (
+          {!isEditingIcon && (
             <div
-              data-testid="app-icon-output-size"
-              className="mt-1"
+              className="mt-4 max-w-full truncate text-center"
               style={{
-                color: 'var(--color-secondaryLabel)',
-                fontSize: 'var(--font-size-footnote)',
+                color: 'var(--color-label)',
+                fontSize: 'var(--font-size-title3)',
+                fontWeight: 'var(--font-weight-semibold)',
               }}
             >
-              {ICON_OUTPUT_SIZE} x {ICON_OUTPUT_SIZE}
+              {app.displayName}
             </div>
           )}
         </section>
@@ -729,8 +725,8 @@ function IconPreview({
   onWheelNative,
 }: {
   app: ResolvedAppMetadata;
-  source: LoadedImageSource | null;
-  crop: AppIconCrop | null;
+  source: LoadedImageSource;
+  crop: AppIconCrop;
   onPointerDown: (event: PointerEvent<HTMLDivElement>) => void;
   onPointerMove: (event: PointerEvent<HTMLDivElement>) => void;
   onPointerUp: (event: PointerEvent<HTMLDivElement>) => void;
@@ -739,7 +735,7 @@ function IconPreview({
   onWheelNative: (event: WheelEvent, element: HTMLDivElement) => void;
 }) {
   const cropAreaRef = useRef<HTMLDivElement>(null);
-  const imageStyle = source && crop ? getPreviewImageStyle(source, crop) : null;
+  const imageStyle = getPreviewImageStyle(source, crop);
 
   useEffect(() => {
     const element = cropAreaRef.current;
@@ -766,34 +762,70 @@ function IconPreview({
       onPointerCancel={onPointerCancel}
       onLostPointerCapture={onLostPointerCapture}
       style={{
-        width: 'min(68vw, 248px)',
+        width: 'min(86vw, 328px)',
         aspectRatio: '1 / 1',
-        borderRadius: 46,
-        backgroundColor: 'var(--color-systemGray5)',
-        boxShadow: '0 18px 42px rgba(0,0,0,0.18)',
-        cursor: source && crop ? 'grab' : 'default',
+        borderRadius: 30,
+        backgroundColor: 'var(--color-tertiarySystemBackground)',
+        boxShadow: '0 16px 44px rgba(0,0,0,0.16)',
+        cursor: 'grab',
       }}
     >
-      {source && imageStyle ? (
-        <img
-          data-testid="app-icon-preview-image"
-          src={source.dataUrl}
-          alt=""
-          draggable={false}
-          className="absolute max-w-none select-none"
-          style={imageStyle}
-        />
-      ) : (
-        <span
+      <img
+        data-testid="app-icon-preview-image"
+        src={source.dataUrl}
+        alt=""
+        draggable={false}
+        className="absolute max-w-none select-none"
+        style={imageStyle}
+      />
+      <div data-testid="app-icon-crop-mask" className="pointer-events-none absolute inset-0">
+        <div
+          className="absolute left-0 right-0 top-0"
           style={{
-            color: 'var(--color-secondaryLabel)',
-            fontSize: 64,
-            fontWeight: 'var(--font-weight-semibold)',
+            height: `${CROP_FRAME_INSET_PERCENT}%`,
+            backgroundColor: 'rgba(0,0,0,0.34)',
           }}
-        >
-          {app.displayName.slice(0, 1)}
-        </span>
-      )}
+        />
+        <div
+          className="absolute bottom-0 left-0 right-0"
+          style={{
+            height: `${CROP_FRAME_INSET_PERCENT}%`,
+            backgroundColor: 'rgba(0,0,0,0.34)',
+          }}
+        />
+        <div
+          className="absolute left-0"
+          style={{
+            top: `${CROP_FRAME_INSET_PERCENT}%`,
+            width: `${CROP_FRAME_INSET_PERCENT}%`,
+            height: `${CROP_FRAME_PERCENT}%`,
+            backgroundColor: 'rgba(0,0,0,0.34)',
+          }}
+        />
+        <div
+          className="absolute right-0"
+          style={{
+            top: `${CROP_FRAME_INSET_PERCENT}%`,
+            width: `${CROP_FRAME_INSET_PERCENT}%`,
+            height: `${CROP_FRAME_PERCENT}%`,
+            backgroundColor: 'rgba(0,0,0,0.34)',
+          }}
+        />
+      </div>
+      <div
+        data-testid="app-icon-crop-frame"
+        className="pointer-events-none absolute"
+        style={{
+          left: `${CROP_FRAME_INSET_PERCENT}%`,
+          top: `${CROP_FRAME_INSET_PERCENT}%`,
+          width: `${CROP_FRAME_PERCENT}%`,
+          height: `${CROP_FRAME_PERCENT}%`,
+          borderRadius: 38,
+          border: '2px solid rgba(255,255,255,0.96)',
+          boxShadow:
+            '0 0 0 1px rgba(0,0,0,0.18), inset 0 0 0 1px rgba(0,0,0,0.12)',
+        }}
+      />
     </div>
   );
 }
@@ -807,10 +839,14 @@ function getPreviewImageStyle(
   const baseHeightPercent = aspectRatio >= 1 ? 100 : (1 / aspectRatio) * 100;
 
   return {
-    width: `${baseWidthPercent * crop.scale}%`,
-    height: `${baseHeightPercent * crop.scale}%`,
-    left: `calc(50% + ${(crop.offsetX / ICON_OUTPUT_SIZE) * 100}%)`,
-    top: `calc(50% + ${(crop.offsetY / ICON_OUTPUT_SIZE) * 100}%)`,
+    width: `${baseWidthPercent * crop.scale * CROP_FRAME_RATIO}%`,
+    height: `${baseHeightPercent * crop.scale * CROP_FRAME_RATIO}%`,
+    left: `calc(50% + ${
+      (crop.offsetX / ICON_OUTPUT_SIZE) * CROP_FRAME_PERCENT
+    }%)`,
+    top: `calc(50% + ${
+      (crop.offsetY / ICON_OUTPUT_SIZE) * CROP_FRAME_PERCENT
+    }%)`,
     transform: 'translate(-50%, -50%)',
     objectFit: 'fill',
   };
