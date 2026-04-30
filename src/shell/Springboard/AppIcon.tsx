@@ -6,6 +6,14 @@ import { spring } from '@/platform/design-tokens/motion';
 import { useAppRuntimeStore, type AppOrigin } from '@/platform/stores/appRuntimeStore';
 import { useLongPress } from '@/platform/gesture/useLongPress';
 import { useSpringboardLayoutStore } from '@/platform/stores/springboardLayoutStore';
+import { useInstalledUserAppsStore } from '@/platform/stores/installedUserAppsStore';
+import {
+  canonicalizeAppId,
+  useAppProfileStore,
+} from '@/platform/stores/appProfileStore';
+import {
+  getResolvedAppMetadata,
+} from '@/platform/appMetadataResolver';
 import './jiggle.css';
 
 interface AppIconProps {
@@ -43,10 +51,26 @@ export const AppIcon = memo(function AppIcon({
 }: AppIconProps) {
   const iconRef = useRef<HTMLDivElement>(null);
   const iconControls = useAnimationControls();
+  const profiles = useAppProfileStore((s) => s.profiles);
+  const installedApps = useInstalledUserAppsStore((s) => s.apps);
   const dismissedAppId = useAppRuntimeStore((s) => s.dismissedAppId);
   const dismissReason = useAppRuntimeStore((s) => s.dismissReason);
   const enterEditMode = useSpringboardLayoutStore((s) => s.enterEditMode);
-  const isLandingTarget = dismissedAppId === app.id && dismissReason === 'home';
+  const canonicalAppId = canonicalizeAppId(app.id);
+  const resolvedApp = useMemo(
+    () => getResolvedAppMetadata(canonicalAppId),
+    [canonicalAppId, profiles, installedApps],
+  );
+  const displayName = useMemo(
+    () => resolvedApp?.displayName ?? app.name,
+    [app.name, resolvedApp],
+  );
+  const displayIcon = useMemo(
+    () => resolvedApp?.displayIcon ?? app.icon,
+    [app.icon, resolvedApp],
+  );
+  const isLandingTarget =
+    dismissedAppId === canonicalAppId && dismissReason === 'home';
 
   // Random jiggle delay per icon (stable across re-renders) — desyncs the
   // start phase so neighbours don't move in lock-step.
@@ -97,7 +121,7 @@ export const AppIcon = memo(function AppIcon({
     const rect = el.getBoundingClientRect();
     const deviceRoot = el.closest('[data-testid="device-root"]') as HTMLElement | null;
     const deviceRect = deviceRoot?.getBoundingClientRect();
-    onOpen(app.id, {
+    onOpen(canonicalAppId, {
       x: rect.left - (deviceRect?.left ?? 0),
       y: rect.top - (deviceRect?.top ?? 0),
       width: rect.width,
@@ -128,7 +152,7 @@ export const AppIcon = memo(function AppIcon({
       onPointerDown={isEditMode ? handleEditPointerDown : longPress.onPointerDown}
       onPointerUp={isEditMode ? undefined : longPress.onPointerUp}
       onPointerCancel={isEditMode ? undefined : longPress.onPointerCancel}
-      data-testid={`app-icon-${app.id}`}
+      data-testid={`app-icon-${canonicalAppId}`}
     >
       {/* Icon image with iOS mask */}
       <motion.div
@@ -144,14 +168,14 @@ export const AppIcon = memo(function AppIcon({
         {hideIconImages ? (
           <div
             className="h-full w-full"
-            style={{ backgroundColor: getPlaceholderColor(app.id) }}
-            data-testid={`app-icon-placeholder-${app.id}`}
-            aria-label={`${app.name} 占位图标`}
+            style={{ backgroundColor: getPlaceholderColor(canonicalAppId) }}
+            data-testid={`app-icon-placeholder-${canonicalAppId}`}
+            aria-label={`${displayName} 占位图标`}
           />
         ) : (
           <img
-            src={app.icon}
-            alt={app.name}
+            src={displayIcon}
+            alt={displayName}
             className="h-full w-full object-cover"
             draggable={false}
           />
@@ -168,7 +192,7 @@ export const AppIcon = memo(function AppIcon({
             lineHeight: 1.2,
           }}
         >
-          {app.name}
+          {displayName}
         </span>
       )}
     </motion.button>

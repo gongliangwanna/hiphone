@@ -6,18 +6,57 @@ import {
   type AppInfo,
   type AppKind,
 } from '@/platform/appCatalog';
+import {
+  canonicalizeAppId,
+  useAppProfileStore,
+} from '@/platform/stores/appProfileStore';
 import { useInstalledUserAppsStore } from '@/platform/stores/installedUserAppsStore';
 
 export type { AppInfo, AppKind };
 
+function withProfile(app: AppInfo): AppInfo {
+  const canonicalId = canonicalizeAppId(app.id);
+  const profile = useAppProfileStore.getState().getProfile(canonicalId);
+
+  return {
+    ...app,
+    id: canonicalId,
+    name: profile?.customName ?? app.name,
+    icon: profile?.customIconDataUrl ?? app.icon,
+  };
+}
+
+function removeAppsPresentInDock(appInfos: AppInfo[]): AppInfo[] {
+  const dockIds = new Set(
+    catalogDock.map((app) => canonicalizeAppId(app.id)),
+  );
+  const seen = new Set<string>();
+  const result: AppInfo[] = [];
+
+  for (const app of appInfos) {
+    const canonicalId = canonicalizeAppId(app.id);
+    if (dockIds.has(canonicalId)) continue;
+    if (seen.has(canonicalId)) continue;
+    seen.add(canonicalId);
+    result.push({ ...app, id: canonicalId });
+  }
+
+  return result;
+}
+
 /** All apps (grid only, no dock) */
-export const apps: AppInfo[] = [...catalogApps];
+export const apps: AppInfo[] = removeAppsPresentInDock(catalogApps).map(
+  withProfile,
+);
 
 /** Dock apps */
-export const dock: AppInfo[] = [...catalogDock];
+export const dock: AppInfo[] = catalogDock.map(withProfile);
 
 export function getAppInfoById(id: string): AppInfo | undefined {
-  return getCatalogAppInfoById(id);
+  const app =
+    getCatalogAppInfoById(id) ??
+    getCatalogAppInfoById(canonicalizeAppId(id));
+  return app ? withProfile(app) : undefined;
 }
 
 /** Available wallpapers */
@@ -45,5 +84,7 @@ export function getAppsWithUserInstalled(): AppInfo[] {
     page: u.page,
     kind: 'user',
   }));
-  return [...apps, ...userInfos];
+  return removeAppsPresentInDock([...catalogApps, ...userInfos]).map(
+    withProfile,
+  );
 }
