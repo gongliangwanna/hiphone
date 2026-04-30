@@ -10,3 +10,5 @@
 1. 如果用户感觉“卡”，先检查是否又把拖拽位移写回了 React state，MotionValue 才是这里的默认方案。
 2. 打断中的页切换动画时，新的拖拽起点必须取当前可见 `trackX`，不能强行跳回整页目标位后再开始拖。
 3. 真机卡顿优先排查 `touch-action` 是否被写得过宽，以及 Dock 毛玻璃是否在拖拽期间持续参与合成。
+4. App 业务身份必须使用 canonical app id。Dock 是展示位置，不允许用 `*-dock` 后缀当业务身份、profile key、存储归属 key。
+5. 同一个 canonical App 不能同时出现在 Dock 和桌面网格。解析默认布局或历史布局时，Dock 优先，桌面重复项过滤。

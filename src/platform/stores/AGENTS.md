@@ -9,6 +9,8 @@
 6. **Card dismiss 决策走 projection** (P5 iOS18 校准): `finishCardDismiss` 调用 `project(position, velocity)` 计算"如果此刻松手,手指动量会带到哪里",然后用单一阈值判定 commit。公式见 `src/platform/gesture/projection.ts`。
 7. **`cardDismiss.deltaY` 是 raw signed 位移**: 不 clamp 到 cardHeight,因为 projection 要能推算飞出卡片边界之外的情形。UI-only 的 `progress` 仍然 clamp 到 [0, 1]。
 8. **`assistiveTouchStore` 独立于 `uiStateStore`**：悬浮球不是互斥 overlay，需与 ControlCenter 等共存。位置使用百分比存储以适应 resize。
+9. `appProfileStore` 只保存用户覆盖的显示名称、图标和裁剪参数，不修改 `apps.data.ts`、`appRegistry` 或 user app manifest 的原始元数据。
+10. 恢复默认 App 名称/图标只能删除 profile 覆盖，不应删除 App 数据、安装包或布局信息。
 
 ## 派生 selector
 - `useGestureIntent()` —— 返回 `'idle' | 'switcher-active'`。消费者不应从 `presentationMode` 手动拼判断逻辑。
