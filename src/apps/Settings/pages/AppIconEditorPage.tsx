@@ -17,7 +17,7 @@ import {
   type AppIconCrop,
 } from '@/platform/stores/appProfileStore';
 import { useInstalledUserAppsStore } from '@/platform/stores/installedUserAppsStore';
-import { List, ListRow, ListSection } from '@/system';
+import { List, ListSection } from '@/system';
 
 const ICON_OUTPUT_SIZE = 512;
 const ICON_OUTPUT_MIME_TYPE = 'image/jpeg';
@@ -35,7 +35,6 @@ interface LoadedImageSource {
   dataUrl: string;
   width: number;
   height: number;
-  byteSize?: number;
 }
 
 type IconSourceOrigin = 'app' | 'upload' | 'saved';
@@ -232,25 +231,6 @@ function createInitialCrop(width: number, height: number): AppIconCrop {
   };
 }
 
-function getDataUrlByteSize(dataUrl: string): number {
-  const base64 = dataUrl.split(',')[1] ?? '';
-  if (!base64) return 0;
-
-  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
-  return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
-}
-
-function formatIconByteSize(bytes: number | null | undefined): string {
-  if (!bytes || bytes <= 0) return '0 B';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatIconScale(scale: number): string {
-  return `${Math.round(scale * 100)}%`;
-}
-
 function getSortedPointers(
   pointers: Map<number, { x: number; y: number }>,
 ): ActivePointer[] {
@@ -290,7 +270,6 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
   const [source, setSource] = useState<LoadedImageSource | null>(null);
   const [crop, setCrop] = useState<AppIconCrop | null>(null);
   const [sourceOrigin, setSourceOrigin] = useState<IconSourceOrigin>('app');
-  const [savedIconBytes, setSavedIconBytes] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [statusText, setStatusText] = useState('');
 
@@ -304,10 +283,9 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
     width: number,
     height: number,
     origin: IconSourceOrigin,
-    byteSize?: number,
   ) => {
     const nextCrop = createInitialCrop(width, height);
-    setSource({ dataUrl, width, height, byteSize });
+    setSource({ dataUrl, width, height });
     setCrop(nextCrop);
     setSourceOrigin(origin);
     sourceOriginRef.current = origin;
@@ -339,7 +317,6 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
     activePointersRef.current.clear();
     if (appIdChanged) {
       setStatusText('');
-      setSavedIconBytes(null);
       setSourceOrigin('app');
       sourceOriginRef.current = 'app';
     }
@@ -358,9 +335,6 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
         if (!alive || imageLoadRequestIdRef.current !== requestId) return;
         const appIcon = app.displayIcon!;
         setLoadedSource(appIcon, width, height, 'app');
-        setSavedIconBytes(
-          appIcon.startsWith('data:') ? getDataUrlByteSize(appIcon) : null,
-        );
       })
       .catch(() => {
         if (!alive || imageLoadRequestIdRef.current !== requestId) return;
@@ -389,10 +363,8 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
     dataUrl: string,
     width: number,
     height: number,
-    byteSize?: number,
   ) => {
-    setLoadedSource(dataUrl, width, height, 'upload', byteSize);
-    setSavedIconBytes(null);
+    setLoadedSource(dataUrl, width, height, 'upload');
     setStatusText('');
   };
 
@@ -421,7 +393,7 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
           ) {
             return;
           }
-          resetSource(dataUrl, width, height, file.size);
+          resetSource(dataUrl, width, height);
         })
         .catch(() => {
           if (
@@ -558,7 +530,6 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
     try {
       const normalizedCrop = constrainCrop(crop);
       const dataUrl = await createCroppedIconDataUrl(source.dataUrl, normalizedCrop);
-      const iconBytes = getDataUrlByteSize(dataUrl);
       setIcon(app.id, {
         dataUrl,
         crop: normalizedCrop,
@@ -568,9 +539,7 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
         ICON_OUTPUT_SIZE,
         ICON_OUTPUT_SIZE,
         'saved',
-        iconBytes,
       );
-      setSavedIconBytes(iconBytes);
       setStatusText('已保存');
     } catch {
       setStatusText('保存失败');
@@ -610,38 +579,19 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
           >
             {app.displayName}
           </div>
-        </section>
-
-        {isEditingIcon && (
-          <ListSection title="编辑">
-            <div data-testid="app-icon-editing-panel">
-              <ListRow
-                title="图标大小"
-                detail={`${ICON_OUTPUT_SIZE} x ${ICON_OUTPUT_SIZE}`}
-              />
-              <ListRow
-                title="原图尺寸"
-                detail={`${source.width} x ${source.height}`}
-              />
-              <ListRow
-                title="原图大小"
-                detail={formatIconByteSize(source.byteSize)}
-              />
-              <ListRow
-                title="缩放"
-                detail={formatIconScale(crop.scale)}
-                isLast={savedIconBytes === null}
-              />
-              {savedIconBytes !== null && (
-                <ListRow
-                  title="压缩大小"
-                  detail={formatIconByteSize(savedIconBytes)}
-                  isLast
-                />
-              )}
+          {isEditingIcon && (
+            <div
+              data-testid="app-icon-output-size"
+              className="mt-1"
+              style={{
+                color: 'var(--color-secondaryLabel)',
+                fontSize: 'var(--font-size-footnote)',
+              }}
+            >
+              {ICON_OUTPUT_SIZE} x {ICON_OUTPUT_SIZE}
             </div>
-          </ListSection>
-        )}
+          )}
+        </section>
 
         <ListSection title="图标">
           <div className="flex items-center justify-between gap-3 px-4 py-3">

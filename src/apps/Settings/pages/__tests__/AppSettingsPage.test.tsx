@@ -407,7 +407,7 @@ describe('AppSettingsPage', () => {
     );
   });
 
-  it('shows the icon editing panel and size after selecting an image', async () => {
+  it('enters a focused icon editing surface after selecting an image', async () => {
     installImageMocks();
     useSettingsNavStore.getState().push({
       page: 'appIconEditor',
@@ -417,7 +417,8 @@ describe('AppSettingsPage', () => {
     render(<SettingsApp />);
 
     expect(await screen.findByTestId('app-icon-current-preview')).toBeInTheDocument();
-    expect(screen.queryByTestId('app-icon-editing-panel')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('app-icon-crop-area')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('app-icon-output-size')).not.toBeInTheDocument();
     expect(screen.queryByTestId('app-icon-save')).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByTestId('app-icon-upload'), {
@@ -426,15 +427,18 @@ describe('AppSettingsPage', () => {
       },
     });
 
-    expect(await screen.findByTestId('app-icon-editing-panel')).toBeInTheDocument();
-    expect(screen.getByText('图标大小')).toBeInTheDocument();
-    expect(screen.getByText('512 x 512')).toBeInTheDocument();
-    expect(screen.getByText('原图尺寸')).toBeInTheDocument();
-    expect(screen.getByText('1024 x 512')).toBeInTheDocument();
-    expect(screen.getByText('原图大小')).toBeInTheDocument();
-    expect(screen.getByText('10 B')).toBeInTheDocument();
-    expect(screen.getByText('缩放')).toBeInTheDocument();
-    expect(screen.getByText('100%')).toBeInTheDocument();
+    expect(await screen.findByTestId('app-icon-crop-area')).toBeInTheDocument();
+    expect(screen.getByTestId('app-icon-preview-image')).toHaveAttribute(
+      'src',
+      'data:image/png;base64,UPLOADED_ICON',
+    );
+    expect(screen.getByTestId('app-icon-output-size')).toHaveTextContent(
+      '512 x 512',
+    );
+    expect(screen.queryByText('原图尺寸')).not.toBeInTheDocument();
+    expect(screen.queryByText('原图大小')).not.toBeInTheDocument();
+    expect(screen.queryByText('缩放')).not.toBeInTheDocument();
+    expect(screen.queryByText('压缩大小')).not.toBeInTheDocument();
     expect(screen.getByTestId('app-icon-save')).toBeInTheDocument();
   });
 
