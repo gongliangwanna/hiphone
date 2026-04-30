@@ -23,7 +23,11 @@ import { ModelSelectPage } from './pages/ModelSelectPage';
 import { DeveloperToolsPage } from './pages/DeveloperToolsPage';
 import { StoragePage } from './pages/StoragePage';
 import { AppSettingsPage } from './pages/AppSettingsPage';
+import { AppDetailPage } from './pages/AppDetailPage';
 import { AppScreen, NavBar } from '@/system';
+import { getResolvedAppMetadata } from '@/platform/appMetadataResolver';
+import { useAppProfileStore } from '@/platform/stores/appProfileStore';
+import { useInstalledUserAppsStore } from '@/platform/stores/installedUserAppsStore';
 
 const PAGE_TITLES: Record<string, string> = {
   home: '设置',
@@ -33,6 +37,7 @@ const PAGE_TITLES: Record<string, string> = {
   display: '显示与亮度',
   storage: '存储',
   apps: 'App',
+  appDetail: 'App',
   // AI
   persona: '我的身份',
   aiSettings: 'AI 设置',
@@ -70,6 +75,7 @@ const PAGE_COMPONENTS: Record<string, ComponentType<SettingsPageProps>> = {
   display: asPage(DisplayPage),
   storage: asPage(StoragePage),
   apps: asPage(AppSettingsPage),
+  appDetail: AppDetailPage,
   persona: asPage(PersonaPage),
   aiSettings: asPage(AISettingsPage),
   aiTools: asPage(AIToolsPage),
@@ -97,6 +103,8 @@ export function SettingsApp() {
   const pop = useSettingsNavStore((s) => s.pop);
   const reset = useSettingsNavStore((s) => s.reset);
   const goHome = useAppRuntimeStore((s) => s.goHome);
+  useAppProfileStore((s) => s.profiles);
+  useInstalledUserAppsStore((s) => s.apps);
   const prevLengthRef = useRef(stack.length);
 
   // Only reset navigation if the app was killed (swiped away in switcher).
@@ -110,7 +118,11 @@ export function SettingsApp() {
 
   const currentItem = stack[stack.length - 1] ?? { page: 'home' as const };
   const currentPage = currentItem.page;
-  const title = PAGE_TITLES[currentPage] ?? '设置';
+  const title =
+    currentPage === 'appDetail'
+      ? getResolvedAppMetadata(currentItem.params?.appId ?? '')?.displayName ??
+        'App'
+      : PAGE_TITLES[currentPage] ?? '设置';
   const showBack = stack.length > 1;
 
   // +1 = forward (push), -1 = backward (pop)
