@@ -1,7 +1,13 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppSettingsPage } from '../AppSettingsPage';
+import {
+  applyPan,
+  applyPinch,
+  clampScale,
+  createCroppedIconDataUrl,
+} from '../AppIconEditorPage';
 import { SettingsApp } from '../../SettingsApp';
 import { useSettingsNavStore } from '../../settingsNavStore';
 import { useAppProfileStore } from '@/platform/stores/appProfileStore';
@@ -19,6 +25,69 @@ vi.mock('@/platform/storage/calculateAppStorageUsage', () => ({
 
 const calculateAllAppStorageUsageMock = vi.mocked(calculateAllAppStorageUsage);
 const calculateAppStorageUsageMock = vi.mocked(calculateAppStorageUsage);
+let canvasMock: ReturnType<typeof mockCanvas2d> | null = null;
+
+class MockFileReader {
+  result: string | ArrayBuffer | null = null;
+  onload: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+
+  readAsDataURL(file: File) {
+    this.result = `data:${file.type};base64,UPLOADED_ICON`;
+    queueMicrotask(() => this.onload?.());
+  }
+}
+
+class MockImage {
+  naturalWidth = 1024;
+  naturalHeight = 512;
+  width = 1024;
+  height = 512;
+  onload: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  private source = '';
+
+  set src(value: string) {
+    this.source = value;
+    queueMicrotask(() => this.onload?.());
+  }
+
+  get src() {
+    return this.source;
+  }
+}
+
+function mockCanvas2d() {
+  const context = {
+    clearRect: vi.fn(),
+    drawImage: vi.fn(),
+  };
+  const getContextSpy = vi
+    .spyOn(HTMLCanvasElement.prototype, 'getContext')
+    .mockImplementation((contextId: string) =>
+      contextId === '2d'
+        ? (context as unknown as CanvasRenderingContext2D)
+        : null,
+    );
+  const toDataURLSpy = vi
+    .spyOn(HTMLCanvasElement.prototype, 'toDataURL')
+    .mockReturnValue('data:image/png;base64,CROPPED_ICON');
+
+  return {
+    context,
+    getContextSpy,
+    toDataURLSpy,
+    restore: () => {
+      getContextSpy.mockRestore();
+      toDataURLSpy.mockRestore();
+    },
+  };
+}
+
+function installImageMocks() {
+  vi.stubGlobal('Image', MockImage);
+  vi.stubGlobal('FileReader', MockFileReader);
+}
 
 function mockUsageFor(appId: string) {
   if (appId === 'safari') {
@@ -62,6 +131,79 @@ describe('AppSettingsPage', () => {
     calculateAppStorageUsageMock.mockImplementation(async (appId) =>
       mockUsageFor(appId),
     );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    canvasMock?.restore();
+    canvasMock = null;
+  });
+
+  it('clamps scale and keeps pan inside the square crop bounds', () => {
+    const crop = {
+      sourceWidth: 1024,
+      sourceHeight: 512,
+      scale: 1,
+      offsetX: 0,
+      offsetY: 0,
+    };
+
+    expect(clampScale(0.25)).toBe(1);
+    expect(clampScale(10)).toBe(5);
+    expect(clampScale(2.2)).toBe(2.2);
+    expect(applyPan(crop, 80, 40)).toMatchObject({
+      offsetX: 80,
+      offsetY: 0,
+    });
+    expect(applyPan(crop, 999, 0).offsetX).toBe(256);
+  });
+
+  it('pinches around an explicit next scale and preserves the anchor point', () => {
+    const crop = {
+      sourceWidth: 1024,
+      sourceHeight: 512,
+      scale: 1,
+      offsetX: 0,
+      offsetY: 0,
+    };
+
+    const pinched = applyPinch(crop, {
+      previousCenterX: 100,
+      previousCenterY: 0,
+      nextCenterX: 100,
+      nextCenterY: 0,
+      nextScale: 2,
+    });
+
+    expect(pinched.scale).toBe(2);
+    expect(pinched.offsetX).toBe(-100);
+    expect(pinched.offsetY).toBe(0);
+  });
+
+  it('draws the cropped icon with the same cover and offset semantics as preview', async () => {
+    installImageMocks();
+    canvasMock = mockCanvas2d();
+
+    const result = await createCroppedIconDataUrl(
+      'data:image/png;base64,SOURCE',
+      {
+        sourceWidth: 1024,
+        sourceHeight: 512,
+        scale: 1.5,
+        offsetX: 20,
+        offsetY: -10,
+      },
+    );
+
+    expect(result).toBe('data:image/png;base64,CROPPED_ICON');
+    expect(canvasMock.context.clearRect).toHaveBeenCalledWith(0, 0, 512, 512);
+    expect(canvasMock.context.drawImage).toHaveBeenCalledTimes(1);
+    const drawCall = canvasMock.context.drawImage.mock.calls[0]!;
+    expect(drawCall[1]).toBeCloseTo(-492);
+    expect(drawCall[2]).toBeCloseTo(-138);
+    expect(drawCall[3]).toBeCloseTo(1536);
+    expect(drawCall[4]).toBeCloseTo(768);
+    expect(canvasMock.toDataURLSpy).toHaveBeenCalledWith('image/png');
   });
 
   it('groups system, preinstalled, and user installed apps', async () => {
@@ -199,5 +341,88 @@ describe('AppSettingsPage', () => {
       page: 'appIconEditor',
       params: { appId: 'safari' },
     });
+  });
+
+  it('renders the app icon editor route from the detail page in SettingsApp', async () => {
+    render(<SettingsApp />);
+
+    await userEvent.click(screen.getByTestId('list-row-App'));
+    await userEvent.click(await screen.findByTestId('app-settings-row-safari'));
+    await userEvent.click(await screen.findByTestId('app-detail-edit-icon'));
+
+    expect(await screen.findByTestId('app-icon-editor-page')).toBeInTheDocument();
+    const navBars = screen.getAllByTestId('nav-bar');
+    expect(navBars[navBars.length - 1]).toHaveTextContent('编辑图标');
+  });
+
+  it('shows an empty state when the icon editor app id is missing', async () => {
+    useSettingsNavStore.getState().push({ page: 'appIconEditor' });
+    render(<SettingsApp />);
+
+    expect(await screen.findByTestId('app-icon-editor-empty')).toHaveTextContent(
+      'App 不存在',
+    );
+  });
+
+  it('uploads an image and saves the cropped icon profile', async () => {
+    installImageMocks();
+    canvasMock = mockCanvas2d();
+    useSettingsNavStore.getState().push({
+      page: 'appIconEditor',
+      params: { appId: 'safari' },
+    });
+
+    render(<SettingsApp />);
+
+    const file = new File(['icon-bytes'], 'wide.png', { type: 'image/png' });
+    fireEvent.change(await screen.findByTestId('app-icon-upload'), {
+      target: { files: [file] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('app-icon-preview-image')).toHaveAttribute(
+        'src',
+        'data:image/png;base64,UPLOADED_ICON',
+      );
+    });
+
+    const cropArea = screen.getByTestId('app-icon-crop-area');
+    fireEvent.pointerDown(cropArea, {
+      pointerId: 1,
+      clientX: 100,
+      clientY: 100,
+    });
+    fireEvent.pointerMove(cropArea, {
+      pointerId: 1,
+      clientX: 130,
+      clientY: 110,
+    });
+    fireEvent.pointerUp(cropArea, {
+      pointerId: 1,
+      clientX: 130,
+      clientY: 110,
+    });
+    fireEvent.wheel(cropArea, {
+      deltaY: -100,
+      clientX: 130,
+      clientY: 110,
+    });
+    await userEvent.click(screen.getByTestId('app-icon-save'));
+
+    await waitFor(() => {
+      expect(
+        useAppProfileStore.getState().getProfile('safari')?.customIconDataUrl,
+      ).toBe('data:image/png;base64,CROPPED_ICON');
+    });
+    const profile = useAppProfileStore.getState().getProfile('safari');
+    expect(profile?.iconCrop).toMatchObject({
+      sourceWidth: 1024,
+      sourceHeight: 512,
+    });
+    expect(profile?.iconCrop?.scale).toBeGreaterThan(1);
+    expect(profile?.iconCrop?.offsetX).toBeGreaterThan(0);
+    expect(screen.getByTestId('app-icon-save-status')).toHaveTextContent(
+      '已保存',
+    );
   });
 });

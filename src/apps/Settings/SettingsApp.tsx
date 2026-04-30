@@ -24,6 +24,7 @@ import { DeveloperToolsPage } from './pages/DeveloperToolsPage';
 import { StoragePage } from './pages/StoragePage';
 import { AppSettingsPage } from './pages/AppSettingsPage';
 import { AppDetailPage } from './pages/AppDetailPage';
+import { AppIconEditorPage } from './pages/AppIconEditorPage';
 import { AppScreen, NavBar } from '@/system';
 import { getResolvedAppMetadata } from '@/platform/appMetadataResolver';
 import { useAppProfileStore } from '@/platform/stores/appProfileStore';
@@ -38,6 +39,7 @@ const PAGE_TITLES: Record<string, string> = {
   storage: '存储',
   apps: 'App',
   appDetail: 'App',
+  appIconEditor: '编辑图标',
   // AI
   persona: '我的身份',
   aiSettings: 'AI 设置',
@@ -76,6 +78,7 @@ const PAGE_COMPONENTS: Record<string, ComponentType<SettingsPageProps>> = {
   storage: asPage(StoragePage),
   apps: asPage(AppSettingsPage),
   appDetail: AppDetailPage,
+  appIconEditor: AppIconEditorPage,
   persona: asPage(PersonaPage),
   aiSettings: asPage(AISettingsPage),
   aiTools: asPage(AIToolsPage),
