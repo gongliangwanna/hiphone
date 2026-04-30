@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ComponentType } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useSettingsNavStore } from './settingsNavStore';
 import { useAppRuntimeStore, wasAppKilled, clearAppKilled } from '@/platform/stores/appRuntimeStore';
@@ -50,28 +50,39 @@ const PAGE_TITLES: Record<string, string> = {
   developerTools: '开发者工具',
 };
 
-const PAGE_COMPONENTS: Record<string, React.ComponentType> = {
-  home: SettingsHome,
-  about: AboutPage,
-  wallpaper: WallpaperPage,
-  display: DisplayPage,
-  storage: StoragePage,
-  persona: PersonaPage,
-  aiSettings: AISettingsPage,
-  aiTools: AIToolsPage,
-  aiBuilderModel: AIBuilderModelPage,
-  characters: CharactersPage,
-  characterEdit: CharacterEditPage,
-  systemPromptEdit: SystemPromptEditPage,
-  postHistoryEdit: PostHistoryEditPage,
-  worldBooks: WorldBooksPage,
-  worldBookEdit: WorldBookEditPage,
-  worldBookEntryEdit: WorldBookEntryEditPage,
-  promptViewer: PromptViewerPage,
-  modelSelect: ModelSelectPage,
-  heartbeat: HeartbeatSettingsPage,
-  disclaimer: DisclaimerPage,
-  developerTools: DeveloperToolsPage,
+type SettingsPageProps = { params?: Record<string, string> };
+
+const asPage = (
+  Component: ComponentType,
+): ComponentType<SettingsPageProps> =>
+  function PageAdapter() {
+    return <Component />;
+  };
+
+const SettingsHomePage = asPage(SettingsHome);
+
+const PAGE_COMPONENTS: Record<string, ComponentType<SettingsPageProps>> = {
+  home: SettingsHomePage,
+  about: asPage(AboutPage),
+  wallpaper: asPage(WallpaperPage),
+  display: asPage(DisplayPage),
+  storage: asPage(StoragePage),
+  persona: asPage(PersonaPage),
+  aiSettings: asPage(AISettingsPage),
+  aiTools: asPage(AIToolsPage),
+  aiBuilderModel: asPage(AIBuilderModelPage),
+  characters: asPage(CharactersPage),
+  characterEdit: asPage(CharacterEditPage),
+  systemPromptEdit: asPage(SystemPromptEditPage),
+  postHistoryEdit: asPage(PostHistoryEditPage),
+  worldBooks: asPage(WorldBooksPage),
+  worldBookEdit: asPage(WorldBookEditPage),
+  worldBookEntryEdit: asPage(WorldBookEntryEditPage),
+  promptViewer: asPage(PromptViewerPage),
+  modelSelect: asPage(ModelSelectPage),
+  heartbeat: asPage(HeartbeatSettingsPage),
+  disclaimer: asPage(DisclaimerPage),
+  developerTools: asPage(DeveloperToolsPage),
 };
 
 /** iOS push/pop slide — 350ms, ease-out */
@@ -94,7 +105,8 @@ export function SettingsApp() {
     }
   }, [reset]);
 
-  const currentPage = stack[stack.length - 1] ?? 'home';
+  const currentItem = stack[stack.length - 1] ?? { page: 'home' as const };
+  const currentPage = currentItem.page;
   const title = PAGE_TITLES[currentPage] ?? '设置';
   const showBack = stack.length > 1;
 
@@ -113,7 +125,8 @@ export function SettingsApp() {
     }
   };
 
-  const PageComponent = PAGE_COMPONENTS[currentPage] ?? SettingsHome;
+  const PageComponent = PAGE_COMPONENTS[currentPage] ?? SettingsHomePage;
+  const routeKey = `${currentPage}:${currentItem.params?.appId ?? ''}`;
   const header =
     currentPage === 'home' && !showBack ? (
       <NavBar title={title} variant="largeTitle" />
@@ -129,7 +142,7 @@ export function SettingsApp() {
       >
         <AnimatePresence initial={false}>
           <motion.div
-            key={currentPage}
+            key={routeKey}
             className="absolute inset-0 flex min-h-0 flex-col"
             style={{
               backgroundColor: 'var(--color-secondarySystemBackground)',
@@ -142,7 +155,7 @@ export function SettingsApp() {
           >
             {header}
             <div className="min-h-0 flex-1 overflow-hidden">
-              <PageComponent />
+              <PageComponent params={currentItem.params} />
             </div>
           </motion.div>
         </AnimatePresence>
