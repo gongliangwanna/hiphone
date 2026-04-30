@@ -22,6 +22,7 @@ import { HeartbeatSettingsPage } from './pages/HeartbeatSettingsPage';
 import { ModelSelectPage } from './pages/ModelSelectPage';
 import { DeveloperToolsPage } from './pages/DeveloperToolsPage';
 import { StoragePage } from './pages/StoragePage';
+import { AppSettingsPage } from './pages/AppSettingsPage';
 import { AppScreen, NavBar } from '@/system';
 
 const PAGE_TITLES: Record<string, string> = {
@@ -31,6 +32,7 @@ const PAGE_TITLES: Record<string, string> = {
   wallpaper: '壁纸',
   display: '显示与亮度',
   storage: '存储',
+  apps: 'App',
   // AI
   persona: '我的身份',
   aiSettings: 'AI 设置',
@@ -67,6 +69,7 @@ const PAGE_COMPONENTS: Record<string, ComponentType<SettingsPageProps>> = {
   wallpaper: asPage(WallpaperPage),
   display: asPage(DisplayPage),
   storage: asPage(StoragePage),
+  apps: asPage(AppSettingsPage),
   persona: asPage(PersonaPage),
   aiSettings: asPage(AISettingsPage),
   aiTools: asPage(AIToolsPage),

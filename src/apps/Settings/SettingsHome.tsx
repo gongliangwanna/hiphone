@@ -11,6 +11,7 @@ import {
   User,
   HardDrive,
   ToggleLeft,
+  Grid3X3,
 } from 'lucide-react';
 import { useSettingsNavStore } from './settingsNavStore';
 import { usePersonaStore } from '@/platform/stores/personaStore';
@@ -148,6 +149,13 @@ export function SettingsHome() {
           iconColor="#32ADE6"
           title="壁纸"
           onClick={() => push('wallpaper')}
+          chevron
+        />
+        <ListRow
+          icon={<Grid3X3 size={16} />}
+          iconColor="#007AFF"
+          title="App"
+          onClick={() => push('apps')}
           chevron
         />
         <ListRow
