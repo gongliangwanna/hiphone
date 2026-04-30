@@ -5,6 +5,7 @@ import {
   useInstalledUserAppsStore,
   type InstalledUserApp,
 } from '@/platform/stores/installedUserAppsStore';
+import { useAppProfileStore } from '@/platform/stores/appProfileStore';
 import {
   getDB,
   APP_META_STORE,
@@ -327,6 +328,7 @@ export async function uninstall(appId: string): Promise<void> {
   unregisterToolRegistryApp(appId);
   unregisterReplyRendererApp(appId);
   unregisterAppSystemPromptApp(appId);
+  useAppProfileStore.getState().removeProfile(appId);
 }
 
 export async function loadInstalledApps(): Promise<void> {

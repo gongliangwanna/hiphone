@@ -5,6 +5,7 @@ import { render, cleanup, act } from '@testing-library/react';
 import JSZip from 'jszip';
 import { install, uninstall, loadInstalledApps, InstallError } from '../installer';
 import { useInstalledUserAppsStore } from '@/platform/stores/installedUserAppsStore';
+import { useAppProfileStore } from '@/platform/stores/appProfileStore';
 import { appRegistry } from '@/platform/appRegistry';
 import {
   getDB,
@@ -42,6 +43,7 @@ async function resetIdb(): Promise<void> {
 describe('installer.install — single file', () => {
   beforeEach(async () => {
     useInstalledUserAppsStore.setState({ apps: [] });
+    useAppProfileStore.setState({ profiles: {} });
     appRegistry.list().forEach((e) => appRegistry.unregister(e.id));
     await resetIdb();
   });
@@ -216,11 +218,41 @@ describe('installer.install — single file', () => {
     // Name/version updated in installedUserAppsStore
     expect(useInstalledUserAppsStore.getState().apps[0]!.name).toBe('Todo v2');
   });
+
+  it('preserves app profile overrides when upgrading a user app', async () => {
+    const zip1 = await makeZip({
+      'manifest.json': JSON.stringify({
+        id: 'todo-profile',
+        name: 'Todo',
+        version: '1.0.0',
+        entry: 'App.tsx',
+      }),
+      'App.tsx': helloTsx,
+    });
+    const zip2 = await makeZip({
+      'manifest.json': JSON.stringify({
+        id: 'todo-profile',
+        name: 'Todo 2',
+        version: '1.1.0',
+        entry: 'App.tsx',
+      }),
+      'App.tsx': helloTsx,
+    });
+
+    await install(zip1);
+    useAppProfileStore.getState().setName('todo-profile', '我的待办');
+    await install(zip2);
+
+    expect(
+      useAppProfileStore.getState().getProfile('todo-profile')?.customName,
+    ).toBe('我的待办');
+  });
 });
 
 describe('installer.uninstall', () => {
   beforeEach(async () => {
     useInstalledUserAppsStore.setState({ apps: [] });
+    useAppProfileStore.setState({ profiles: {} });
     appRegistry.list().forEach((e) => appRegistry.unregister(e.id));
     await resetIdb();
   });
@@ -267,6 +299,26 @@ describe('installer.uninstall', () => {
     expect(await serviceRegistry.list(APP_ID)).toEqual([]);
   });
 
+  it('removes app profile overrides when uninstalling a user app', async () => {
+    const zip = await makeZip({
+      'manifest.json': JSON.stringify({
+        id: 'todo-profile',
+        name: 'Todo',
+        version: '1.0.0',
+        entry: 'App.tsx',
+      }),
+      'App.tsx': helloTsx,
+    });
+
+    await install(zip);
+    useAppProfileStore.getState().setName('todo-profile', '我的待办');
+    await uninstall('todo-profile');
+
+    expect(
+      useAppProfileStore.getState().getProfile('todo-profile'),
+    ).toBeUndefined();
+  });
+
   it('refuses to uninstall a builtin app', async () => {
     function Stub() { return null; }
     appRegistry.register({
@@ -284,6 +336,7 @@ describe('installer.uninstall', () => {
 describe('installer.loadInstalledApps', () => {
   beforeEach(async () => {
     useInstalledUserAppsStore.setState({ apps: [] });
+    useAppProfileStore.setState({ profiles: {} });
     appRegistry.list().forEach((e) => appRegistry.unregister(e.id));
     await resetIdb();
   });
@@ -385,6 +438,7 @@ describe('installer.loadInstalledApps', () => {
 describe('installer — multi-file', () => {
   beforeEach(async () => {
     useInstalledUserAppsStore.setState({ apps: [] });
+    useAppProfileStore.setState({ profiles: {} });
     appRegistry.list().forEach((e) => appRegistry.unregister(e.id));
     await resetIdb();
   });
@@ -440,6 +494,7 @@ describe('installer — end-to-end with storage', () => {
   beforeEach(async () => {
     cleanup();
     useInstalledUserAppsStore.setState({ apps: [] });
+    useAppProfileStore.setState({ profiles: {} });
     appRegistry.list().forEach((e) => appRegistry.unregister(e.id));
     await resetIdb();
   });
