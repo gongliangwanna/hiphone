@@ -764,9 +764,7 @@ function IconPreview({
       style={{
         width: 'min(86vw, 328px)',
         aspectRatio: '1 / 1',
-        borderRadius: 30,
-        backgroundColor: 'var(--color-tertiarySystemBackground)',
-        boxShadow: '0 16px 44px rgba(0,0,0,0.16)',
+        backgroundColor: 'transparent',
         cursor: 'grab',
       }}
     >
