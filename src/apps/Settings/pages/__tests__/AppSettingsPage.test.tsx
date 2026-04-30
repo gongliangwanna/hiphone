@@ -407,6 +407,37 @@ describe('AppSettingsPage', () => {
     );
   });
 
+  it('shows the icon editing panel and size after selecting an image', async () => {
+    installImageMocks();
+    useSettingsNavStore.getState().push({
+      page: 'appIconEditor',
+      params: { appId: 'safari' },
+    });
+
+    render(<SettingsApp />);
+
+    expect(await screen.findByTestId('app-icon-current-preview')).toBeInTheDocument();
+    expect(screen.queryByTestId('app-icon-editing-panel')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('app-icon-save')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId('app-icon-upload'), {
+      target: {
+        files: [new File(['icon-bytes'], 'wide.png', { type: 'image/png' })],
+      },
+    });
+
+    expect(await screen.findByTestId('app-icon-editing-panel')).toBeInTheDocument();
+    expect(screen.getByText('图标大小')).toBeInTheDocument();
+    expect(screen.getByText('512 x 512')).toBeInTheDocument();
+    expect(screen.getByText('原图尺寸')).toBeInTheDocument();
+    expect(screen.getByText('1024 x 512')).toBeInTheDocument();
+    expect(screen.getByText('原图大小')).toBeInTheDocument();
+    expect(screen.getByText('10 B')).toBeInTheDocument();
+    expect(screen.getByText('缩放')).toBeInTheDocument();
+    expect(screen.getByText('100%')).toBeInTheDocument();
+    expect(screen.getByTestId('app-icon-save')).toBeInTheDocument();
+  });
+
   it('keeps the selected image when the initial icon decode finishes later', async () => {
     let initialImage: { onload: (() => void) | null } | null = null;
 

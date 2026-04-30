@@ -17,7 +17,7 @@ import {
   type AppIconCrop,
 } from '@/platform/stores/appProfileStore';
 import { useInstalledUserAppsStore } from '@/platform/stores/installedUserAppsStore';
-import { List, ListSection } from '@/system';
+import { List, ListRow, ListSection } from '@/system';
 
 const ICON_OUTPUT_SIZE = 512;
 const ICON_OUTPUT_MIME_TYPE = 'image/jpeg';
@@ -35,7 +35,10 @@ interface LoadedImageSource {
   dataUrl: string;
   width: number;
   height: number;
+  byteSize?: number;
 }
+
+type IconSourceOrigin = 'app' | 'upload' | 'saved';
 
 interface CropOptions {
   outputSize?: number;
@@ -229,6 +232,25 @@ function createInitialCrop(width: number, height: number): AppIconCrop {
   };
 }
 
+function getDataUrlByteSize(dataUrl: string): number {
+  const base64 = dataUrl.split(',')[1] ?? '';
+  if (!base64) return 0;
+
+  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
+  return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
+}
+
+function formatIconByteSize(bytes: number | null | undefined): string {
+  if (!bytes || bytes <= 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatIconScale(scale: number): string {
+  return `${Math.round(scale * 100)}%`;
+}
+
 function getSortedPointers(
   pointers: Map<number, { x: number; y: number }>,
 ): ActivePointer[] {
@@ -260,12 +282,15 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
   const imageLoadRequestIdRef = useRef(0);
   const isMountedRef = useRef(true);
   const lastInitializedAppIdRef = useRef<string | null>(null);
+  const sourceOriginRef = useRef<IconSourceOrigin>('app');
   const activePointersRef = useRef<Map<number, { x: number; y: number }>>(
     new Map(),
   );
   const cropRef = useRef<AppIconCrop | null>(null);
   const [source, setSource] = useState<LoadedImageSource | null>(null);
   const [crop, setCrop] = useState<AppIconCrop | null>(null);
+  const [sourceOrigin, setSourceOrigin] = useState<IconSourceOrigin>('app');
+  const [savedIconBytes, setSavedIconBytes] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [statusText, setStatusText] = useState('');
 
@@ -273,6 +298,22 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
     () => (appId ? getResolvedAppMetadata(appId) : undefined),
     [appId, installedApps, profiles],
   );
+
+  const setLoadedSource = (
+    dataUrl: string,
+    width: number,
+    height: number,
+    origin: IconSourceOrigin,
+    byteSize?: number,
+  ) => {
+    const nextCrop = createInitialCrop(width, height);
+    setSource({ dataUrl, width, height, byteSize });
+    setCrop(nextCrop);
+    setSourceOrigin(origin);
+    sourceOriginRef.current = origin;
+    cropRef.current = nextCrop;
+    activePointersRef.current.clear();
+  };
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -291,29 +332,43 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
     const appIdChanged = app?.id !== lastInitializedAppIdRef.current;
     lastInitializedAppIdRef.current = app?.id ?? null;
 
+    if (!appIdChanged && sourceOriginRef.current !== 'app') {
+      return;
+    }
+
     activePointersRef.current.clear();
-    if (appIdChanged) setStatusText('');
+    if (appIdChanged) {
+      setStatusText('');
+      setSavedIconBytes(null);
+      setSourceOrigin('app');
+      sourceOriginRef.current = 'app';
+    }
 
     if (!app?.displayIcon) {
       setSource(null);
       setCrop(null);
       cropRef.current = null;
+      setSourceOrigin('app');
+      sourceOriginRef.current = 'app';
       return;
     }
 
     loadImage(app.displayIcon)
       .then(({ width, height }) => {
         if (!alive || imageLoadRequestIdRef.current !== requestId) return;
-        const nextCrop = createInitialCrop(width, height);
-        setSource({ dataUrl: app.displayIcon!, width, height });
-        setCrop(nextCrop);
-        cropRef.current = nextCrop;
+        const appIcon = app.displayIcon!;
+        setLoadedSource(appIcon, width, height, 'app');
+        setSavedIconBytes(
+          appIcon.startsWith('data:') ? getDataUrlByteSize(appIcon) : null,
+        );
       })
       .catch(() => {
         if (!alive || imageLoadRequestIdRef.current !== requestId) return;
         setSource(null);
         setCrop(null);
         cropRef.current = null;
+        setSourceOrigin('app');
+        sourceOriginRef.current = 'app';
       });
 
     return () => {
@@ -330,12 +385,14 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
     setCrop(nextCrop);
   };
 
-  const resetSource = (dataUrl: string, width: number, height: number) => {
-    const nextCrop = createInitialCrop(width, height);
-    setSource({ dataUrl, width, height });
-    setCrop(nextCrop);
-    cropRef.current = nextCrop;
-    activePointersRef.current.clear();
+  const resetSource = (
+    dataUrl: string,
+    width: number,
+    height: number,
+    byteSize?: number,
+  ) => {
+    setLoadedSource(dataUrl, width, height, 'upload', byteSize);
+    setSavedIconBytes(null);
     setStatusText('');
   };
 
@@ -364,7 +421,7 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
           ) {
             return;
           }
-          resetSource(dataUrl, width, height);
+          resetSource(dataUrl, width, height, file.size);
         })
         .catch(() => {
           if (
@@ -501,10 +558,19 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
     try {
       const normalizedCrop = constrainCrop(crop);
       const dataUrl = await createCroppedIconDataUrl(source.dataUrl, normalizedCrop);
+      const iconBytes = getDataUrlByteSize(dataUrl);
       setIcon(app.id, {
         dataUrl,
         crop: normalizedCrop,
       });
+      setLoadedSource(
+        dataUrl,
+        ICON_OUTPUT_SIZE,
+        ICON_OUTPUT_SIZE,
+        'saved',
+        iconBytes,
+      );
+      setSavedIconBytes(iconBytes);
       setStatusText('已保存');
     } catch {
       setStatusText('保存失败');
@@ -513,21 +579,27 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
     }
   };
 
+  const isEditingIcon = sourceOrigin !== 'app' && source !== null && crop !== null;
+
   return (
     <div data-testid="app-icon-editor-page" className="h-full min-h-0">
       <List>
         <section className="flex flex-col items-center px-4 pb-6 pt-3">
-          <IconPreview
-            app={app}
-            source={source}
-            crop={crop}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerEnd}
-            onPointerCancel={handlePointerEnd}
-            onLostPointerCapture={handlePointerEnd}
-            onWheelNative={handleWheel}
-          />
+          {isEditingIcon ? (
+            <IconPreview
+              app={app}
+              source={source}
+              crop={crop}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerEnd}
+              onPointerCancel={handlePointerEnd}
+              onLostPointerCapture={handlePointerEnd}
+              onWheelNative={handleWheel}
+            />
+          ) : (
+            <CurrentIconPreview app={app} source={source} />
+          )}
           <div
             className="mt-4 max-w-full truncate text-center"
             style={{
@@ -540,6 +612,37 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
           </div>
         </section>
 
+        {isEditingIcon && (
+          <ListSection title="编辑">
+            <div data-testid="app-icon-editing-panel">
+              <ListRow
+                title="图标大小"
+                detail={`${ICON_OUTPUT_SIZE} x ${ICON_OUTPUT_SIZE}`}
+              />
+              <ListRow
+                title="原图尺寸"
+                detail={`${source.width} x ${source.height}`}
+              />
+              <ListRow
+                title="原图大小"
+                detail={formatIconByteSize(source.byteSize)}
+              />
+              <ListRow
+                title="缩放"
+                detail={formatIconScale(crop.scale)}
+                isLast={savedIconBytes === null}
+              />
+              {savedIconBytes !== null && (
+                <ListRow
+                  title="压缩大小"
+                  detail={formatIconByteSize(savedIconBytes)}
+                  isLast
+                />
+              )}
+            </div>
+          </ListSection>
+        )}
+
         <ListSection title="图标">
           <div className="flex items-center justify-between gap-3 px-4 py-3">
             <div
@@ -549,7 +652,7 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
                 fontSize: 'var(--font-size-body)',
               }}
             >
-              上传图片
+              {isEditingIcon ? '更换图片' : '选择图片'}
             </div>
             <button
               type="button"
@@ -578,27 +681,28 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
           </div>
         </ListSection>
 
-        <ListSection>
-          <button
-            type="button"
-            data-testid="app-icon-save"
-            disabled={!source || !crop || isSaving}
-            onClick={handleSave}
-            className="flex w-full items-center justify-center gap-2 px-4"
-            style={{
-              minHeight: 50,
-              color:
-                source && crop && !isSaving
+        {isEditingIcon && (
+          <ListSection>
+            <button
+              type="button"
+              data-testid="app-icon-save"
+              disabled={isSaving}
+              onClick={handleSave}
+              className="flex w-full items-center justify-center gap-2 px-4"
+              style={{
+                minHeight: 50,
+                color: !isSaving
                   ? 'var(--color-systemBlue)'
                   : 'var(--color-tertiaryLabel)',
-              fontSize: 'var(--font-size-body)',
-              fontWeight: 'var(--font-weight-semibold)',
-            }}
-          >
-            <Check size={18} strokeWidth={2.4} />
-            <span>{isSaving ? '保存中' : '保存图标'}</span>
-          </button>
-        </ListSection>
+                fontSize: 'var(--font-size-body)',
+                fontWeight: 'var(--font-weight-semibold)',
+              }}
+            >
+              <Check size={18} strokeWidth={2.4} />
+              <span>{isSaving ? '保存中' : '保存图标'}</span>
+            </button>
+          </ListSection>
+        )}
 
         {statusText && (
           <div
@@ -616,6 +720,49 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
           </div>
         )}
       </List>
+    </div>
+  );
+}
+
+function CurrentIconPreview({
+  app,
+  source,
+}: {
+  app: ResolvedAppMetadata;
+  source: LoadedImageSource | null;
+}) {
+  const iconSrc = source?.dataUrl ?? app.displayIcon;
+
+  return (
+    <div
+      data-testid="app-icon-current-preview"
+      className="flex items-center justify-center overflow-hidden"
+      style={{
+        width: 112,
+        height: 112,
+        borderRadius: 25,
+        backgroundColor: 'var(--color-systemGray5)',
+        boxShadow: '0 14px 34px rgba(0,0,0,0.16)',
+      }}
+    >
+      {iconSrc ? (
+        <img
+          src={iconSrc}
+          alt={`${app.displayName} 当前图标`}
+          className="h-full w-full object-cover"
+          draggable={false}
+        />
+      ) : (
+        <span
+          style={{
+            color: 'var(--color-secondaryLabel)',
+            fontSize: 44,
+            fontWeight: 'var(--font-weight-semibold)',
+          }}
+        >
+          {app.displayName.slice(0, 1)}
+        </span>
+      )}
     </div>
   );
 }
