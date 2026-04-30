@@ -20,7 +20,8 @@ describe('settingsNavStore', () => {
       .getState()
       .push({ page: 'appDetail', params: { appId: 'settings' } });
 
-    expect(useSettingsNavStore.getState().stack.at(-1)).toEqual({
+    const stack = useSettingsNavStore.getState().stack;
+    expect(stack[stack.length - 1]).toEqual({
       page: 'appDetail',
       params: { appId: 'settings' },
     });

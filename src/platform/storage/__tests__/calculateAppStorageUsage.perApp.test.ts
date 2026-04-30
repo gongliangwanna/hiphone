@@ -99,10 +99,14 @@ describe('calculateAppStorageUsage', () => {
 
   it('calculates all requested app ids keyed by canonical app id', async () => {
     const result = await calculateAllAppStorageUsage(['gomoku', 'music']);
+    const gomokuUsage = result.gomoku;
+    const musicUsage = result.music;
 
     expect(Object.keys(result).sort()).toEqual(['gomoku', 'music']);
-    expect(result.gomoku.totalBytes).toBeGreaterThanOrEqual(0);
-    expect(result.music.totalBytes).toBeGreaterThanOrEqual(0);
+    expect(gomokuUsage).toBeDefined();
+    expect(musicUsage).toBeDefined();
+    expect(gomokuUsage?.totalBytes).toBeGreaterThanOrEqual(0);
+    expect(musicUsage?.totalBytes).toBeGreaterThanOrEqual(0);
   });
 
   it('canonicalizes legacy dock aliases before reading usage', async () => {
