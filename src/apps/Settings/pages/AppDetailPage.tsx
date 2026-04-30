@@ -27,6 +27,29 @@ function emptyUsage(appId: string): AppStorageUsage {
   };
 }
 
+function formatKnownStorageSize(bytes: number): string {
+  return bytes > 0 ? formatByteSize(bytes) : '0 B';
+}
+
+function formatAppPackageSize(
+  app: ResolvedAppMetadata,
+  bytes: number,
+): string {
+  if (bytes > 0) return formatByteSize(bytes);
+  return app.kind === 'user' ? '0 B' : '内置';
+}
+
+function formatTotalStorageSize(
+  app: ResolvedAppMetadata,
+  usage: AppStorageUsage,
+): string {
+  if (usage.totalBytes > 0 && (app.kind === 'user' || usage.appBytes > 0)) {
+    return formatByteSize(usage.totalBytes);
+  }
+
+  return app.kind === 'user' ? formatKnownStorageSize(usage.totalBytes) : '内置';
+}
+
 export function AppDetailPage({ params }: AppDetailPageProps) {
   const appId = params?.appId;
   const push = useSettingsNavStore((state) => state.push);
@@ -157,15 +180,15 @@ export function AppDetailPage({ params }: AppDetailPageProps) {
         <ListSection title="存储">
           <ListRow
             title="App 大小"
-            detail={formatByteSize(currentUsage.appBytes)}
+            detail={formatAppPackageSize(app, currentUsage.appBytes)}
           />
           <ListRow
             title="文稿与数据"
-            detail={formatByteSize(currentUsage.dataBytes)}
+            detail={formatKnownStorageSize(currentUsage.dataBytes)}
           />
           <ListRow
             title="总占用"
-            detail={formatByteSize(currentUsage.totalBytes)}
+            detail={formatTotalStorageSize(app, currentUsage)}
             isLast
           />
         </ListSection>

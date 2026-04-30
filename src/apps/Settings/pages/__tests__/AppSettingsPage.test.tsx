@@ -118,6 +118,7 @@ function renderSettingsAppAtAppDetail(appId: string) {
 
 describe('AppSettingsPage', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     useSettingsNavStore.getState().reset();
     useAppProfileStore.setState({ profiles: {} });
     useInstalledUserAppsStore.setState({ apps: [] });
@@ -228,7 +229,8 @@ describe('AppSettingsPage', () => {
     expect(screen.getByText('设置')).toBeInTheDocument();
     expect(screen.getByText('五子棋')).toBeInTheDocument();
     expect(screen.getByText('待办')).toBeInTheDocument();
-    expect(await screen.findByText('2.0 KB')).toBeInTheDocument();
+    expect(screen.queryByText('2.0 KB')).not.toBeInTheDocument();
+    expect(calculateAllAppStorageUsageMock).not.toHaveBeenCalled();
   });
 
   it('searches by custom name, original name, and app id', async () => {
@@ -320,6 +322,15 @@ describe('AppSettingsPage', () => {
     expect(screen.getByText('1.0 KB')).toBeInTheDocument();
     expect(screen.getByText('5.0 KB')).toBeInTheDocument();
     expect(screen.queryByText(/清空/)).not.toBeInTheDocument();
+  });
+
+  it('shows built-in storage copy instead of a dash when size is unknown', async () => {
+    renderSettingsAppAtAppDetail('calendar');
+
+    expect(await screen.findByText('App 大小')).toBeInTheDocument();
+    expect(screen.getAllByText('内置')).toHaveLength(2);
+    expect(screen.getByText('0 B')).toBeInTheDocument();
+    expect(screen.queryByText('—')).not.toBeInTheDocument();
   });
 
   it('shows an empty state when the app id is missing', async () => {

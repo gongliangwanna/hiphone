@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import {
   listResolvedAppMetadata,
@@ -7,11 +7,6 @@ import {
 } from '@/platform/appMetadataResolver';
 import { useAppProfileStore } from '@/platform/stores/appProfileStore';
 import { useInstalledUserAppsStore } from '@/platform/stores/installedUserAppsStore';
-import {
-  calculateAllAppStorageUsage,
-  type AppStorageUsage,
-} from '@/platform/storage/calculateAppStorageUsage';
-import { formatByteSize } from '@/platform/utils/formatters';
 import { List, ListSection } from '@/system';
 import { useSettingsNavStore } from '../settingsNavStore';
 
@@ -28,30 +23,11 @@ export function AppSettingsPage() {
   const installedApps = useInstalledUserAppsStore((state) => state.apps);
   const profiles = useAppProfileStore((state) => state.profiles);
   const [query, setQuery] = useState('');
-  const [usageById, setUsageById] = useState<Record<string, AppStorageUsage>>({});
 
   const apps = useMemo(
     () => listResolvedAppMetadata(),
     [installedApps, profiles],
   );
-  const appIdsKey = useMemo(() => apps.map((app) => app.id).join('|'), [apps]);
-
-  useEffect(() => {
-    let alive = true;
-    const appIds = apps.map((app) => app.id);
-
-    void calculateAllAppStorageUsage(appIds)
-      .then((usage) => {
-        if (alive) setUsageById(usage);
-      })
-      .catch(() => {
-        if (alive) setUsageById({});
-      });
-
-    return () => {
-      alive = false;
-    };
-  }, [apps, appIdsKey]);
 
   const filteredApps = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -101,7 +77,6 @@ export function AppSettingsPage() {
               <AppSettingsRow
                 key={app.id}
                 app={app}
-                usage={usageById[app.id]}
                 isLast={index === group.apps.length - 1}
                 onClick={() =>
                   push({ page: 'appDetail', params: { appId: app.id } })
@@ -117,14 +92,12 @@ export function AppSettingsPage() {
 
 interface AppSettingsRowProps {
   app: ResolvedAppMetadata;
-  usage?: AppStorageUsage;
   isLast: boolean;
   onClick: () => void;
 }
 
 function AppSettingsRow({
   app,
-  usage,
   isLast,
   onClick,
 }: AppSettingsRowProps) {
@@ -180,15 +153,6 @@ function AppSettingsRow({
         </div>
 
         <div className="flex flex-shrink-0 items-center gap-2">
-          <span
-            className="max-w-[96px] truncate text-right"
-            style={{
-              color: 'var(--color-secondaryLabel)',
-              fontSize: 'var(--font-size-body)',
-            }}
-          >
-            {formatByteSize(usage?.totalBytes ?? 0)}
-          </span>
           <svg
             width="8"
             height="13"
