@@ -4,7 +4,10 @@ import {
   useInstalledUserAppsStore,
   type InstalledUserApp,
 } from '@/platform/stores/installedUserAppsStore';
-import { appStorageSet } from '@/platform/userApp/appStorage';
+import {
+  appStorageSet,
+  type AppKvRecord,
+} from '@/platform/userApp/appStorage';
 import { APP_KV_STORE, getDB } from '../idbStorage';
 import {
   calculateAllAppStorageUsage,
@@ -39,6 +42,14 @@ function installedApp(
   };
 }
 
+function estimateBytes(value: unknown): number {
+  try {
+    return new Blob([JSON.stringify(value)]).size;
+  } catch {
+    return 0;
+  }
+}
+
 describe('calculateAppStorageUsage', () => {
   beforeEach(async () => {
     await clearAppKv();
@@ -49,26 +60,31 @@ describe('calculateAppStorageUsage', () => {
     useInstalledUserAppsStore.getState().replaceAll([
       installedApp('todo-app', { sizeBytes: 2048 }),
     ]);
-    await appStorageSet('todo-app', 'todo-app:owner:me:items', {
+    const todoRecord: AppKvRecord = {
       appId: 'todo-app',
       scope: 'owner',
       ownerId: 'me',
       userKey: 'items',
       value: ['a', 'b', 'c'],
-    });
-    await appStorageSet('other-app', 'other-app:owner:me:items', {
+    };
+    const otherRecord: AppKvRecord = {
       appId: 'other-app',
       scope: 'owner',
       ownerId: 'me',
       userKey: 'items',
       value: ['not', 'counted'],
-    });
+    };
+    await appStorageSet('todo-app', 'todo-app:owner:me:items', todoRecord);
+    await appStorageSet('other-app', 'other-app:owner:me:items', otherRecord);
 
     const usage = await calculateAppStorageUsage('todo-app');
 
     expect(usage.appId).toBe('todo-app');
     expect(usage.appBytes).toBe(2048);
-    expect(usage.dataBytes).toBeGreaterThan(0);
+    expect(usage.dataBytes).toBe(estimateBytes(todoRecord));
+    expect(usage.dataBytes).not.toBe(
+      estimateBytes(todoRecord) + estimateBytes(otherRecord),
+    );
     expect(usage.totalBytes).toBe(usage.appBytes + usage.dataBytes);
   });
 
