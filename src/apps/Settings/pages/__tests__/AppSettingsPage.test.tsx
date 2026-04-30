@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { StrictMode } from 'react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppSettingsPage } from '../AppSettingsPage';
@@ -60,7 +61,9 @@ class MockImage {
 function mockCanvas2d() {
   const context = {
     clearRect: vi.fn(),
+    fillRect: vi.fn(),
     drawImage: vi.fn(),
+    fillStyle: '',
   };
   const getContextSpy = vi
     .spyOn(HTMLCanvasElement.prototype, 'getContext')
@@ -71,7 +74,7 @@ function mockCanvas2d() {
     );
   const toDataURLSpy = vi
     .spyOn(HTMLCanvasElement.prototype, 'toDataURL')
-    .mockReturnValue('data:image/png;base64,CROPPED_ICON');
+    .mockReturnValue('data:image/jpeg;base64,CROPPED_ICON');
 
   return {
     context,
@@ -196,15 +199,16 @@ describe('AppSettingsPage', () => {
       },
     );
 
-    expect(result).toBe('data:image/png;base64,CROPPED_ICON');
+    expect(result).toBe('data:image/jpeg;base64,CROPPED_ICON');
     expect(canvasMock.context.clearRect).toHaveBeenCalledWith(0, 0, 512, 512);
+    expect(canvasMock.context.fillRect).toHaveBeenCalledWith(0, 0, 512, 512);
     expect(canvasMock.context.drawImage).toHaveBeenCalledTimes(1);
     const drawCall = canvasMock.context.drawImage.mock.calls[0]!;
     expect(drawCall[1]).toBeCloseTo(-492);
     expect(drawCall[2]).toBeCloseTo(-138);
     expect(drawCall[3]).toBeCloseTo(1536);
     expect(drawCall[4]).toBeCloseTo(768);
-    expect(canvasMock.toDataURLSpy).toHaveBeenCalledWith('image/png');
+    expect(canvasMock.toDataURLSpy).toHaveBeenCalledWith('image/jpeg', 0.82);
   });
 
   it('groups system, preinstalled, and user installed apps', async () => {
@@ -248,6 +252,34 @@ describe('AppSettingsPage', () => {
     await userEvent.clear(search);
     await userEvent.type(search, 'gomoku');
     expect(screen.getByText('五子棋')).toBeInTheDocument();
+  });
+
+  it('refreshes the app settings row icon when the app profile icon changes', async () => {
+    render(<AppSettingsPage />);
+
+    const row = await screen.findByTestId('app-settings-row-safari');
+    const icon = row.querySelector('img');
+    expect(icon).toHaveAttribute('src', '/resource/icons/ios-system/safari.jpg');
+
+    act(() => {
+      useAppProfileStore.getState().setIcon('safari', {
+        dataUrl: 'data:image/jpeg;base64,NEW_ICON',
+        crop: {
+          sourceWidth: 512,
+          sourceHeight: 512,
+          scale: 1,
+          offsetX: 0,
+          offsetY: 0,
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(row.querySelector('img')).toHaveAttribute(
+        'src',
+        'data:image/jpeg;base64,NEW_ICON',
+      );
+    });
   });
 
   it('opens the app detail page in SettingsApp instead of falling back home', async () => {
@@ -375,6 +407,104 @@ describe('AppSettingsPage', () => {
     );
   });
 
+  it('keeps the selected image when the initial icon decode finishes later', async () => {
+    let initialImage: { onload: (() => void) | null } | null = null;
+
+    class RaceFileReader {
+      result: string | ArrayBuffer | null = null;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+
+      readAsDataURL(file: File) {
+        this.result = `data:${file.type};base64,${file.name}`;
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+
+    class InitialRaceImage {
+      naturalWidth = 1024;
+      naturalHeight = 512;
+      width = 1024;
+      height = 512;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      private source = '';
+
+      set src(value: string) {
+        this.source = value;
+        if (value.includes('/resource/icons/ios-system/safari.jpg')) {
+          initialImage = this;
+          return;
+        }
+        queueMicrotask(() => this.onload?.());
+      }
+
+      get src() {
+        return this.source;
+      }
+    }
+
+    vi.stubGlobal('Image', InitialRaceImage);
+    vi.stubGlobal('FileReader', RaceFileReader);
+    useSettingsNavStore.getState().push({
+      page: 'appIconEditor',
+      params: { appId: 'safari' },
+    });
+
+    render(<SettingsApp />);
+
+    fireEvent.change(await screen.findByTestId('app-icon-upload'), {
+      target: {
+        files: [new File(['upload'], 'upload.png', { type: 'image/png' })],
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('app-icon-preview-image')).toHaveAttribute(
+        'src',
+        'data:image/png;base64,upload.png',
+      );
+    });
+
+    const delayedInitialImage = initialImage as
+      | { onload: (() => void) | null }
+      | null;
+    delayedInitialImage?.onload?.();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(screen.getByTestId('app-icon-preview-image')).toHaveAttribute(
+      'src',
+      'data:image/png;base64,upload.png',
+    );
+  });
+
+  it('uploads an image inside React StrictMode', async () => {
+    installImageMocks();
+    useSettingsNavStore.getState().push({
+      page: 'appIconEditor',
+      params: { appId: 'safari' },
+    });
+
+    render(
+      <StrictMode>
+        <SettingsApp />
+      </StrictMode>,
+    );
+
+    fireEvent.change(await screen.findByTestId('app-icon-upload'), {
+      target: {
+        files: [new File(['strict'], 'strict.png', { type: 'image/png' })],
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('app-icon-preview-image')).toHaveAttribute(
+        'src',
+        'data:image/png;base64,UPLOADED_ICON',
+      );
+    });
+  });
+
   it('uploads an image and saves the cropped icon profile', async () => {
     installImageMocks();
     canvasMock = mockCanvas2d();
@@ -427,7 +557,7 @@ describe('AppSettingsPage', () => {
     await waitFor(() => {
       expect(
         useAppProfileStore.getState().getProfile('safari')?.customIconDataUrl,
-      ).toBe('data:image/png;base64,CROPPED_ICON');
+      ).toBe('data:image/jpeg;base64,CROPPED_ICON');
     });
     const profile = useAppProfileStore.getState().getProfile('safari');
     expect(profile?.iconCrop).toMatchObject({
@@ -439,6 +569,12 @@ describe('AppSettingsPage', () => {
     expect(screen.getByTestId('app-icon-save-status')).toHaveTextContent(
       '已保存',
     );
+    await waitFor(() => {
+      expect(screen.getByTestId('app-icon-preview-image')).toHaveAttribute(
+        'src',
+        'data:image/jpeg;base64,CROPPED_ICON',
+      );
+    });
   });
 
   it('keeps the latest icon upload when an earlier decode finishes later', async () => {

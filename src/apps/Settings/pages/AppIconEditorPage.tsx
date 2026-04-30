@@ -20,6 +20,9 @@ import { useInstalledUserAppsStore } from '@/platform/stores/installedUserAppsSt
 import { List, ListSection } from '@/system';
 
 const ICON_OUTPUT_SIZE = 512;
+const ICON_OUTPUT_MIME_TYPE = 'image/jpeg';
+const ICON_OUTPUT_QUALITY = 0.82;
+const ICON_OUTPUT_BACKGROUND = '#fff';
 const PREVIEW_FALLBACK_SIZE = 240;
 const MIN_SCALE = 1;
 const MAX_SCALE = 5;
@@ -172,6 +175,8 @@ export function createCroppedIconDataUrl(
     }
 
     context.clearRect(0, 0, outputSize, outputSize);
+    context.fillStyle = ICON_OUTPUT_BACKGROUND;
+    context.fillRect(0, 0, outputSize, outputSize);
     const normalizedCrop = constrainCrop(crop, { outputSize });
     const coverScale = Math.max(
       outputSize / normalizedCrop.sourceWidth,
@@ -186,7 +191,7 @@ export function createCroppedIconDataUrl(
 
     context.drawImage(image, drawX, drawY, drawWidth, drawHeight);
 
-    return canvas.toDataURL('image/png');
+    return canvas.toDataURL(ICON_OUTPUT_MIME_TYPE, ICON_OUTPUT_QUALITY);
   });
 }
 
@@ -249,10 +254,12 @@ function findPointerById(pointers: ActivePointer[], id: number) {
 export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
   const appId = params?.appId;
   const installedApps = useInstalledUserAppsStore((state) => state.apps);
+  const profiles = useAppProfileStore((state) => state.profiles);
   const setIcon = useAppProfileStore((state) => state.setIcon);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const uploadRequestIdRef = useRef(0);
+  const imageLoadRequestIdRef = useRef(0);
   const isMountedRef = useRef(true);
+  const lastInitializedAppIdRef = useRef<string | null>(null);
   const activePointersRef = useRef<Map<number, { x: number; y: number }>>(
     new Map(),
   );
@@ -264,21 +271,28 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
 
   const app = useMemo(
     () => (appId ? getResolvedAppMetadata(appId) : undefined),
-    [appId, installedApps],
+    [appId, installedApps, profiles],
   );
 
   useEffect(() => {
+    isMountedRef.current = true;
+
     return () => {
       isMountedRef.current = false;
-      uploadRequestIdRef.current += 1;
+      imageLoadRequestIdRef.current += 1;
       activePointersRef.current.clear();
     };
   }, []);
 
   useEffect(() => {
     let alive = true;
+    const requestId = imageLoadRequestIdRef.current + 1;
+    imageLoadRequestIdRef.current = requestId;
+    const appIdChanged = app?.id !== lastInitializedAppIdRef.current;
+    lastInitializedAppIdRef.current = app?.id ?? null;
+
     activePointersRef.current.clear();
-    setStatusText('');
+    if (appIdChanged) setStatusText('');
 
     if (!app?.displayIcon) {
       setSource(null);
@@ -289,14 +303,14 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
 
     loadImage(app.displayIcon)
       .then(({ width, height }) => {
-        if (!alive) return;
+        if (!alive || imageLoadRequestIdRef.current !== requestId) return;
         const nextCrop = createInitialCrop(width, height);
         setSource({ dataUrl: app.displayIcon!, width, height });
         setCrop(nextCrop);
         cropRef.current = nextCrop;
       })
       .catch(() => {
-        if (!alive) return;
+        if (!alive || imageLoadRequestIdRef.current !== requestId) return;
         setSource(null);
         setCrop(null);
         cropRef.current = null;
@@ -305,7 +319,7 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
     return () => {
       alive = false;
     };
-  }, [app?.id]);
+  }, [app?.id, app?.displayIcon]);
 
   if (!app) {
     return <MissingAppState />;
@@ -333,8 +347,8 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const requestId = uploadRequestIdRef.current + 1;
-    uploadRequestIdRef.current = requestId;
+    const requestId = imageLoadRequestIdRef.current + 1;
+    imageLoadRequestIdRef.current = requestId;
     setStatusText('');
 
     const reader = new FileReader();
@@ -346,7 +360,7 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
         .then(({ width, height }) => {
           if (
             !isMountedRef.current ||
-            uploadRequestIdRef.current !== requestId
+            imageLoadRequestIdRef.current !== requestId
           ) {
             return;
           }
@@ -355,14 +369,14 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
         .catch(() => {
           if (
             isMountedRef.current &&
-            uploadRequestIdRef.current === requestId
+            imageLoadRequestIdRef.current === requestId
           ) {
             setStatusText('读取失败');
           }
         });
     };
     reader.onerror = () => {
-      if (isMountedRef.current && uploadRequestIdRef.current === requestId) {
+      if (isMountedRef.current && imageLoadRequestIdRef.current === requestId) {
         setStatusText('读取失败');
       }
     };
