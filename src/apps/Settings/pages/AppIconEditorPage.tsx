@@ -6,7 +6,6 @@ import {
   type ChangeEvent,
   type CSSProperties,
   type PointerEvent,
-  type WheelEvent,
 } from 'react';
 import { Check, ImagePlus } from 'lucide-react';
 import {
@@ -252,6 +251,8 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
   const installedApps = useInstalledUserAppsStore((state) => state.apps);
   const setIcon = useAppProfileStore((state) => state.setIcon);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadRequestIdRef = useRef(0);
+  const isMountedRef = useRef(true);
   const activePointersRef = useRef<Map<number, { x: number; y: number }>>(
     new Map(),
   );
@@ -265,6 +266,14 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
     () => (appId ? getResolvedAppMetadata(appId) : undefined),
     [appId, installedApps],
   );
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+      uploadRequestIdRef.current += 1;
+      activePointersRef.current.clear();
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -324,29 +333,55 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    const requestId = uploadRequestIdRef.current + 1;
+    uploadRequestIdRef.current = requestId;
+    setStatusText('');
+
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = String(reader.result ?? '');
       if (!dataUrl) return;
 
-      void loadImage(dataUrl).then(({ width, height }) => {
-        resetSource(dataUrl, width, height);
-      });
+      void loadImage(dataUrl)
+        .then(({ width, height }) => {
+          if (
+            !isMountedRef.current ||
+            uploadRequestIdRef.current !== requestId
+          ) {
+            return;
+          }
+          resetSource(dataUrl, width, height);
+        })
+        .catch(() => {
+          if (
+            isMountedRef.current &&
+            uploadRequestIdRef.current === requestId
+          ) {
+            setStatusText('读取失败');
+          }
+        });
+    };
+    reader.onerror = () => {
+      if (isMountedRef.current && uploadRequestIdRef.current === requestId) {
+        setStatusText('读取失败');
+      }
     };
     reader.readAsDataURL(file);
     event.target.value = '';
   };
 
   const getPointInIconSpace = (
-    event: PointerEvent<HTMLDivElement> | WheelEvent<HTMLDivElement>,
+    element: HTMLDivElement,
+    clientX: number,
+    clientY: number,
   ) => {
-    const rect = event.currentTarget.getBoundingClientRect();
+    const rect = element.getBoundingClientRect();
     const previewSize = rect.width || PREVIEW_FALLBACK_SIZE;
     const scale = ICON_OUTPUT_SIZE / previewSize;
 
     return {
-      x: (event.clientX - rect.left - previewSize / 2) * scale,
-      y: (event.clientY - rect.top - previewSize / 2) * scale,
+      x: (clientX - rect.left - previewSize / 2) * scale,
+      y: (clientY - rect.top - previewSize / 2) * scale,
     };
   };
 
@@ -361,7 +396,7 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
     }
     activePointersRef.current.set(
       event.pointerId,
-      getPointInIconSpace(event),
+      getPointInIconSpace(event.currentTarget, event.clientX, event.clientY),
     );
   };
 
@@ -374,7 +409,7 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
     const previousPointers = getSortedPointers(activePointersRef.current);
     activePointersRef.current.set(
       event.pointerId,
-      getPointInIconSpace(event),
+      getPointInIconSpace(event.currentTarget, event.clientX, event.clientY),
     );
     const nextPointers = getSortedPointers(activePointersRef.current);
     const currentCrop = cropRef.current;
@@ -424,11 +459,11 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
     }
   };
 
-  const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
+  const handleWheel = (event: WheelEvent, element: HTMLDivElement) => {
     if (!cropRef.current) return;
 
     event.preventDefault();
-    const anchor = getPointInIconSpace(event);
+    const anchor = getPointInIconSpace(element, event.clientX, event.clientY);
     const scaleFactor = event.deltaY < 0 ? 1.08 : 0.92;
     const currentCrop = cropRef.current;
 
@@ -477,7 +512,7 @@ export function AppIconEditorPage({ params }: AppIconEditorPageProps) {
             onPointerUp={handlePointerEnd}
             onPointerCancel={handlePointerEnd}
             onLostPointerCapture={handlePointerEnd}
-            onWheel={handleWheel}
+            onWheelNative={handleWheel}
           />
           <div
             className="mt-4 max-w-full truncate text-center"
@@ -580,7 +615,7 @@ function IconPreview({
   onPointerUp,
   onPointerCancel,
   onLostPointerCapture,
-  onWheel,
+  onWheelNative,
 }: {
   app: ResolvedAppMetadata;
   source: LoadedImageSource | null;
@@ -590,12 +625,26 @@ function IconPreview({
   onPointerUp: (event: PointerEvent<HTMLDivElement>) => void;
   onPointerCancel: (event: PointerEvent<HTMLDivElement>) => void;
   onLostPointerCapture: (event: PointerEvent<HTMLDivElement>) => void;
-  onWheel: (event: WheelEvent<HTMLDivElement>) => void;
+  onWheelNative: (event: WheelEvent, element: HTMLDivElement) => void;
 }) {
+  const cropAreaRef = useRef<HTMLDivElement>(null);
   const imageStyle = source && crop ? getPreviewImageStyle(source, crop) : null;
+
+  useEffect(() => {
+    const element = cropAreaRef.current;
+    if (!element) return;
+
+    const handleWheel = (event: WheelEvent) => {
+      onWheelNative(event, element);
+    };
+
+    element.addEventListener('wheel', handleWheel, { passive: false });
+    return () => element.removeEventListener('wheel', handleWheel);
+  }, [onWheelNative]);
 
   return (
     <div
+      ref={cropAreaRef}
       data-testid="app-icon-crop-area"
       role="img"
       aria-label={`${app.displayName} 图标预览`}
@@ -605,7 +654,6 @@ function IconPreview({
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerCancel}
       onLostPointerCapture={onLostPointerCapture}
-      onWheel={onWheel}
       style={{
         width: 'min(68vw, 248px)',
         aspectRatio: '1 / 1',

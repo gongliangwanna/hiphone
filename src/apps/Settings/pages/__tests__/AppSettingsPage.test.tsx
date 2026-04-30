@@ -402,11 +402,15 @@ describe('AppSettingsPage', () => {
       clientX: 130,
       clientY: 110,
     });
-    fireEvent.wheel(cropArea, {
+    const wheelEvent = new WheelEvent('wheel', {
       deltaY: -100,
       clientX: 130,
       clientY: 110,
+      bubbles: true,
+      cancelable: true,
     });
+    cropArea.dispatchEvent(wheelEvent);
+    expect(wheelEvent.defaultPrevented).toBe(true);
     await userEvent.click(screen.getByTestId('app-icon-save'));
 
     await waitFor(() => {
@@ -423,6 +427,83 @@ describe('AppSettingsPage', () => {
     expect(profile?.iconCrop?.offsetX).toBeGreaterThan(0);
     expect(screen.getByTestId('app-icon-save-status')).toHaveTextContent(
       '已保存',
+    );
+  });
+
+  it('keeps the latest icon upload when an earlier decode finishes later', async () => {
+    let firstImage: { onload: (() => void) | null } | null = null;
+
+    class RaceFileReader {
+      result: string | ArrayBuffer | null = null;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+
+      readAsDataURL(file: File) {
+        this.result = `data:image/png;base64,${file.name}`;
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+
+    class RaceImage {
+      naturalWidth = 1024;
+      naturalHeight = 512;
+      width = 1024;
+      height = 512;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      private source = '';
+
+      set src(value: string) {
+        this.source = value;
+        if (value.includes('first.png')) {
+          firstImage = this;
+          return;
+        }
+        queueMicrotask(() => this.onload?.());
+      }
+
+      get src() {
+        return this.source;
+      }
+    }
+
+    vi.stubGlobal('Image', RaceImage);
+    vi.stubGlobal('FileReader', RaceFileReader);
+    useSettingsNavStore.getState().push({
+      page: 'appIconEditor',
+      params: { appId: 'safari' },
+    });
+
+    render(<SettingsApp />);
+
+    const upload = await screen.findByTestId('app-icon-upload');
+    fireEvent.change(upload, {
+      target: {
+        files: [new File(['first'], 'first.png', { type: 'image/png' })],
+      },
+    });
+    fireEvent.change(upload, {
+      target: {
+        files: [new File(['second'], 'second.png', { type: 'image/png' })],
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('app-icon-preview-image')).toHaveAttribute(
+        'src',
+        'data:image/png;base64,second.png',
+      );
+    });
+
+    const delayedFirstImage = firstImage as
+      | { onload: (() => void) | null }
+      | null;
+    delayedFirstImage?.onload?.();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(screen.getByTestId('app-icon-preview-image')).toHaveAttribute(
+      'src',
+      'data:image/png;base64,second.png',
     );
   });
 });
