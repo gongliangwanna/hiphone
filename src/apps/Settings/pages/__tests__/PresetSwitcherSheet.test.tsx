@@ -43,7 +43,8 @@ describe('PresetSwitcherSheet', () => {
     const beforeLen = useAIConfigStore.getState().presets.length;
     fireEvent.click(screen.getByTestId('switcher-create-from-current'));
     expect(useAIConfigStore.getState().presets).toHaveLength(beforeLen + 1);
-    expect(useAIConfigStore.getState().presets.at(-1)!.name).toBe('副本');
+    const presets = useAIConfigStore.getState().presets;
+    expect(presets[presets.length - 1]!.name).toBe('副本');
     expect(onClose).toHaveBeenCalled();
   });
 

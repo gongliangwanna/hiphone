@@ -42,6 +42,6 @@ describe('AIServicePage — preset row', () => {
     render(<AIServicePage />);
     fireEvent.click(screen.getByTestId('preset-manage-button'));
     const stack = useSettingsNavStore.getState().stack;
-    expect(stack.at(-1)?.page).toBe('aiPresets');
+    expect(stack[stack.length - 1]?.page).toBe('aiPresets');
   });
 });
