@@ -16,14 +16,28 @@ export interface ProviderConfig {
   fetchedModels: ModelInfo[];
 }
 
+export interface ApiPreset {
+  id: string;
+  name: string;
+  provider: ProviderId;
+  apiKey: string;
+  apiEndpoint: string;
+  model: string;
+  fetchedModels: ModelInfo[];
+}
+
 export interface AIConfigState {
-  // Connection
+  // Connection (mirrors of active preset)
   provider: ProviderId;
   apiKey: string;
   apiEndpoint: string;
   model: string;
 
-  // Per-provider saved configs
+  // Presets
+  presets: ApiPreset[];
+  activePresetId: string;
+
+  // Per-provider saved configs (legacy, removed in Task 8)
   providerConfigs: Record<string, ProviderConfig>;
 
   // Dynamic model list (fetched from API)
@@ -92,6 +106,9 @@ export const useAIConfigStore = create<AIConfigState>()(
       apiKey: '',
       apiEndpoint: '',
       model: '',
+
+      presets: [],
+      activePresetId: '',
 
       providerConfigs: {},
 
@@ -193,6 +210,8 @@ export const useAIConfigStore = create<AIConfigState>()(
         apiKey: s.apiKey,
         apiEndpoint: s.apiEndpoint,
         model: s.model,
+        presets: s.presets,
+        activePresetId: s.activePresetId,
         providerConfigs: s.providerConfigs,
         fetchedModels: s.fetchedModels,
         temperature: s.temperature,
