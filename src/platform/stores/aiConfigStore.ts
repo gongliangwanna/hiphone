@@ -9,14 +9,6 @@ import { uid } from '@/platform/utils/uid';
 /** Supported provider IDs — grows as we add adapters one-by-one */
 export type ProviderId = 'openrouter' | 'siliconflow' | 'custom';
 
-/** Per-provider connection settings, saved independently */
-export interface ProviderConfig {
-  apiKey: string;
-  apiEndpoint: string;
-  model: string;
-  fetchedModels: ModelInfo[];
-}
-
 export interface ApiPreset {
   id: string;
   name: string;
@@ -37,9 +29,6 @@ export interface AIConfigState {
   // Presets
   presets: ApiPreset[];
   activePresetId: string;
-
-  // Per-provider saved configs (legacy, removed in Task 8)
-  providerConfigs: Record<string, ProviderConfig>;
 
   // Dynamic model list (fetched from API)
   fetchedModels: ModelInfo[];
@@ -117,8 +106,6 @@ export const useAIConfigStore = create<AIConfigState>()(
 
       presets: [],
       activePresetId: '',
-
-      providerConfigs: {},
 
       fetchedModels: [],
       modelListLoading: false,
@@ -234,27 +221,34 @@ export const useAIConfigStore = create<AIConfigState>()(
       // ── Connection actions ──
 
       setProvider: (p) => {
-        const { provider: prev, apiKey, apiEndpoint, model, fetchedModels, providerConfigs } = get();
-        // Save current provider's config
-        const saved = {
-          ...providerConfigs,
-          [prev]: { apiKey, apiEndpoint, model, fetchedModels },
-        };
-        // Restore target provider's config (or defaults)
-        const target = saved[p] ?? { apiKey: '', apiEndpoint: '', model: '', fetchedModels: [] };
+        const { activePresetId, presets } = get();
         set({
           provider: p,
-          providerConfigs: saved,
-          apiKey: target.apiKey,
-          apiEndpoint: target.apiEndpoint,
-          model: target.model,
-          fetchedModels: target.fetchedModels,
+          presets: presets.map((pr) => (pr.id === activePresetId ? { ...pr, provider: p } : pr)),
           modelListError: null,
         });
       },
-      setApiKey: (k) => set({ apiKey: k }),
-      setApiEndpoint: (url) => set({ apiEndpoint: url }),
-      setModel: (m) => set({ model: m }),
+      setApiKey: (k) => {
+        const { activePresetId, presets } = get();
+        set({
+          apiKey: k,
+          presets: presets.map((p) => (p.id === activePresetId ? { ...p, apiKey: k } : p)),
+        });
+      },
+      setApiEndpoint: (url) => {
+        const { activePresetId, presets } = get();
+        set({
+          apiEndpoint: url,
+          presets: presets.map((p) => (p.id === activePresetId ? { ...p, apiEndpoint: url } : p)),
+        });
+      },
+      setModel: (m) => {
+        const { activePresetId, presets } = get();
+        set({
+          model: m,
+          presets: presets.map((p) => (p.id === activePresetId ? { ...p, model: m } : p)),
+        });
+      },
 
       fetchModels: async () => {
         const { provider, apiKey, apiEndpoint } = get();
@@ -268,7 +262,14 @@ export const useAIConfigStore = create<AIConfigState>()(
         try {
           const endpoint = apiEndpoint || adapter.defaultEndpoint;
           const models = await adapter.fetchModels(apiKey, endpoint);
-          set({ fetchedModels: models, modelListLoading: false });
+          const { activePresetId, presets } = get();
+          set({
+            fetchedModels: models,
+            modelListLoading: false,
+            presets: presets.map((p) =>
+              p.id === activePresetId ? { ...p, fetchedModels: models } : p,
+            ),
+          });
         } catch (e) {
           set({
             modelListLoading: false,
@@ -310,7 +311,6 @@ export const useAIConfigStore = create<AIConfigState>()(
         model: s.model,
         presets: s.presets,
         activePresetId: s.activePresetId,
-        providerConfigs: s.providerConfigs,
         fetchedModels: s.fetchedModels,
         temperature: s.temperature,
         maxTokens: s.maxTokens,

@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { useAIConfigStore, type ApiPreset } from '../aiConfigStore';
+import * as providers from '@/platform/ai/providers';
 
 function resetStore() {
   useAIConfigStore.setState((s) => ({
@@ -187,5 +188,80 @@ describe('deletePreset', () => {
     useAIConfigStore.getState().setActivePreset(id);
     expect(useAIConfigStore.getState().deletePreset(id)).toBe(false);
     expect(useAIConfigStore.getState().presets).toHaveLength(1);
+  });
+});
+
+describe('setApiKey/Endpoint/Model write through to active preset', () => {
+  beforeEach(resetStore);
+
+  it('setApiKey updates active preset and top-level mirror', () => {
+    const id = useAIConfigStore.getState().createEmptyPreset('A');
+    useAIConfigStore.getState().setActivePreset(id);
+    useAIConfigStore.getState().setApiKey('NEW');
+    const s = useAIConfigStore.getState();
+    expect(s.apiKey).toBe('NEW');
+    expect(s.presets[0]!.apiKey).toBe('NEW');
+  });
+
+  it('setApiEndpoint write-through', () => {
+    const id = useAIConfigStore.getState().createEmptyPreset('A');
+    useAIConfigStore.getState().setActivePreset(id);
+    useAIConfigStore.getState().setApiEndpoint('https://x');
+    expect(useAIConfigStore.getState().presets[0]!.apiEndpoint).toBe('https://x');
+  });
+
+  it('setModel write-through', () => {
+    const id = useAIConfigStore.getState().createEmptyPreset('A');
+    useAIConfigStore.getState().setActivePreset(id);
+    useAIConfigStore.getState().setModel('gpt-4o');
+    expect(useAIConfigStore.getState().presets[0]!.model).toBe('gpt-4o');
+  });
+
+  it('only modifies active preset, leaves others intact', () => {
+    const aId = useAIConfigStore.getState().createEmptyPreset('A');
+    const bId = useAIConfigStore.getState().createEmptyPreset('B');
+    useAIConfigStore.getState().setActivePreset(aId);
+    useAIConfigStore.getState().setApiKey('only-A');
+    const bPreset = useAIConfigStore.getState().presets.find((p) => p.id === bId)!;
+    expect(bPreset.apiKey).toBe('');
+  });
+});
+
+describe('setProvider write through', () => {
+  beforeEach(resetStore);
+
+  it('writes provider into active preset, does not touch other presets', () => {
+    const aId = useAIConfigStore.getState().createEmptyPreset('A');
+    const bId = useAIConfigStore.getState().createEmptyPreset('B');
+    useAIConfigStore.getState().setActivePreset(aId);
+    useAIConfigStore.getState().setProvider('siliconflow');
+    const s = useAIConfigStore.getState();
+    expect(s.provider).toBe('siliconflow');
+    expect(s.presets.find((p) => p.id === aId)!.provider).toBe('siliconflow');
+    expect(s.presets.find((p) => p.id === bId)!.provider).toBe('openrouter');
+  });
+
+  it('no longer references providerConfigs', () => {
+    const s = useAIConfigStore.getState() as unknown as Record<string, unknown>;
+    expect(s.providerConfigs).toBeUndefined();
+  });
+});
+
+describe('fetchModels persists to active preset', () => {
+  beforeEach(resetStore);
+  afterEach(() => vi.restoreAllMocks());
+
+  it('updates active preset fetchedModels when fetch succeeds', async () => {
+    const id = useAIConfigStore.getState().createEmptyPreset('A');
+    useAIConfigStore.getState().setActivePreset(id);
+    useAIConfigStore.getState().setApiKey('test-key');
+    const fakeModels = [{ id: 'm1', name: 'Model 1', contextLength: 4096 }];
+    const adapter = providers.getAdapter('openrouter')!;
+    vi.spyOn(adapter, 'fetchModels').mockResolvedValue(fakeModels);
+
+    await useAIConfigStore.getState().fetchModels();
+    const s = useAIConfigStore.getState();
+    expect(s.fetchedModels).toEqual(fakeModels);
+    expect(s.presets.find((p) => p.id === id)!.fetchedModels).toEqual(fakeModels);
   });
 });
