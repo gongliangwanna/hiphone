@@ -5,6 +5,7 @@ import { useAppRuntimeStore, wasAppKilled, clearAppKilled } from '@/platform/sto
 import { SettingsHome } from './SettingsHome';
 import { AboutPage } from './AboutPage';
 import { WallpaperPage } from './WallpaperPage';
+import { AIPresetsPage } from './pages/AIPresetsPage';
 import { AISettingsPage } from './pages/AISettingsPage';
 import { AIToolsPage } from './pages/AIToolsPage';
 import { PersonaPage } from './pages/PersonaPage';
@@ -42,6 +43,7 @@ const PAGE_TITLES: Record<string, string> = {
   // AI
   persona: '我的身份',
   aiSettings: 'AI 设置',
+  aiPresets: '预设管理',
   aiTools: 'AI 工具',
   characters: '角色管理',
   characterEdit: '编辑角色',
@@ -79,6 +81,7 @@ const PAGE_COMPONENTS: Record<string, ComponentType<SettingsPageProps>> = {
   appIconEditor: AppIconEditorPage,
   persona: asPage(PersonaPage),
   aiSettings: asPage(AISettingsPage),
+  aiPresets: asPage(AIPresetsPage),
   aiTools: asPage(AIToolsPage),
   characters: asPage(CharactersPage),
   characterEdit: asPage(CharacterEditPage),

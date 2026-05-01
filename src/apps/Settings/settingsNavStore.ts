@@ -11,6 +11,7 @@ export type SettingsPageId =
   | 'appIconEditor'
   | 'persona'
   | 'aiSettings'
+  | 'aiPresets'
   | 'aiTools'
   | 'characters'
   | 'characterEdit'
