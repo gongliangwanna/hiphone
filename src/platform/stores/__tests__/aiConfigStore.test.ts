@@ -56,3 +56,45 @@ describe('createEmptyPreset', () => {
     expect(presets[0]!.name).toBe('预设 1');
   });
 });
+
+describe('setActivePreset', () => {
+  beforeEach(resetStore);
+
+  it('mirrors active preset fields onto top-level state', () => {
+    const id = useAIConfigStore.getState().createEmptyPreset('A');
+    useAIConfigStore.setState((s) => ({
+      ...s,
+      presets: s.presets.map((p) =>
+        p.id === id
+          ? { ...p, provider: 'siliconflow', apiKey: 'k1', apiEndpoint: 'https://api.example', model: 'm1', fetchedModels: [] }
+          : p,
+      ),
+    }));
+
+    useAIConfigStore.getState().setActivePreset(id);
+
+    const s = useAIConfigStore.getState();
+    expect(s.activePresetId).toBe(id);
+    expect(s.provider).toBe('siliconflow');
+    expect(s.apiKey).toBe('k1');
+    expect(s.apiEndpoint).toBe('https://api.example');
+    expect(s.model).toBe('m1');
+    expect(s.fetchedModels).toEqual([]);
+  });
+
+  it('clears transient model-list error/loading on switch', () => {
+    const id = useAIConfigStore.getState().createEmptyPreset('A');
+    useAIConfigStore.setState((s) => ({ ...s, modelListError: 'old err', modelListLoading: true }));
+    useAIConfigStore.getState().setActivePreset(id);
+    const s = useAIConfigStore.getState();
+    expect(s.modelListError).toBeNull();
+    expect(s.modelListLoading).toBe(false);
+  });
+
+  it('does nothing if id does not exist', () => {
+    useAIConfigStore.getState().createEmptyPreset('A');
+    const before = useAIConfigStore.getState().activePresetId;
+    useAIConfigStore.getState().setActivePreset('nonexistent');
+    expect(useAIConfigStore.getState().activePresetId).toBe(before);
+  });
+});
