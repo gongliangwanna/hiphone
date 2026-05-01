@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { useAIConfigStore, type ApiPreset } from '../aiConfigStore';
+import {
+  useAIConfigStore,
+  migrateToV2,
+  ensureAtLeastOnePreset,
+  type ApiPreset,
+} from '../aiConfigStore';
 import * as providers from '@/platform/ai/providers';
 
 function resetStore() {
@@ -263,5 +268,111 @@ describe('fetchModels persists to active preset', () => {
     const s = useAIConfigStore.getState();
     expect(s.fetchedModels).toEqual(fakeModels);
     expect(s.presets.find((p) => p.id === id)!.fetchedModels).toEqual(fakeModels);
+  });
+});
+
+describe('persisted state migration v1 → v2', () => {
+  it('builds a "默认" preset from top-level fields', () => {
+    const persisted = {
+      provider: 'openrouter' as const,
+      apiKey: 'sk-x',
+      apiEndpoint: 'https://or.example',
+      model: 'claude',
+      fetchedModels: [{ id: 'claude', name: 'C' }],
+    };
+    const result = migrateToV2(persisted);
+    expect(result.presets).toHaveLength(1);
+    expect(result.presets[0]!.name).toBe('默认');
+    expect(result.presets[0]!.apiKey).toBe('sk-x');
+    expect(result.activePresetId).toBe(result.presets[0]!.id);
+    expect(result.apiKey).toBe('sk-x');
+    expect(result.fetchedModels).toEqual([{ id: 'claude', name: 'C' }]);
+    expect((result as Record<string, unknown>).providerConfigs).toBeUndefined();
+  });
+
+  it('expands providerConfigs entries into separate presets', () => {
+    const persisted = {
+      provider: 'openrouter' as const,
+      apiKey: 'sk-or',
+      apiEndpoint: '',
+      model: 'm-or',
+      fetchedModels: [],
+      providerConfigs: {
+        siliconflow: { apiKey: 'sk-sf', apiEndpoint: '', model: 'm-sf', fetchedModels: [] },
+      },
+    };
+    const result = migrateToV2(persisted);
+    expect(result.presets).toHaveLength(2);
+    const orPreset = result.presets.find((p) => p.provider === 'openrouter')!;
+    const sfPreset = result.presets.find((p) => p.provider === 'siliconflow')!;
+    expect(orPreset.apiKey).toBe('sk-or');
+    expect(sfPreset.apiKey).toBe('sk-sf');
+    expect(result.activePresetId).toBe(orPreset.id);
+  });
+
+  it('creates an empty "预设 1" for fully blank state', () => {
+    const persisted = {};
+    const result = migrateToV2(persisted);
+    expect(result.presets).toHaveLength(1);
+    expect(result.presets[0]!.name).toBe('预设 1');
+    expect(result.presets[0]!.apiKey).toBe('');
+    expect(result.activePresetId).toBe(result.presets[0]!.id);
+  });
+
+  it('passes through state already on v2 (idempotent)', () => {
+    const v2 = {
+      presets: [
+        {
+          id: 'x',
+          name: 'A',
+          provider: 'openrouter' as const,
+          apiKey: 'k',
+          apiEndpoint: '',
+          model: '',
+          fetchedModels: [],
+        },
+      ],
+      activePresetId: 'x',
+    };
+    const result = migrateToV2(v2);
+    expect(result.presets).toEqual(v2.presets);
+    expect(result.activePresetId).toBe('x');
+  });
+});
+
+describe('ensureAtLeastOnePreset', () => {
+  function seed(): { presets: ApiPreset[]; activePresetId: string } {
+    return {
+      presets: [
+        {
+          id: 'a',
+          name: 'A',
+          provider: 'openrouter' as const,
+          apiKey: '',
+          apiEndpoint: '',
+          model: '',
+          fetchedModels: [],
+        },
+      ],
+      activePresetId: 'a',
+    };
+  }
+
+  it('adds an empty "预设 1" when presets is empty', () => {
+    const out = ensureAtLeastOnePreset({ presets: [] as ApiPreset[], activePresetId: '' });
+    expect(out.presets).toHaveLength(1);
+    expect(out.activePresetId).toBe(out.presets[0]!.id);
+  });
+
+  it('is a no-op when at least one preset exists and active id is valid', () => {
+    const s = seed();
+    expect(ensureAtLeastOnePreset(s)).toBe(s);
+  });
+
+  it('repoints activePresetId to first preset if it dangles', () => {
+    const s = seed();
+    s.activePresetId = 'missing';
+    const out = ensureAtLeastOnePreset(s);
+    expect(out.activePresetId).toBe('a');
   });
 });

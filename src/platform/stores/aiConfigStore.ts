@@ -303,7 +303,29 @@ export const useAIConfigStore = create<AIConfigState>()(
     }),
     {
       name: 'hiPhone-ai-config',
+      version: 2,
       storage: idbStorage,
+      migrate: (persisted, version) => {
+        if (version < 2) return migrateToV2(persisted as LegacyPersisted);
+        return persisted;
+      },
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        const fixed = ensureAtLeastOnePreset(state);
+        if (fixed !== state) {
+          useAIConfigStore.setState(fixed);
+        }
+        const active = fixed.presets.find((p) => p.id === fixed.activePresetId);
+        if (active) {
+          useAIConfigStore.setState({
+            provider: active.provider,
+            apiKey: active.apiKey,
+            apiEndpoint: active.apiEndpoint,
+            model: active.model,
+            fetchedModels: active.fetchedModels,
+          });
+        }
+      },
       partialize: (s) => ({
         provider: s.provider,
         apiKey: s.apiKey,
@@ -329,6 +351,130 @@ export const useAIConfigStore = create<AIConfigState>()(
     },
   ),
 );
+
+// Bootstrap: ensure at least one preset exists synchronously, even before hydration.
+{
+  const s = useAIConfigStore.getState();
+  if (s.presets.length === 0) {
+    const id = s.createEmptyPreset('预设 1');
+    s.setActivePreset(id);
+  }
+}
+
+// ── Migration helpers (exported for tests) ──
+
+type LegacyProviderConfig = {
+  apiKey?: string;
+  apiEndpoint?: string;
+  model?: string;
+  fetchedModels?: ModelInfo[];
+};
+
+type LegacyPersisted = {
+  provider?: ProviderId;
+  apiKey?: string;
+  apiEndpoint?: string;
+  model?: string;
+  fetchedModels?: ModelInfo[];
+  providerConfigs?: Record<string, LegacyProviderConfig>;
+  presets?: ApiPreset[];
+  activePresetId?: string;
+};
+
+export function migrateToV2(persisted: LegacyPersisted): LegacyPersisted & {
+  presets: ApiPreset[];
+  activePresetId: string;
+} {
+  if (Array.isArray(persisted.presets) && persisted.presets.length > 0 && persisted.activePresetId) {
+    return persisted as LegacyPersisted & { presets: ApiPreset[]; activePresetId: string };
+  }
+
+  const presets: ApiPreset[] = [];
+  let activeId = '';
+
+  const hasTopLevel =
+    !!persisted.apiKey || !!persisted.model || !!persisted.apiEndpoint || !!persisted.provider;
+  if (hasTopLevel) {
+    const main: ApiPreset = {
+      id: uid(),
+      name: '默认',
+      provider: (persisted.provider ?? 'openrouter') as ProviderId,
+      apiKey: persisted.apiKey ?? '',
+      apiEndpoint: persisted.apiEndpoint ?? '',
+      model: persisted.model ?? '',
+      fetchedModels: persisted.fetchedModels ?? [],
+    };
+    presets.push(main);
+    activeId = main.id;
+  }
+
+  if (persisted.providerConfigs) {
+    for (const [providerId, cfg] of Object.entries(persisted.providerConfigs)) {
+      if (providerId === persisted.provider) continue;
+      const isEmpty = !cfg.apiKey && !cfg.model && !cfg.apiEndpoint;
+      if (isEmpty) continue;
+      presets.push({
+        id: uid(),
+        name: `默认 - ${providerId}`,
+        provider: providerId as ProviderId,
+        apiKey: cfg.apiKey ?? '',
+        apiEndpoint: cfg.apiEndpoint ?? '',
+        model: cfg.model ?? '',
+        fetchedModels: cfg.fetchedModels ?? [],
+      });
+    }
+  }
+
+  if (presets.length === 0) {
+    const empty: ApiPreset = {
+      id: uid(),
+      name: '预设 1',
+      provider: 'openrouter',
+      apiKey: '',
+      apiEndpoint: '',
+      model: '',
+      fetchedModels: [],
+    };
+    presets.push(empty);
+    activeId = empty.id;
+  }
+
+  const cleaned = { ...persisted } as LegacyPersisted;
+  delete cleaned.providerConfigs;
+
+  const active = presets.find((p) => p.id === activeId)!;
+  return {
+    ...cleaned,
+    presets,
+    activePresetId: activeId,
+    provider: active.provider,
+    apiKey: active.apiKey,
+    apiEndpoint: active.apiEndpoint,
+    model: active.model,
+    fetchedModels: active.fetchedModels,
+  };
+}
+
+export function ensureAtLeastOnePreset<T extends { presets: ApiPreset[]; activePresetId: string }>(
+  state: T,
+): T {
+  if (state.presets.length === 0) {
+    const seed: ApiPreset = {
+      id: uid(),
+      name: '预设 1',
+      provider: 'openrouter',
+      apiKey: '',
+      apiEndpoint: '',
+      model: '',
+      fetchedModels: [],
+    };
+    return { ...state, presets: [seed], activePresetId: seed.id };
+  }
+  if (!state.presets.some((p) => p.id === state.activePresetId)) {
+    return { ...state, activePresetId: state.presets[0]!.id };
+  }
+  return state;
+}
 
 /** Helper: get the adapter for the current provider */
 export { PROVIDER_ADAPTERS, getAdapter, streamChat, pickGenerationParams } from '@/platform/ai/providers';
