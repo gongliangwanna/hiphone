@@ -1,5 +1,16 @@
 import { useState, useMemo, useCallback, useRef } from 'react';
-import { Check, Eye, EyeOff, RefreshCw, Search, Zap, X } from 'lucide-react';
+import { AnimatePresence } from 'motion/react';
+import {
+  Check,
+  ChevronDown,
+  Eye,
+  EyeOff,
+  MoreHorizontal,
+  RefreshCw,
+  Search,
+  Zap,
+  X,
+} from 'lucide-react';
 import {
   useAIConfigStore,
   PROVIDER_ADAPTERS,
@@ -7,6 +18,8 @@ import {
   type ProviderId,
   type ModelInfo,
 } from '@/platform/stores/aiConfigStore';
+import { useSettingsNavStore } from '../settingsNavStore';
+import { PresetSwitcherSheet } from './PresetSwitcherSheet';
 
 // ---------------------------------------------------------------------------
 // Shared UI pieces
@@ -175,10 +188,16 @@ export function ModelSelectPage() {
   const setModel = useAIConfigStore((s) => s.setModel);
   const fetchModels = useAIConfigStore((s) => s.fetchModels);
 
+  const presets = useAIConfigStore((s) => s.presets);
+  const activePresetId = useAIConfigStore((s) => s.activePresetId);
+  const activePreset = presets.find((p) => p.id === activePresetId);
+  const pushNav = useSettingsNavStore((s) => s.push);
+
   const [showKey, setShowKey] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [testError, setTestError] = useState('');
+  const [sheetOpen, setSheetOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const adapterInfo = PROVIDER_ADAPTERS[provider];
@@ -232,6 +251,64 @@ export function ModelSelectPage() {
       className="h-full overflow-auto"
       style={{ backgroundColor: 'var(--color-secondarySystemBackground)' }}
     >
+      {/* ═══════════════ 0. 预设 ═══════════════ */}
+
+      <SectionHeader title="预设" />
+      <div className="mx-4 mb-5 flex gap-2">
+        <button
+          type="button"
+          data-testid="preset-picker-button"
+          onClick={() => setSheetOpen(true)}
+          className="flex flex-1 items-center gap-2 px-4 text-left"
+          style={{
+            minHeight: 52,
+            borderRadius: 'var(--radius-group)',
+            backgroundColor: 'var(--color-tertiarySystemBackground)',
+          }}
+        >
+          <div className="min-w-0 flex-1">
+            <div
+              data-testid="preset-picker-name"
+              className="truncate"
+              style={{
+                fontSize: 'var(--font-size-body)',
+                color: 'var(--color-label)',
+                fontWeight: 600,
+              }}
+            >
+              {activePreset?.name ?? '未选择预设'}
+            </div>
+            <div
+              className="truncate"
+              style={{
+                fontSize: 'var(--font-size-caption1)',
+                color: 'var(--color-secondaryLabel)',
+                marginTop: 2,
+              }}
+            >
+              {activePreset?.provider} · {activePreset?.model || '未选择模型'}
+            </div>
+          </div>
+          <ChevronDown size={18} color="var(--color-secondaryLabel)" />
+        </button>
+
+        <button
+          type="button"
+          data-testid="preset-manage-button"
+          onClick={() => pushNav('aiPresets')}
+          className="flex items-center justify-center"
+          style={{
+            width: 52,
+            height: 52,
+            borderRadius: 'var(--radius-group)',
+            backgroundColor: 'var(--color-tertiarySystemBackground)',
+            color: 'var(--color-secondaryLabel)',
+          }}
+        >
+          <MoreHorizontal size={20} />
+        </button>
+      </div>
+
       {/* ═══════════════ 1. 服务商 ═══════════════ */}
 
       <SectionHeader title="服务商" />
@@ -447,6 +524,10 @@ export function ModelSelectPage() {
       )}
 
       <div style={{ height: 40 }} />
+
+      <AnimatePresence>
+        {sheetOpen && <PresetSwitcherSheet onClose={() => setSheetOpen(false)} />}
+      </AnimatePresence>
     </div>
   );
 }
