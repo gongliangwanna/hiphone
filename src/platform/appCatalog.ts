@@ -44,7 +44,7 @@ const devPreinstalledApps: AppInfo[] = import.meta.env.DEV
 /** Implemented non-system apps — page 1 */
 export const preinstalledApps: AppInfo[] = [
   { id: 'gomoku', name: '五子棋', icon: `${CN_ICON_BASE}/gomoku.svg`, page: 1, kind: 'preinstalled' },
-  { id: 'presence', name: '在场', icon: `${CN_ICON_BASE}/presence.svg`, page: 1, kind: 'preinstalled' },
+  { id: 'presence', name: '在场', icon: `${CN_ICON_BASE}/presence.png`, page: 1, kind: 'preinstalled' },
   { id: 'ai-app-builder', name: 'AI 工坊', icon: `${SYSTEM_ICON_BASE}/shortcuts.jpg`, page: 1, kind: 'preinstalled' },
   ...devPreinstalledApps,
 ];
