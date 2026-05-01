@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { idbStorage } from '@/platform/storage/idbStorage';
 import { type ModelInfo, getAdapter } from '@/platform/ai/providers';
+import { uid } from '@/platform/utils/uid';
 
 // ── Types ──────────────────────────────────────────────
 
@@ -68,6 +69,9 @@ export interface AIConfigState {
   systemPrompt: string;
   postHistoryInstructions: string;
 
+  // Actions — presets
+  createEmptyPreset: (name: string) => string;
+
   // Actions — connection
   setProvider: (p: ProviderId) => void;
   setApiKey: (k: string) => void;
@@ -132,6 +136,25 @@ export const useAIConfigStore = create<AIConfigState>()(
 
       systemPrompt: '',
       postHistoryInstructions: '',
+
+      // ── Preset actions ──
+
+      createEmptyPreset: (name) => {
+        const trimmed = name.trim();
+        const { presets } = get();
+        const finalName = trimmed === '' ? `预设 ${presets.length + 1}` : trimmed;
+        const newPreset: ApiPreset = {
+          id: uid(),
+          name: finalName,
+          provider: 'openrouter',
+          apiKey: '',
+          apiEndpoint: '',
+          model: '',
+          fetchedModels: [],
+        };
+        set({ presets: [...presets, newPreset] });
+        return newPreset.id;
+      },
 
       // ── Connection actions ──
 

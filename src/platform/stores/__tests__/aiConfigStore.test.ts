@@ -33,3 +33,26 @@ describe('aiConfigStore — preset state shape', () => {
     );
   });
 });
+
+describe('createEmptyPreset', () => {
+  beforeEach(resetStore);
+
+  it('appends a new preset with empty connection fields and returns its id', () => {
+    const id = useAIConfigStore.getState().createEmptyPreset('我的预设');
+    const { presets } = useAIConfigStore.getState();
+    expect(presets).toHaveLength(1);
+    expect(presets[0]!.id).toBe(id);
+    expect(presets[0]!.name).toBe('我的预设');
+    expect(presets[0]!.provider).toBe('openrouter');
+    expect(presets[0]!.apiKey).toBe('');
+    expect(presets[0]!.apiEndpoint).toBe('');
+    expect(presets[0]!.model).toBe('');
+    expect(presets[0]!.fetchedModels).toEqual([]);
+  });
+
+  it('falls back to "预设 N" when name is blank', () => {
+    useAIConfigStore.getState().createEmptyPreset('   ');
+    const { presets } = useAIConfigStore.getState();
+    expect(presets[0]!.name).toBe('预设 1');
+  });
+});
