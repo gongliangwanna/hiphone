@@ -71,6 +71,7 @@ export interface AIConfigState {
 
   // Actions — presets
   createEmptyPreset: (name: string) => string;
+  createPresetFromCurrent: (name: string) => string;
   setActivePreset: (id: string) => void;
 
   // Actions — connection
@@ -154,6 +155,26 @@ export const useAIConfigStore = create<AIConfigState>()(
           fetchedModels: [],
         };
         set({ presets: [...presets, newPreset] });
+        return newPreset.id;
+      },
+
+      createPresetFromCurrent: (name) => {
+        const trimmed = name.trim();
+        const { presets, provider, apiKey, apiEndpoint, model, fetchedModels } = get();
+        const finalName = trimmed === '' ? `预设 ${presets.length + 1}` : trimmed;
+        const newPreset: ApiPreset = {
+          id: uid(),
+          name: finalName,
+          provider,
+          apiKey,
+          apiEndpoint,
+          model,
+          fetchedModels,
+        };
+        set({
+          presets: [...presets, newPreset],
+          activePresetId: newPreset.id,
+        });
         return newPreset.id;
       },
 

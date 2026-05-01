@@ -98,3 +98,36 @@ describe('setActivePreset', () => {
     expect(useAIConfigStore.getState().activePresetId).toBe(before);
   });
 });
+
+describe('createPresetFromCurrent', () => {
+  beforeEach(resetStore);
+
+  it('snapshots current top-level fields into a new preset and switches active', () => {
+    const aId = useAIConfigStore.getState().createEmptyPreset('A');
+    useAIConfigStore.setState((s) => ({
+      ...s,
+      presets: s.presets.map((p) =>
+        p.id === aId ? { ...p, apiKey: 'k1', model: 'm1' } : p,
+      ),
+    }));
+    useAIConfigStore.getState().setActivePreset(aId);
+
+    const newId = useAIConfigStore.getState().createPresetFromCurrent('副本');
+    const s = useAIConfigStore.getState();
+    expect(s.presets).toHaveLength(2);
+    const copy = s.presets.find((p) => p.id === newId)!;
+    expect(copy.name).toBe('副本');
+    expect(copy.apiKey).toBe('k1');
+    expect(copy.model).toBe('m1');
+    expect(s.activePresetId).toBe(newId);
+    expect(s.presets.find((p) => p.id === aId)!.apiKey).toBe('k1');
+  });
+
+  it('uses fallback name when blank', () => {
+    useAIConfigStore.getState().createEmptyPreset('A');
+    useAIConfigStore.getState().setActivePreset(useAIConfigStore.getState().presets[0]!.id);
+    useAIConfigStore.getState().createPresetFromCurrent('  ');
+    const s = useAIConfigStore.getState();
+    expect(s.presets[1]!.name).toBe('预设 2');
+  });
+});
