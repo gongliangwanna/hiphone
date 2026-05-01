@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { LockScreen } from '../LockScreen';
 
-const WALLPAPER = '/resource/wallpapers/ios/ios-26-stock-01.png';
+const WALLPAPER = '/resource/wallpapers/ios/ios-26-stock-01.jpg';
 
 describe('LockScreen', () => {
   const mockUnlock = vi.fn();

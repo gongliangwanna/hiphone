@@ -6,31 +6,31 @@ export const PRESENCE_BACKDROPS: PresenceBackdrop[] = [
   {
     id: 'rooftop-dusk',
     title: '傍晚天台',
-    imageUrl: '/resource/presence/backdrops/rooftop-dusk.png',
+    imageUrl: '/resource/presence/backdrops/rooftop-dusk.jpg',
     presetSceneId: 'rooftop-dusk',
   },
   {
     id: 'kitchen-night',
     title: '深夜厨房',
-    imageUrl: '/resource/presence/backdrops/kitchen-night.png',
+    imageUrl: '/resource/presence/backdrops/kitchen-night.jpg',
     presetSceneId: 'kitchen-night',
   },
   {
     id: 'convenience-rain',
     title: '雨中便利店',
-    imageUrl: '/resource/presence/backdrops/convenience-rain.png',
+    imageUrl: '/resource/presence/backdrops/convenience-rain.jpg',
     presetSceneId: 'convenience-rain',
   },
   {
     id: 'library-quiet',
     title: '安静图书馆',
-    imageUrl: '/resource/presence/backdrops/library-quiet.png',
+    imageUrl: '/resource/presence/backdrops/library-quiet.jpg',
     presetSceneId: 'library-quiet',
   },
   {
     id: 'street-home',
     title: '回家路上',
-    imageUrl: '/resource/presence/backdrops/street-home.png',
+    imageUrl: '/resource/presence/backdrops/street-home.jpg',
     presetSceneId: 'street-home',
   },
 ];

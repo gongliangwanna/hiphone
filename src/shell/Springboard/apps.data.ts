@@ -61,13 +61,13 @@ export function getAppInfoById(id: string): AppInfo | undefined {
 
 /** Available wallpapers */
 export const wallpapers = [
-  { id: 'ios-26-stock-01', src: '/resource/wallpapers/ios/ios-26-stock-01.png' },
-  { id: 'ios-26-stock-02', src: '/resource/wallpapers/ios/ios-26-stock-02.png' },
-  { id: 'ios-26-stock-03', src: '/resource/wallpapers/ios/ios-26-stock-03.png' },
-  { id: 'ios-26-stock-04', src: '/resource/wallpapers/ios/ios-26-stock-04.png' },
-  { id: 'ios-26-stock-05', src: '/resource/wallpapers/ios/ios-26-stock-05.png' },
-  { id: 'ios-26-stock-06', src: '/resource/wallpapers/ios/ios-26-stock-06.png' },
-  { id: 'ios-26-stock-07', src: '/resource/wallpapers/ios/ios-26-stock-07.png' },
+  { id: 'ios-26-stock-01', src: '/resource/wallpapers/ios/ios-26-stock-01.jpg' },
+  { id: 'ios-26-stock-02', src: '/resource/wallpapers/ios/ios-26-stock-02.jpg' },
+  { id: 'ios-26-stock-03', src: '/resource/wallpapers/ios/ios-26-stock-03.jpg' },
+  { id: 'ios-26-stock-04', src: '/resource/wallpapers/ios/ios-26-stock-04.jpg' },
+  { id: 'ios-26-stock-05', src: '/resource/wallpapers/ios/ios-26-stock-05.jpg' },
+  { id: 'ios-26-stock-06', src: '/resource/wallpapers/ios/ios-26-stock-06.jpg' },
+  { id: 'ios-26-stock-07', src: '/resource/wallpapers/ios/ios-26-stock-07.jpg' },
 ];
 
 /**
