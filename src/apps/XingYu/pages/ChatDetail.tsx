@@ -821,9 +821,13 @@ export function ChatDetail() {
           minHeight: 56,
           paddingTop: 10,
           // 避开 iOS Home Indicator 手势区域（约 34px）
+          // env(keyboard-inset-bottom) 仅在 Android Chromium + virtualKeyboard.overlaysContent=true
+          // 下有真值（main.tsx 已开启），让输入栏在键盘弹起时抬到键盘上方；
+          // iOS Safari 不实现 VirtualKeyboard API，env 恒取 fallback 0，行为等同改动前。
+          // 详见 docs/plan/2026-05-01-1640-android-keyboard-inset.md
           paddingBottom:
             pickerMode === 'none'
-              ? 'max(14px, calc(var(--safe-bottom, 0px) + 14px))'
+              ? 'max(14px, calc(var(--safe-bottom, 0px) + 14px + env(keyboard-inset-bottom, 0px)))'
               : 12,
           borderTop: `0.5px solid ${T.separator}`,
           backgroundColor: T.overlay,
