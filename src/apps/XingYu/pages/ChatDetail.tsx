@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback, memo } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ChevronLeft, Phone, Send, Image, Smile, MoreHorizontal, Play } from 'lucide-react';
+import { ChevronLeft, Phone, Send, Smile, MoreHorizontal, Play, Plus, MessageCircle, Loader2 } from 'lucide-react';
 import { useXYNav } from '../xingYuNavStore';
 import { useXYData } from '../xingYuDataStore';
 import { GroupMemberStrip } from '../components/GroupMemberStrip';
@@ -31,6 +31,8 @@ interface ChatPeer {
   id: string;
   name: string;
   avatar: string;
+  /** src 为空时使用的兜底文字（群聊默认「群」） */
+  fallbackText?: string;
   ringIndex: number;
   online: boolean;
   isGroup: boolean;
@@ -39,9 +41,10 @@ interface ChatPeer {
 import { Avatar } from '../components/Avatar';
 import { StickerPicker } from '../components/StickerPicker';
 import { ImagePicker } from '../components/ImagePicker';
+import { AttachmentDrawer } from '../components/AttachmentDrawer';
 import { T, springs } from '../theme';
 
-type PickerMode = 'none' | 'sticker' | 'image';
+type PickerMode = 'none' | 'sticker' | 'image' | 'attach';
 
 const CHAT_INPUT_LINE_HEIGHT = 22;
 const CHAT_INPUT_VERTICAL_PADDING = 18;
@@ -132,6 +135,10 @@ export function ChatDetail() {
   const generatingByConv = useXYData((s) => s.generatingByConv);
   const generatingMemberId = conv?.groupMemberIds ? generatingByConv[conv.id] ?? null : null;
   const triggerGroupReply = useXYData((s) => s.triggerGroupReply);
+  const triggerSingleReply = useXYData((s) => s.triggerSingleReply);
+  // 单聊：是否已有 AI 回复正在生成（与群聊共用 generatingByConv 锁）
+  const isSingleReplyGenerating =
+    !!conv?.characterId && !conv?.groupMemberIds && generatingByConv[conv.id] !== undefined;
 
   // 对话对端:character 优先,fallback 到 legacy mock idol
   // 查手机模式下需要视角化: AI 的对方是玩家
@@ -169,7 +176,8 @@ export function ChatDetail() {
       return {
         id: conv.id,
         name: conv.groupName,
-        avatar: conv.groupAvatar?.trim() || '/resource/avatars/idol-starlight.jpg',
+        avatar: conv.groupAvatar?.trim() || '',
+        fallbackText: '群',
         ringIndex: 0,
         online: true,
         isGroup: true,
@@ -651,7 +659,7 @@ export function ChatDetail() {
 
               <motion.button
                 className="flex flex-1 flex-col items-center justify-center min-w-0 px-2"
-                onClick={() => openIdol(peer.id)}
+                onClick={() => (peer.isGroup ? openChatSettings() : openIdol(peer.id))}
                 whileTap={{ opacity: 0.5 }}
               >
                 <div className="flex items-center gap-1.5">
@@ -808,7 +816,7 @@ export function ChatDetail() {
           {isViewingOther ? '只读模式 — 正在查看对方手机' : '旁观模式 — AI 角色间的私聊'}
         </div>
       ) : <div
-        className="flex shrink-0 items-end gap-2 px-3"
+        className="flex shrink-0 items-end gap-1 px-2"
         style={{
           minHeight: 56,
           paddingTop: 10,
@@ -821,26 +829,37 @@ export function ChatDetail() {
           backgroundColor: T.overlay,
         }}
       >
-        <button
-          type="button"
-          className="flex shrink-0 items-center justify-center transition-transform active:scale-90"
-          style={{
-            width: 44,
-            height: 44,
-            backgroundColor: pickerMode === 'image' ? `${T.accent}20` : 'transparent',
-            borderRadius: T.r.sm,
-            touchAction: 'manipulation',
-          }}
-          // 在 pointerdown 里直接触发 — 在 iOS Safari 上，pointerdown preventDefault
-          // 可能会抑制后续合成的 click 事件（用户看到按钮有反馈但 onClick 收不到）。
-          // 所以我们把动作挪到 pointerdown 本身，并且仍然 preventDefault 保持 input 不失焦。
-          onPointerDown={(e) => {
-            e.preventDefault();
-            togglePicker('image');
-          }}
-        >
-          <Image size={22} strokeWidth={1.8} color={pickerMode === 'image' ? T.accent : T.textMuted} />
-        </button>
+        {/* AI 触发按钮（仅 character 单聊；点击手动触发一条 AI 回复） */}
+        {conv?.characterId ? (
+          <button
+            type="button"
+            aria-label="AI 回复"
+            data-testid="xy-ai-trigger"
+            disabled={isSingleReplyGenerating}
+            className="flex shrink-0 items-center justify-center transition-transform active:scale-90"
+            style={{
+              width: 40,
+              height: 44,
+              marginLeft: -4,
+              backgroundColor: 'transparent',
+              borderRadius: T.r.full,
+              touchAction: 'manipulation',
+              opacity: isSingleReplyGenerating ? 0.55 : 1,
+              cursor: isSingleReplyGenerating ? 'default' : 'pointer',
+            }}
+            onPointerDown={(e) => {
+              if (isSingleReplyGenerating) return;
+              e.preventDefault();
+              triggerSingleReply(conv.id);
+            }}
+          >
+            {isSingleReplyGenerating ? (
+              <Loader2 size={22} strokeWidth={2} color={T.accent} className="animate-spin" />
+            ) : (
+              <MessageCircle size={22} strokeWidth={1.8} color={T.accent} />
+            )}
+          </button>
+        ) : null}
 
         <div
           className="flex min-w-0 flex-1 items-end gap-1"
@@ -891,6 +910,7 @@ export function ChatDetail() {
             <button
               key="send"
               type="button"
+              aria-label="发送"
               className="flex shrink-0 items-center justify-center transition-transform active:scale-90"
               style={{
                 // 44x44 tap target per iOS HIG; visual circle is 36x36 inside.
@@ -924,26 +944,49 @@ export function ChatDetail() {
                 <Send size={16} strokeWidth={2.4} color={T.textOnAccent} />
               </span>
             </button>
-          ) : (
-            <button
-              key="emoji"
-              type="button"
-              className="flex shrink-0 items-center justify-center transition-transform active:scale-90"
-              style={{
-                width: 44,
-                height: 44,
-                backgroundColor: pickerMode === 'sticker' ? `${T.accent}20` : 'transparent',
-                borderRadius: T.r.full,
-                touchAction: 'manipulation',
-              }}
-              onPointerDown={(e) => {
-                e.preventDefault();
-                togglePicker('sticker');
-              }}
-            >
-              <Smile size={22} strokeWidth={1.8} color={pickerMode === 'sticker' ? T.accent : T.textMuted} />
-            </button>
-          )}
+          ) : null}
+        </div>
+
+        {/* 表情 + + 紧贴一对（与微信一致，零间距） */}
+        <div className="flex shrink-0 items-end" style={{ marginRight: -4 }}>
+          <button
+            type="button"
+            aria-label="表情"
+            data-testid="xy-emoji-trigger"
+            className="flex shrink-0 items-center justify-center transition-transform active:scale-90"
+            style={{
+              width: 40,
+              height: 44,
+              backgroundColor: pickerMode === 'sticker' ? `${T.accent}20` : 'transparent',
+              borderRadius: T.r.full,
+              touchAction: 'manipulation',
+            }}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              togglePicker('sticker');
+            }}
+          >
+            <Smile size={22} strokeWidth={1.8} color={pickerMode === 'sticker' ? T.accent : T.textMuted} />
+          </button>
+          <button
+            type="button"
+            aria-label="附件"
+            data-testid="xy-attach-trigger"
+            className="flex shrink-0 items-center justify-center transition-transform active:scale-90"
+            style={{
+              width: 40,
+              height: 44,
+              backgroundColor: pickerMode === 'attach' ? `${T.accent}20` : 'transparent',
+              borderRadius: T.r.full,
+              touchAction: 'manipulation',
+            }}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              togglePicker('attach');
+            }}
+          >
+            <Plus size={22} strokeWidth={1.8} color={pickerMode === 'attach' ? T.accent : T.textMuted} />
+          </button>
         </div>
       </div>}
 
@@ -955,6 +998,10 @@ export function ChatDetail() {
           setPickerMode('none');
           openStickerManager('chat-detail');
         }}
+      />
+      <AttachmentDrawer
+        visible={pickerMode === 'attach'}
+        onPickImage={() => setPickerMode('image')}
       />
       <ImagePicker
         visible={pickerMode === 'image'}

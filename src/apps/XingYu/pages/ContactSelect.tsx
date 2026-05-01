@@ -18,6 +18,7 @@ interface ConvOption {
   id: string;
   name: string;
   avatar: string;
+  fallbackText?: string;
 }
 
 export function ContactSelect() {
@@ -168,7 +169,7 @@ export function ContactSelect() {
               transition={{ duration: 0 }}
               onClick={() => handlePick(opt.id)}
             >
-              <Avatar src={opt.avatar} size={44} ringIndex={0} />
+              <Avatar src={opt.avatar} fallbackText={opt.fallbackText} size={44} ringIndex={0} />
               <span
                 className="truncate"
                 style={{ fontSize: 16, color: T.textPrimary, flex: 1 }}
@@ -191,7 +192,8 @@ function convOption(
     return {
       id: conv.id,
       name: conv.groupName,
-      avatar: '/resource/avatars/idol-starlight.jpg',
+      avatar: conv.groupAvatar?.trim() || '',
+      fallbackText: '群',
     };
   }
   if (conv.characterId) {

@@ -107,4 +107,29 @@ describe('ChatDetail input composer', () => {
     expect(textarea.value).toBe('');
     expect(textarea.style.height).toBe('40px');
   });
+
+  it('renders AI / emoji / attach buttons on the new WeChat-style bar', () => {
+    renderChatDetail();
+    expect(screen.getByTestId('xy-ai-trigger')).toBeTruthy();
+    expect(screen.getByTestId('xy-emoji-trigger')).toBeTruthy();
+    expect(screen.getByTestId('xy-attach-trigger')).toBeTruthy();
+  });
+
+  it('tapping the + button opens the attachment drawer with photo entry', () => {
+    renderChatDetail();
+    expect(screen.queryByTestId('xy-attachment-drawer')).toBeNull();
+
+    fireEvent.pointerDown(screen.getByTestId('xy-attach-trigger'));
+    expect(screen.getByTestId('xy-attachment-drawer')).toBeTruthy();
+    expect(screen.getByTestId('xy-attach-photo')).toBeTruthy();
+  });
+
+  it('tapping the AI trigger calls triggerSingleReply for the active conv', () => {
+    const triggerSingleReply = vi.fn();
+    useXYData.setState({ triggerSingleReply } as never);
+    renderChatDetail();
+
+    fireEvent.pointerDown(screen.getByTestId('xy-ai-trigger'));
+    expect(triggerSingleReply).toHaveBeenCalledWith('conv-1');
+  });
 });

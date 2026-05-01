@@ -32,6 +32,8 @@ const SEARCH_PAGE_SIZE = 20;
 interface ConvPeer {
   name: string;
   avatar: string;
+  /** src 为空时使用的兜底文字（群聊默认「群」） */
+  fallbackText?: string;
   ringIndex: number;
   online: boolean;
   isGroup: boolean;
@@ -344,7 +346,8 @@ function ConvRow({ conv, isOpen, onOpen, onCloseRequest, onTap, onDelete }: Conv
     if (conv.groupName && conv.groupMemberIds) {
       return {
         name: conv.groupName,
-        avatar: '/resource/avatars/idol-starlight.jpg',
+        avatar: conv.groupAvatar?.trim() || '',
+        fallbackText: '群',
         ringIndex: 0,
         online: true,
         isGroup: true,
@@ -382,7 +385,7 @@ function ConvRow({ conv, isOpen, onOpen, onCloseRequest, onTap, onDelete }: Conv
       isGroup: idol.isGroup ?? false,
       memberCount: idol.memberCount,
     };
-  }, [conv.characterId, conv.idolId, conv.groupName, conv.groupMemberIds, conv.aiChatParticipants, characters, phoneOwnerId, persona, userSettings]);
+  }, [conv.characterId, conv.idolId, conv.groupName, conv.groupMemberIds, conv.groupAvatar, conv.aiChatParticipants, characters, phoneOwnerId, persona, userSettings]);
 
   // 外部 isOpen 变化时 (例如别的行被展开触发本行收起) 同步动画。
   // 跳过首次 mount 的 0→0 动画,避免和后续 pan 的 x 更新抢夺控制权。
@@ -524,6 +527,7 @@ function ConvRow({ conv, isOpen, onOpen, onCloseRequest, onTap, onDelete }: Conv
         <div className="relative">
           <Avatar
             src={peer.avatar}
+            fallbackText={peer.fallbackText}
             size={50}
             ringIndex={peer.ringIndex}
             online={peer.online}
@@ -636,7 +640,7 @@ function resolveConvPeer(
   phoneOwnerId: string | null,
   persona: Persona | null,
   userSettingsAvatar: string | undefined,
-): { name: string; avatar: string } | null {
+): { name: string; avatar: string; fallbackText?: string } | null {
   if (conv.aiChatParticipants) {
     const [id1, id2] = conv.aiChatParticipants;
     const ch1 = characters.find((c) => c.id === id1);
@@ -654,7 +658,11 @@ function resolveConvPeer(
     };
   }
   if (conv.groupName && conv.groupMemberIds) {
-    return { name: conv.groupName, avatar: '/resource/avatars/idol-starlight.jpg' };
+    return {
+      name: conv.groupName,
+      avatar: conv.groupAvatar?.trim() || '',
+      fallbackText: '群',
+    };
   }
   if (conv.characterId) {
     if (phoneOwnerId && conv.characterId === phoneOwnerId) {
@@ -713,7 +721,7 @@ function MessageResultRow({
         userSelect: 'none',
       }}
     >
-      <Avatar src={peer.avatar} size={40} ringIndex={0} />
+      <Avatar src={peer.avatar} fallbackText={peer.fallbackText} size={40} ringIndex={0} />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex w-full items-center justify-between gap-2">
           <div className="flex min-w-0 items-baseline gap-1.5">

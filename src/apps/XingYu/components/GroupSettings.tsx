@@ -128,11 +128,7 @@ export function GroupSettings({ conv, onOpenPicker, onCompressImage }: Props) {
           <button className="flex w-full items-center justify-between px-4 py-3" onClick={() => groupAvatarRef.current?.click()}>
             <span style={{ fontSize: 15, color: T.textPrimary }}>群头像</span>
             <div className="flex items-center gap-2">
-              {conv.groupAvatar ? (
-                <img src={conv.groupAvatar} alt="" style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'cover' }} />
-              ) : (
-                <ImageIcon size={18} color={T.textMuted} />
-              )}
+              <Avatar src={conv.groupAvatar?.trim() || ''} fallbackText="群" size={32} />
               <ChevronRight size={16} color={T.textMuted} />
             </div>
           </button>

@@ -71,7 +71,35 @@ export function IdolProfile() {
     [moments, activeIdolId],
   );
 
-  if (!profileData) return null;
+  if (!profileData) {
+    return (
+      <div className="flex h-full flex-col" style={{ backgroundColor: T.bg }}>
+        <div
+          className="flex shrink-0 items-center gap-2.5 px-2"
+          style={{
+            height: 56,
+            backgroundColor: T.overlay,
+            borderBottom: `0.5px solid ${T.separator}`,
+          }}
+        >
+          <motion.button
+            className="flex items-center justify-center"
+            style={{ width: 36, height: 36 }}
+            onClick={closeIdol}
+            whileTap={{ scale: 0.85 }}
+            transition={springs.press}
+          >
+            <ChevronLeft size={22} strokeWidth={2.2} color={T.accent} />
+          </motion.button>
+        </div>
+        <div className="flex flex-1 items-center justify-center px-6">
+          <span style={{ fontSize: 14, color: T.textSecondary, textAlign: 'center' }}>
+            未找到该资料页
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   const handleSendMessage = () => {
     if (idol) {

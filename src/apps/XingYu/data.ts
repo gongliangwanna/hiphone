@@ -135,6 +135,9 @@ export interface Conversation {
   groupAvatar?: string;
   /** 群公告文本 */
   groupAnnouncement?: string;
+  /** 单聊是否自动触发 AI 回复；undefined/false = 手动，true = 自动。
+   *  默认手动，与群聊一致。仅对 characterId 单聊生效，群聊忽略此字段。 */
+  aiAutoReply?: boolean;
 }
 
 export interface Moment {

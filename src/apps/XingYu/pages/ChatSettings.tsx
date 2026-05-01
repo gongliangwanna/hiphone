@@ -8,6 +8,7 @@ import { useCharacterStore } from '@/platform/stores/characterStore';
 import { Avatar } from '../components/Avatar';
 import { T, springs } from '../theme';
 import { GroupSettings } from '../components/GroupSettings';
+import { Toggle } from '@/system';
 
 const CHAR_FALLBACK_AVATAR = '/resource/avatars/preset-01.jpg';
 
@@ -245,6 +246,36 @@ export function ChatSettings() {
             placeholder={originalName || '输入备注名...'}
           />
         </motion.div>
+
+        {/* ── Section 2.5: AI 自动回复（仅 character 单聊显示） ── */}
+        {conv.characterId && (
+          <motion.div
+            className="mt-4 flex items-center gap-3"
+            style={{
+              padding: '16px 20px',
+              borderRadius: T.r.xl,
+              backgroundColor: T.card,
+              boxShadow: T.shadow2,
+            }}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.075, ...springs.gentle }}
+          >
+            <div className="min-w-0 flex-1">
+              <span style={{ fontSize: 14, fontWeight: 600, color: T.textPrimary }}>
+                AI 自动回复
+              </span>
+              <p style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>
+                开启后发消息会自动收到回复；关闭则需在聊天页手动点击触发
+              </p>
+            </div>
+            <Toggle
+              value={!!conv.aiAutoReply}
+              onChange={(v) => updateConvSettings(conv.id, { aiAutoReply: v })}
+              testId="xy-ai-autoreply-toggle"
+            />
+          </motion.div>
+        )}
 
         {/* ── Section 3: 发起群聊 ── */}
         <motion.div

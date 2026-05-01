@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { dock, type AppInfo, getAppsWithUserInstalled } from './apps.data';
+import {
+  type AppInfo,
+  getAppsWithUserInstalled,
+  getDockAppsFromIds,
+} from './apps.data';
 import { useInstalledUserAppsStore } from '@/platform/stores/installedUserAppsStore';
 import { IconGrid, type AppDragPreview, type WidgetDragPreview } from './IconGrid';
 import { Dock } from './Dock';
@@ -13,6 +17,7 @@ import { useAppRuntimeStore, type AppOrigin } from '@/platform/stores/appRuntime
 import { usePerfDebugStore } from '@/platform/stores/perfDebugStore';
 import {
   useSpringboardLayoutStore,
+  resolveDock,
   resolveSlotPages,
   type Slot,
   type WidgetInstance,
@@ -32,15 +37,27 @@ export function Springboard({ sizeTier, viewportWidth }: SpringboardProps) {
 
   // Re-render when user apps change (subscription side-effect only)
   useInstalledUserAppsStore((s) => s.apps);
-  const apps = getAppsWithUserInstalled();
 
   // Layout store
   const appOrder = useSpringboardLayoutStore((s) => s.appOrder);
   const pageWidgets = useSpringboardLayoutStore((s) => s.pageWidgets);
+  const dockOrder = useSpringboardLayoutStore((s) => s.dockOrder);
   const isEditMode = useSpringboardLayoutStore((s) => s.isEditMode);
   const removeWidget = useSpringboardLayoutStore((s) => s.removeWidget);
   const setCurrentSpringboardPage = useSpringboardLayoutStore(
     (s) => s.setCurrentSpringboardPage,
+  );
+
+  // Resolve the dock first so the grid resolution can exclude its apps.
+  // `dockIds` is the canonical source of truth for what's in the dock right
+  // now; `dockApps` is the AppInfo list for rendering.
+  const dockIds = useMemo(() => resolveDock(dockOrder), [dockOrder]);
+  const dockApps = useMemo(() => getDockAppsFromIds(dockIds), [dockIds]);
+  const apps = useMemo(
+    () => getAppsWithUserInstalled(dockIds),
+    // `apps` lookup also depends on the user-installed store, which we
+    // already subscribe to above — that subscription drives our re-render.
+    [dockIds],
   );
 
   // Resolve unified slot pages, then split into parallel app / widget views.
@@ -126,6 +143,7 @@ export function Springboard({ sizeTier, viewportWidth }: SpringboardProps) {
   const iconDrag = useIconDrag({
     pages: displayPages,
     widgetPages: displayWidgetPages,
+    dockApps,
     metrics,
     viewportWidth,
     currentPage,
@@ -181,7 +199,27 @@ export function Springboard({ sizeTier, viewportWidth }: SpringboardProps) {
   const isAnyDragActive = iconDrag.dragPos !== null || iconDrag.widgetDrag !== null;
 
   return (
-    <div className="flex h-full flex-col" data-testid="springboard">
+    // Springboard root is the stacking context for drag overlays — they're
+    // rendered as siblings of the gesture surface (and the Dock) so they
+    // (a) aren't clipped by the gesture surface's overflow:hidden when the
+    // user drags an icon down toward the Dock, and (b) paint above the Dock
+    // (which is in normal flex flow with no z-index).
+    <div
+      className="relative flex h-full flex-col"
+      data-testid="springboard"
+      // Icon-drag pointer handlers live at the Springboard ROOT so they
+      // catch pointer events from the Dock too (the Dock is a sibling of
+      // the gesture surface in the DOM — events from there don't bubble
+      // through the gesture surface). This removes the dependency on
+      // `setPointerCapture` succeeding from a long-press timer callback,
+      // which silently fails in some browsers (the call is no longer in
+      // a trusted pointer-event context). Without this, dragging a Dock
+      // icon via long-press did nothing until a grid drag had already
+      // primed the pointer-capture path.
+      onPointerMove={iconDrag.onPointerMove}
+      onPointerUp={iconDrag.onPointerUp}
+      onPointerCancel={iconDrag.onPointerCancel}
+    >
       <div
         ref={gestureAreaRef}
         className="relative flex-1 overflow-hidden"
@@ -191,18 +229,9 @@ export function Springboard({ sizeTier, viewportWidth }: SpringboardProps) {
           touchAction: 'pan-y',
         }}
         onPointerDown={onPointerDown}
-        onPointerMove={(e) => {
-          onPointerMove(e);
-          iconDrag.onPointerMove(e);
-        }}
-        onPointerUp={(e) => {
-          onPointerUp(e);
-          iconDrag.onPointerUp(e);
-        }}
-        onPointerCancel={(e) => {
-          onPointerCancel(e);
-          iconDrag.onPointerCancel(e);
-        }}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerCancel}
         onLostPointerCapture={onLostPointerCapture}
       >
         <ActivePagesProvider
@@ -252,64 +281,84 @@ export function Springboard({ sizeTier, viewportWidth }: SpringboardProps) {
           ))}
         </motion.div>
         </ActivePagesProvider>
-
-        {iconDrag.dragPos && iconDrag.dragApp && (
-          <DragOverlay
-            app={iconDrag.dragApp}
-            metrics={metrics}
-            x={iconDrag.dragX}
-            y={iconDrag.dragY}
-            hideIconImages={hideIconImages}
-            isSettling={iconDrag.isSettling}
-          />
-        )}
-
-        {/* Static overlay snapshot — covers the grid slot for one paint frame
-            while it renders underneath. Prevents the 1-frame flash on
-            settle → grid-slot swap. */}
-        {iconDrag.overlayLingering && iconDrag.overlayLingerData && (
-          <div
-            className="pointer-events-none absolute left-0 top-0 z-50"
-            style={{
-              width: iconDrag.overlayLingerData.size,
-              height: iconDrag.overlayLingerData.size,
-              transform: `translate3d(${iconDrag.overlayLingerData.x}px,${iconDrag.overlayLingerData.y}px,0)`,
-              willChange: 'transform',
-              filter: 'drop-shadow(0 8px 24px rgba(0,0,0,0.35))',
-            }}
-          >
-            <div
-              className="h-full w-full overflow-hidden"
-              style={{ borderRadius: 'var(--radius-icon)' }}
-            >
-              {hideIconImages ? (
-                <div className="h-full w-full bg-gray-400" />
-              ) : (
-                <img
-                  src={iconDrag.overlayLingerData.icon}
-                  alt=""
-                  className="h-full w-full object-cover"
-                  draggable={false}
-                />
-              )}
-            </div>
-          </div>
-        )}
-
-        {iconDrag.widgetDrag && (
-          <WidgetDragOverlay
-            widget={iconDrag.widgetDrag.widget}
-            metrics={metrics}
-            viewportWidth={viewportWidth}
-            x={iconDrag.dragX}
-            y={iconDrag.dragY}
-            isSettling={iconDrag.isSettling}
-          />
-        )}
       </div>
 
       <PageIndicator totalPages={totalPages} currentPage={currentPage} />
-      <Dock apps={dock} metrics={metrics} reduceTransparency={isPageDragging} hideIconImages={hideIconImages} onOpen={handleOpenApp} />
+      <Dock
+        apps={dockApps}
+        metrics={metrics}
+        reduceTransparency={isPageDragging}
+        hideIconImages={hideIconImages}
+        isEditMode={isEditMode}
+        dragPreview={iconDrag.dockDragPreview}
+        onDragStart={iconDrag.onDragStart}
+        onOpen={handleOpenApp}
+      />
+
+      {/*
+        Drag overlays live at the Springboard root level — siblings of the
+        gesture surface and the Dock — so they:
+          1. Are NOT clipped by the gesture surface's overflow:hidden when
+             the dragged icon travels down toward the Dock.
+          2. Paint above the Dock in stacking order (z-50 vs unstacked Dock).
+        `dragX` / `dragY` are computed against the gesture surface's
+        bounding rect, which starts at (0, 0) of the Springboard root (the
+        gesture surface is the first flex child with no offset above it),
+        so coordinates remain valid here.
+      */}
+      {iconDrag.dragPos && iconDrag.dragApp && (
+        <DragOverlay
+          app={iconDrag.dragApp}
+          metrics={metrics}
+          x={iconDrag.dragX}
+          y={iconDrag.dragY}
+          hideIconImages={hideIconImages}
+          isSettling={iconDrag.isSettling}
+        />
+      )}
+
+      {/* Static overlay snapshot — covers the grid slot for one paint frame
+          while it renders underneath. Prevents the 1-frame flash on
+          settle → grid-slot swap. */}
+      {iconDrag.overlayLingering && iconDrag.overlayLingerData && (
+        <div
+          className="pointer-events-none absolute left-0 top-0 z-50"
+          style={{
+            width: iconDrag.overlayLingerData.size,
+            height: iconDrag.overlayLingerData.size,
+            transform: `translate3d(${iconDrag.overlayLingerData.x}px,${iconDrag.overlayLingerData.y}px,0)`,
+            willChange: 'transform',
+            filter: 'drop-shadow(0 8px 24px rgba(0,0,0,0.35))',
+          }}
+        >
+          <div
+            className="h-full w-full overflow-hidden"
+            style={{ borderRadius: 'var(--radius-icon)' }}
+          >
+            {hideIconImages ? (
+              <div className="h-full w-full bg-gray-400" />
+            ) : (
+              <img
+                src={iconDrag.overlayLingerData.icon}
+                alt=""
+                className="h-full w-full object-cover"
+                draggable={false}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {iconDrag.widgetDrag && (
+        <WidgetDragOverlay
+          widget={iconDrag.widgetDrag.widget}
+          metrics={metrics}
+          viewportWidth={viewportWidth}
+          x={iconDrag.dragX}
+          y={iconDrag.dragY}
+          isSettling={iconDrag.isSettling}
+        />
+      )}
     </div>
   );
 }

@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
+  DOCK_CAPACITY,
+  resolveDock,
   useSpringboardLayoutStore,
   resolveOrderedPages,
   resolveSlotPages,
@@ -7,7 +9,11 @@ import {
   WIDGET_CELLS,
   type WidgetInstance,
 } from '../springboardLayoutStore';
-import { apps } from '@/shell/Springboard/apps.data';
+import {
+  apps,
+  DEFAULT_DOCK_IDS,
+  getAppsWithUserInstalled,
+} from '@/shell/Springboard/apps.data';
 import { useInstalledUserAppsStore } from '../installedUserAppsStore';
 
 function resetStore() {
@@ -15,6 +21,7 @@ function resetStore() {
   useSpringboardLayoutStore.setState({
     appOrder: null,
     pageWidgets: null,
+    dockOrder: null,
     isEditMode: false,
     isWidgetDrawerOpen: false,
     recentlyAddedItemId: null,
@@ -520,6 +527,271 @@ describe('springboardLayoutStore', () => {
       const pw = useSpringboardLayoutStore.getState().pageWidgets!;
       expect(pw[0]![0]!.col).toBe(2);
       expect(pw[0]![0]!.row).toBe(3);
+      localStorage.removeItem('hiPhone-springboard-layout');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Dock state + mutations
+  // -------------------------------------------------------------------------
+
+  describe('resolveDock', () => {
+    it('returns the catalog default when dockOrder is null', () => {
+      expect(resolveDock(null)).toEqual(DEFAULT_DOCK_IDS);
+    });
+
+    it('returns the user dockOrder when set, capped at DOCK_CAPACITY', () => {
+      const ids = ['a', 'b', 'c', 'd', 'e', 'f'];
+      const out = resolveDock(ids);
+      expect(out.length).toBe(DOCK_CAPACITY);
+      expect(out).toEqual(['a', 'b', 'c', 'd']);
+    });
+
+    it('canonicalizes ids and dedupes', () => {
+      // safari-dock → safari per appProfileStore alias map
+      const out = resolveDock(['safari-dock', 'safari', 'music']);
+      expect(out).toEqual(['safari', 'music']);
+    });
+  });
+
+  describe('reorderDock', () => {
+    it('moves an app within the dock', () => {
+      // Seed dockOrder so we don't depend on default catalog content order
+      useSpringboardLayoutStore.setState({
+        dockOrder: ['settings', 'safari', 'music', 'xingyu'],
+      });
+      useSpringboardLayoutStore.getState().reorderDock(0, 2);
+      expect(useSpringboardLayoutStore.getState().dockOrder).toEqual([
+        'safari',
+        'music',
+        'settings',
+        'xingyu',
+      ]);
+    });
+
+    it('clamps toIndex into the post-removal range', () => {
+      useSpringboardLayoutStore.setState({
+        dockOrder: ['a', 'b', 'c'],
+      });
+      useSpringboardLayoutStore.getState().reorderDock(0, 99);
+      expect(useSpringboardLayoutStore.getState().dockOrder).toEqual([
+        'b',
+        'c',
+        'a',
+      ]);
+    });
+
+    it('is a no-op when fromIndex is out of range', () => {
+      useSpringboardLayoutStore.setState({
+        dockOrder: ['a', 'b'],
+      });
+      useSpringboardLayoutStore.getState().reorderDock(5, 0);
+      expect(useSpringboardLayoutStore.getState().dockOrder).toEqual(['a', 'b']);
+    });
+  });
+
+  describe('moveAppToDock', () => {
+    it('inserts a grid app into the dock when there is room', () => {
+      useSpringboardLayoutStore.setState({
+        // 3-slot dock leaves room for one more
+        dockOrder: ['settings', 'safari', 'music'],
+        appOrder: [[apps[0]!.id, apps[1]!.id]],
+      });
+      const ok = useSpringboardLayoutStore
+        .getState()
+        .moveAppToDock(apps[0]!.id, 1);
+      expect(ok).toBe(true);
+      expect(useSpringboardLayoutStore.getState().dockOrder).toEqual([
+        'settings',
+        apps[0]!.id,
+        'safari',
+        'music',
+      ]);
+      // Grid no longer contains the moved app
+      expect(useSpringboardLayoutStore.getState().appOrder).toEqual([
+        [apps[1]!.id],
+      ]);
+    });
+
+    it('does not leave the moved app duplicated on the grid (appOrder=null path)', () => {
+      // REGRESSION: when appOrder was null, resolveSlotPages used to fall
+      // back to the static `defaultApps` list (filtered only by the
+      // CATALOG default dock). Moving 'calendar' into the dock then left
+      // it visible on both the grid and the dock until the user
+      // reordered something to materialize appOrder.
+      useSpringboardLayoutStore.setState({
+        appOrder: null,
+        // Free a dock slot so the move succeeds.
+        dockOrder: ['settings', 'safari', 'music'],
+      });
+      const ok = useSpringboardLayoutStore
+        .getState()
+        .moveAppToDock('calendar', 0);
+      expect(ok).toBe(true);
+
+      // Grid resolution must NOT contain 'calendar' — the dock-aware
+      // gridSource passed in must take precedence over `defaultApps`.
+      const dockIds = ['safari', 'music', 'settings', 'calendar'];
+      const grid = resolveOrderedPages(
+        useSpringboardLayoutStore.getState().appOrder,
+        null,
+        // Mirror what Springboard.tsx passes — the dynamic dock-filtered list.
+        // calendar must be filtered out by getAppsWithUserInstalled(dockIds).
+        // (We can't import getAppsWithUserInstalled directly here without
+        // re-running the module-init filter, so build the set inline.)
+        apps.filter((a) => !dockIds.includes(a.id)),
+      );
+      const flatGridIds = grid.flatMap((page) => page.map((a) => a.id));
+      expect(flatGridIds).not.toContain('calendar');
+    });
+
+    it('rejects when dock is at DOCK_CAPACITY and the app is new', () => {
+      useSpringboardLayoutStore.setState({
+        dockOrder: ['settings', 'safari', 'music', 'xingyu'],
+        appOrder: [[apps[0]!.id]],
+      });
+      const ok = useSpringboardLayoutStore
+        .getState()
+        .moveAppToDock(apps[0]!.id, 0);
+      expect(ok).toBe(false);
+      // Dock unchanged, grid unchanged
+      expect(useSpringboardLayoutStore.getState().dockOrder).toEqual([
+        'settings',
+        'safari',
+        'music',
+        'xingyu',
+      ]);
+      expect(useSpringboardLayoutStore.getState().appOrder).toEqual([
+        [apps[0]!.id],
+      ]);
+    });
+
+    it('reorders within the dock when the app is already there', () => {
+      useSpringboardLayoutStore.setState({
+        dockOrder: ['settings', 'safari', 'music', 'xingyu'],
+      });
+      const ok = useSpringboardLayoutStore
+        .getState()
+        .moveAppToDock('settings', 3);
+      expect(ok).toBe(true);
+      expect(useSpringboardLayoutStore.getState().dockOrder).toEqual([
+        'safari',
+        'music',
+        'xingyu',
+        'settings',
+      ]);
+    });
+
+    it('canonicalizes the appId before storing', () => {
+      useSpringboardLayoutStore.setState({
+        dockOrder: ['settings', 'music', 'xingyu'],
+      });
+      const ok = useSpringboardLayoutStore
+        .getState()
+        .moveAppToDock('safari-dock', 0);
+      expect(ok).toBe(true);
+      // 'safari-dock' canonicalized to 'safari'
+      expect(useSpringboardLayoutStore.getState().dockOrder![0]).toBe('safari');
+    });
+  });
+
+  describe('moveAppFromDock', () => {
+    it('keeps the moved app visible on the grid when starting from a default layout', () => {
+      // REGRESSION: dragging a default dock app (e.g. settings) out of the
+      // dock when both appOrder and dockOrder are null caused the app to
+      // disappear: resolveSlotPages must surface it on the grid using the
+      // dock-aware `gridSource` (extraApps) the caller passes.
+      useSpringboardLayoutStore.setState({
+        appOrder: null,
+        dockOrder: null,
+      });
+      useSpringboardLayoutStore
+        .getState()
+        .moveAppFromDock('settings', 0, 0);
+
+      // Mirror what Springboard.tsx passes — the dynamic dock-filtered list.
+      // After the move, dock no longer has 'settings' so it must appear in
+      // the grid source.
+      const newDockIds = useSpringboardLayoutStore
+        .getState()
+        .dockOrder!;
+      expect(newDockIds).not.toContain('settings');
+
+      // Use the REAL helper that Springboard.tsx uses. This catches the
+      // root-cause: when getAppsWithUserInstalled doesn't source from the
+      // dock entries, dock-only apps like 'settings' are missing from the
+      // grid pool entirely and the moved app silently disappears.
+      const gridSource = getAppsWithUserInstalled(newDockIds);
+      const resolved = resolveOrderedPages(
+        useSpringboardLayoutStore.getState().appOrder,
+        null,
+        gridSource,
+      );
+      const flatIds = resolved.flatMap((page) => page.map((a) => a.id));
+      expect(flatIds).toContain('settings');
+    });
+
+    it('removes the app from the dock and inserts it onto the target page', () => {
+      useSpringboardLayoutStore.setState({
+        dockOrder: ['settings', 'safari', 'music', 'xingyu'],
+        appOrder: [[apps[0]!.id]],
+      });
+      useSpringboardLayoutStore
+        .getState()
+        .moveAppFromDock('settings', 0, 0);
+      expect(useSpringboardLayoutStore.getState().dockOrder).toEqual([
+        'safari',
+        'music',
+        'xingyu',
+      ]);
+      const order = useSpringboardLayoutStore.getState().appOrder!;
+      expect(order[0]![0]).toBe('settings');
+      expect(order[0]).toContain(apps[0]!.id);
+    });
+
+    it('is a no-op when the app is not in the dock', () => {
+      useSpringboardLayoutStore.setState({
+        dockOrder: ['settings', 'safari', 'music', 'xingyu'],
+        appOrder: [[apps[0]!.id]],
+      });
+      useSpringboardLayoutStore
+        .getState()
+        .moveAppFromDock(apps[0]!.id, 0, 0);
+      expect(useSpringboardLayoutStore.getState().dockOrder).toEqual([
+        'settings',
+        'safari',
+        'music',
+        'xingyu',
+      ]);
+    });
+  });
+
+  describe('resetLayout', () => {
+    it('clears dockOrder along with appOrder and pageWidgets', () => {
+      useSpringboardLayoutStore.setState({
+        dockOrder: ['a', 'b'],
+        appOrder: [[apps[0]!.id]],
+      });
+      useSpringboardLayoutStore.getState().resetLayout();
+      const s = useSpringboardLayoutStore.getState();
+      expect(s.dockOrder).toBe(null);
+      expect(s.appOrder).toBe(null);
+      expect(s.pageWidgets).toBe(null);
+    });
+  });
+
+  describe('migration v3 → v4 (introduce dockOrder)', () => {
+    it('stamps dockOrder=null on legacy v3 persisted state', async () => {
+      const v3State = {
+        appOrder: [[apps[0]!.id]],
+        pageWidgets: null,
+      };
+      localStorage.setItem(
+        'hiPhone-springboard-layout',
+        JSON.stringify({ state: v3State, version: 3 }),
+      );
+      await useSpringboardLayoutStore.persist.rehydrate();
+      expect(useSpringboardLayoutStore.getState().dockOrder).toBe(null);
       localStorage.removeItem('hiPhone-springboard-layout');
     });
   });

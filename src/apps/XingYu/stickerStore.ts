@@ -58,6 +58,48 @@ function blobToDataURL(blob: Blob): Promise<string> {
   });
 }
 
+/* ── URL 批量导入 ── */
+
+export interface ParsedStickerLine {
+  description: string;
+  url: string;
+}
+
+/**
+ * 解析"描述：URL"或"描述:URL"格式的多行文本。
+ * 仅取每行第一个冒号作为分隔符，兼容 URL 中的 `://`。
+ * 中英文冒号都支持。空行与无法识别的行会被丢弃。
+ */
+export function parseUrlImport(text: string): ParsedStickerLine[] {
+  const out: ParsedStickerLine[] = [];
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    // 找第一个冒号（中文 ： 或英文 :）
+    const m = line.match(/^([^:：]+)[:：]\s*(.+)$/);
+    if (!m) continue;
+    const description = m[1]!.trim();
+    const url = m[2]!.trim();
+    if (!description || !url) continue;
+    if (!/^https?:\/\//i.test(url)) continue;
+    out.push({ description, url });
+  }
+  return out;
+}
+
+/**
+ * 从 URL 拉取图片并复用 compressImage 压缩为 data URL。
+ * 网络/CORS 失败抛错，由调用方决定如何向用户反馈。
+ */
+export async function compressImageFromUrl(url: string): Promise<string> {
+  const res = await fetch(url, { mode: 'cors' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const blob = await res.blob();
+  if (!blob.type.startsWith('image/')) throw new Error('not an image');
+  const file = new File([blob], 'sticker', { type: blob.type });
+  return compressImage(file);
+}
+
 /* ── Store ── */
 
 interface StickerState {

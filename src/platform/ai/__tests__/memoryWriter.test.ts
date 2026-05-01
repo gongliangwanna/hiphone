@@ -49,8 +49,13 @@ describe('_appendMessage — 1-to-1 conv', () => {
     expect(useXYData.getState().messages[0]!.id).toBe('m1');
 
     const mem = useCharacterMemory.getState().getAll('char-001');
-    expect(mem).toHaveLength(1);
-    expect(mem[0]!).toMatchObject({
+    // _appendMessage now prefixes a [场景] system marker before the first
+    // content entry it writes for a character (so single↔group switches are
+    // visible in the transcript).
+    expect(mem).toHaveLength(2);
+    expect(mem[0]!.role).toBe('system');
+    expect(mem[0]!.content).toMatch(/场景/);
+    expect(mem[1]!).toMatchObject({
       role: 'user',
       speakerId: 'me',
       content: '你好',
@@ -205,11 +210,15 @@ describe('_appendMessage — group fan-out', () => {
       id: 'm1', convId: 'c-group-x', senderId: 'me',
       type: 'text', text: 'hi everyone', timestamp: 1000,
     }, 'xingyu');
+    // Each member's memory now begins with a [场景] system marker (group
+    // scene) before the first content entry.
     for (const memberId of ['a', 'b', 'c']) {
       const entries = useCharacterMemory.getState().getAll(memberId);
-      expect(entries).toHaveLength(1);
-      expect(entries[0]!.role).toBe('user');
-      expect(entries[0]!.content).toBe('hi everyone');
+      expect(entries).toHaveLength(2);
+      expect(entries[0]!.role).toBe('system');
+      expect(entries[0]!.content).toMatch(/群聊/);
+      expect(entries[1]!.role).toBe('user');
+      expect(entries[1]!.content).toBe('hi everyone');
     }
   });
 
@@ -218,9 +227,10 @@ describe('_appendMessage — group fan-out', () => {
       id: 'm2', convId: 'c-group-x', senderId: 'char-a',
       type: 'text', text: 'hello', timestamp: 2000,
     }, 'xingyu');
-    expect(useCharacterMemory.getState().getAll('a')[0]!.role).toBe('assistant');
-    expect(useCharacterMemory.getState().getAll('b')[0]!.role).toBe('user');
-    expect(useCharacterMemory.getState().getAll('c')[0]!.role).toBe('user');
-    expect(useCharacterMemory.getState().getAll('b')[0]!.speakerId).toBe('char-a');
+    // Index [0] is the [场景] marker; the message lands at [1] for every member.
+    expect(useCharacterMemory.getState().getAll('a')[1]!.role).toBe('assistant');
+    expect(useCharacterMemory.getState().getAll('b')[1]!.role).toBe('user');
+    expect(useCharacterMemory.getState().getAll('c')[1]!.role).toBe('user');
+    expect(useCharacterMemory.getState().getAll('b')[1]!.speakerId).toBe('char-a');
   });
 });

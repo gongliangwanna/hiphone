@@ -18,6 +18,13 @@ class AudioEngine {
   private currentSongId = '';
   private progressTimer: ReturnType<typeof setInterval> | null = null;
   private resolveAbort: AbortController | null = null;
+  // True while the progress timer is writing audio.currentTime back to the
+  // store, so the seek-sync subscriber can ignore engine-driven updates.
+  // Critical when the tab is backgrounded: setInterval is throttled to ~1Hz
+  // while audio keeps advancing, making the per-tick progress delta look like
+  // a user seek and triggering audio.currentTime= writes that flush the
+  // decode pipeline (audible as choppy/intermittent playback).
+  isApplyingTick = false;
 
   constructor() {
     this.audio = new Audio();
@@ -168,7 +175,9 @@ class AudioEngine {
     this.stopProgressTimer();
     this.progressTimer = setInterval(() => {
       if (!this.audio.paused && Number.isFinite(this.audio.currentTime)) {
+        this.isApplyingTick = true;
         useMusicDataStore.getState().setProgress(this.audio.currentTime);
+        this.isApplyingTick = false;
       }
     }, 66);
   }
@@ -206,10 +215,11 @@ export function usePlaybackEngine() {
   // Handle seek from UI
   useEffect(() => {
     const unsub = useMusicDataStore.subscribe((state, prevState) => {
+      if (engine.isApplyingTick) return;
       if (
         state.currentSongId === prevState.currentSongId &&
         state.isPlaying === prevState.isPlaying &&
-        Math.abs(state.progress - prevState.progress) > 1
+        state.progress !== prevState.progress
       ) {
         engine.seek(state.progress);
       }

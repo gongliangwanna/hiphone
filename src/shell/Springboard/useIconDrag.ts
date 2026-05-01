@@ -9,6 +9,7 @@ import {
   type PackerWidget,
 } from '@/platform/stores/pagePacker';
 import {
+  DOCK_CAPACITY,
   useSpringboardLayoutStore,
   type WidgetInstance,
   type WidgetSize,
@@ -18,6 +19,13 @@ const COLS = 4;
 const ROWS = 5;
 const EDGE_ZONE = 40;
 const AUTO_SCROLL_DELAY = 400;
+
+/**
+ * Sentinel page index meaning "this position lives in the Dock, not on a
+ * grid page." Reusing `DragPosition` lets us thread dock drag state through
+ * the existing app-drag pipeline without a parallel state shape.
+ */
+export const DOCK_PAGE = -1;
 
 export interface DragPosition {
   page: number;
@@ -40,6 +48,12 @@ interface UseIconDragOptions {
   pages: AppInfo[][];
   /** Widgets per page. Used to resolve which widget was grabbed by id. */
   widgetPages?: WidgetInstance[][];
+  /**
+   * Apps currently in the Dock, in display order. Lets the drag pipeline
+   * (a) resolve the dragged app when the source is the Dock, and (b)
+   * compute drop-target slot indices when the pointer is over the Dock.
+   */
+  dockApps?: AppInfo[];
   metrics: SpringboardMetrics;
   viewportWidth: number;
   currentPage: number;
@@ -49,6 +63,15 @@ interface UseIconDragOptions {
   cancelSwipe: () => void;
   gestureAreaRef: React.RefObject<HTMLDivElement | null>;
   onRequestExtraPage?: () => void;
+}
+
+/** Active dock drag preview consumed by `<Dock>` to reflow slots. */
+export interface DockDragPreview {
+  draggedApp: AppInfo;
+  /** Source slot in the Dock at drag start, or `null` if dragging from grid. */
+  fromIndex: number | null;
+  /** Current target slot in the Dock, or `null` if hovering over the grid. */
+  toIndex: number | null;
 }
 
 interface PointerState {
@@ -137,6 +160,7 @@ export function getWidgetDropTarget(
 export function useIconDrag({
   pages,
   widgetPages = [],
+  dockApps = [],
   metrics,
   viewportWidth,
   currentPage,
@@ -148,6 +172,14 @@ export function useIconDrag({
 }: UseIconDragOptions) {
   const moveApp = useSpringboardLayoutStore((s) => s.moveApp);
   const moveWidget = useSpringboardLayoutStore((s) => s.moveWidget);
+  const reorderDock = useSpringboardLayoutStore((s) => s.reorderDock);
+  const moveAppToDock = useSpringboardLayoutStore((s) => s.moveAppToDock);
+  const moveAppFromDock = useSpringboardLayoutStore((s) => s.moveAppFromDock);
+
+  // Latest dockApps in a ref so onPointerMove can read without re-binding the
+  // callback on every dock change.
+  const dockAppsRef = useRef<AppInfo[]>(dockApps);
+  dockAppsRef.current = dockApps;
 
   // Which kind of entity (if any) is currently being dragged. Synchronously
   // readable from pointer handlers so we avoid the React state update lag.
@@ -241,8 +273,13 @@ export function useIconDrag({
     for (const a of settleAnimsRef.current) a.stop();
     settleAnimsRef.current = [];
 
-    // Snapshot the overlay's appearance before clearing state.
-    const app = dragPos ? pages[dragPos.page]?.[dragPos.localIndex] ?? null : null;
+    // Snapshot the overlay's appearance before clearing state. Source can
+    // be either a grid page or the Dock — look up accordingly.
+    const app = dragPos
+      ? dragPos.page === DOCK_PAGE
+        ? dockApps[dragPos.localIndex] ?? null
+        : pages[dragPos.page]?.[dragPos.localIndex] ?? null
+      : null;
     if (app) {
       overlayLingerRef.current = {
         icon: app.icon,
@@ -259,7 +296,7 @@ export function useIconDrag({
     // Activate linger — same React batch, so the snapshot overlay renders
     // in the same frame that the main overlay unmounts.
     setOverlayLingering(true);
-  }, [resetAllState, dragPos, pages, dragX, dragY, metrics.iconSize]);
+  }, [resetAllState, dragPos, pages, dockApps, dragX, dragY, metrics.iconSize]);
 
   // Ref for the settle callback — the imperative motionAnimate onComplete
   // closure captures this ref, so it always calls the latest version.
@@ -276,11 +313,24 @@ export function useIconDrag({
 
       const areaRect = area.getBoundingClientRect();
 
-      // Find icon element by data-testid (e.currentTarget may be null from long-press timer)
-      const appId = pages[pageIndex]?.[localIndex]?.id;
-      const iconEl = appId
-        ? area.querySelector<HTMLElement>(`[data-testid="app-icon-${appId}"]`)
-        : e.currentTarget;
+      // Find icon element by data-testid (e.currentTarget may be null from
+      // long-press timer). Source can be either a grid page or the Dock —
+      // the latter uses the `DOCK_PAGE` sentinel and `dockApps` for lookup.
+      // CRITICAL: search via `document` (not `area`) because the Dock lives
+      // OUTSIDE the gesture surface in the DOM. Using `area.querySelector`
+      // here was returning null for dock icons, silently aborting the drag.
+      // App ids are canonical and globally unique (AGENTS.md inv 9), so
+      // `document.querySelector` is safe.
+      const appId =
+        pageIndex === DOCK_PAGE
+          ? dockApps[localIndex]?.id
+          : pages[pageIndex]?.[localIndex]?.id;
+      const iconEl =
+        (appId
+          ? document.querySelector<HTMLElement>(
+              `[data-testid="app-icon-${appId}"]`,
+            )
+          : null) ?? (e.currentTarget as HTMLElement | null);
       if (!iconEl) return;
 
       const iconRect = iconEl.getBoundingClientRect();
@@ -305,7 +355,7 @@ export function useIconDrag({
         // pointerId may be stale from long-press timer
       }
     },
-    [gestureAreaRef, cancelSwipe, pages],
+    [gestureAreaRef, cancelSwipe, pages, dockApps],
   );
 
   const onWidgetDragStart = useCallback(
@@ -362,11 +412,78 @@ export function useIconDrag({
       const kind = dragKindRef.current;
 
       if (kind === 'app' && dragPosRef.current) {
+        // Pointer center in gesture-area coords (the dock rect lives in
+        // viewport coords, so we adjust below).
+        const centerX = dragX.get() + metrics.iconSize / 2;
+        const centerY = dragY.get() + metrics.iconSize / 2;
+
+        // ---- Dock drop detection ------------------------------------------
+        // Widgets can never enter the dock; the kind === 'app' guard above
+        // covers that. For app drags, check if the pointer is inside the
+        // dock material rect (queried by testid — cheap, single getBCR per
+        // pointermove, and always reflects the live position even if the
+        // dock content reflows mid-drag). Source = grid hits the capacity
+        // cap; source = dock always reorders within.
+        // CRITICAL: query via `document` (not `area`) — the Dock lives
+        // OUTSIDE the gesture surface, so an `area`-scoped query returns
+        // null and grid-into-dock drops silently fail to register.
+        const area = gestureAreaRef.current;
+        const dockEl = document.querySelector<HTMLElement>(
+          '[data-testid="dock-material"]',
+        );
+        if (area && dockEl) {
+          const areaRect = area.getBoundingClientRect();
+          const dockRect = dockEl.getBoundingClientRect();
+          // Translate dock rect into gesture-area coordinates.
+          const dockLeft = dockRect.left - areaRect.left;
+          const dockTop = dockRect.top - areaRect.top;
+          const dockRight = dockLeft + dockRect.width;
+          const dockBottom = dockTop + dockRect.height;
+
+          if (
+            centerX >= dockLeft &&
+            centerX <= dockRight &&
+            centerY >= dockTop &&
+            centerY <= dockBottom
+          ) {
+            const sourceIsDock = dragPosRef.current.page === DOCK_PAGE;
+            const dockLen = dockAppsRef.current.length;
+            // Visual slot count: source-from-dock means the source slot is
+            // hidden, so the dock visually shows one fewer slot.
+            const visualCount = sourceIsDock
+              ? Math.max(0, dockLen - 1)
+              : dockLen;
+            // Reject grid → full dock. Falls through to grid drop logic.
+            const wouldExceedCap =
+              !sourceIsDock && dockLen >= DOCK_CAPACITY;
+
+            if (!wouldExceedCap) {
+              // Insertion gap count = visualCount + 1 (gaps between/around).
+              const insertSlots = visualCount + 1;
+              const slotWidth = dockRect.width / Math.max(1, insertSlots);
+              const raw = (centerX - dockLeft) / slotWidth;
+              const slotIndex = Math.max(
+                0,
+                Math.min(visualCount, Math.floor(raw)),
+              );
+
+              const prev = dropPosRef.current;
+              if (
+                !prev ||
+                prev.page !== DOCK_PAGE ||
+                prev.localIndex !== slotIndex
+              ) {
+                setDropPos({ page: DOCK_PAGE, localIndex: slotIndex });
+              }
+              return;
+            }
+          }
+        }
+
+        // ---- Grid drop (existing path) -----------------------------------
         // Compute app drop target from icon center. We feed `getDropTarget`
         // the page's widgets so it can pack and find the actual cell-to-
         // localIndex mapping (widgets carve holes in the row-major fill).
-        const centerX = dragX.get() + metrics.iconSize / 2;
-        const centerY = dragY.get() + metrics.iconSize / 2;
         const pageApps = pages[page] ?? [];
         const pageWidgetsHere = widgetPages[page] ?? [];
 
@@ -409,7 +526,15 @@ export function useIconDrag({
         }
       }
     },
-    [dragX, dragY, metrics, pages, viewportWidth, widgetPages],
+    [
+      dragX,
+      dragY,
+      metrics,
+      pages,
+      viewportWidth,
+      widgetPages,
+      gestureAreaRef,
+    ],
   );
 
   // Auto-scroll changes the active page even when the finger is stationary.
@@ -498,39 +623,92 @@ export function useIconDrag({
         const sameSpot =
           drag.page === drop.page && drag.localIndex === drop.localIndex;
 
-        // Defer moveApp until the settle animation completes
-        if (!sameSpot) {
-          pendingMoveRef.current = () =>
-            moveApp(drag.page, drag.localIndex, drop.page, drop.localIndex);
+        // Resolve the dragged app from either the source grid page or the
+        // Dock (sentinel page = DOCK_PAGE).
+        const draggedApp =
+          drag.page === DOCK_PAGE
+            ? dockApps[drag.localIndex]
+            : pages[drag.page]?.[drag.localIndex];
+
+        // Decide the store mutation based on (source kind, target kind).
+        if (!sameSpot && draggedApp) {
+          if (drag.page === DOCK_PAGE && drop.page === DOCK_PAGE) {
+            pendingMoveRef.current = () =>
+              reorderDock(drag.localIndex, drop.localIndex);
+          } else if (drag.page === DOCK_PAGE && drop.page !== DOCK_PAGE) {
+            const appId = draggedApp.id;
+            pendingMoveRef.current = () =>
+              moveAppFromDock(appId, drop.page, drop.localIndex);
+          } else if (drag.page !== DOCK_PAGE && drop.page === DOCK_PAGE) {
+            const appId = draggedApp.id;
+            pendingMoveRef.current = () =>
+              moveAppToDock(appId, drop.localIndex);
+          } else {
+            pendingMoveRef.current = () =>
+              moveApp(drag.page, drag.localIndex, drop.page, drop.localIndex);
+          }
         }
 
-        // Compute the target grid cell via the packer (mirrors IconGrid's
-        // effectiveApps so the overlay lands exactly where the slot will be).
-        const draggedApp = pages[drag.page]?.[drag.localIndex];
-        const targetApps = pages[drop.page] ?? [];
-        const targetWidgets = widgetPages[drop.page] ?? [];
+        // Compute settle target rect. Two cases:
+        // 1. Drop on the grid → reuse the existing packer-based math.
+        // 2. Drop in the Dock → measure the dock material rect + slot.
+        let targetX: number | null = null;
+        let targetY: number | null = null;
 
-        const effectiveIds = targetApps.map((a) => a.id);
-        if (drag.page === drop.page) {
-          effectiveIds.splice(drag.localIndex, 1);
+        if (drop.page === DOCK_PAGE) {
+          // Query via `document` (not `area`) — the Dock lives outside the
+          // gesture surface in the DOM. See updateDropTargetForPage.
+          const area = gestureAreaRef.current;
+          const dockEl = document.querySelector<HTMLElement>(
+            '[data-testid="dock-material"]',
+          );
+          if (area && dockEl) {
+            const areaRect = area.getBoundingClientRect();
+            const dockRect = dockEl.getBoundingClientRect();
+            const dockLeft = dockRect.left - areaRect.left;
+            const dockTop = dockRect.top - areaRect.top;
+            const sourceIsDock = drag.page === DOCK_PAGE;
+            const dockLen = dockApps.length;
+            // Visual count after removal = dockLen - 1 if source is dock and
+            // wasn't already at the drop slot; for grid → dock it's dockLen.
+            // For positioning the settled icon we use the post-commit slot
+            // count: dock will have nextLen items.
+            const nextLen = sourceIsDock ? dockLen : dockLen + 1;
+            const slotWidth = dockRect.width / Math.max(1, nextLen);
+            const finalIndex = Math.max(
+              0,
+              Math.min(nextLen - 1, drop.localIndex),
+            );
+            targetX =
+              dockLeft +
+              finalIndex * slotWidth +
+              (slotWidth - metrics.iconSize) / 2;
+            // Icon vertical position inside dock: dockPaddingY/2 (top
+            // padding) + 4px (button paddingTop) — mirrors `<Dock>` style.
+            targetY = dockTop + Math.max(4, Math.ceil(metrics.dockPaddingY / 2)) + 8;
+          }
+        } else {
+          const targetApps = pages[drop.page] ?? [];
+          const targetWidgets = widgetPages[drop.page] ?? [];
+          const effectiveIds = targetApps.map((a) => a.id);
+          if (drag.page === drop.page) {
+            effectiveIds.splice(drag.localIndex, 1);
+          }
+          effectiveIds.splice(drop.localIndex, 0, draggedApp?.id ?? '');
+          const { appPlacements } = packPage(targetWidgets, effectiveIds);
+          const tp = appPlacements.find((p) => p.id === draggedApp?.id);
+          if (tp) {
+            targetX = sidePadding + tp.col * colWidth + (colWidth - metrics.iconSize) / 2;
+            targetY = metrics.springboardTopPadding + tp.row * rowH + 4;
+          }
         }
-        effectiveIds.splice(drop.localIndex, 0, draggedApp?.id ?? '');
 
-        const { appPlacements } = packPage(targetWidgets, effectiveIds);
-        const tp = appPlacements.find((p) => p.id === draggedApp?.id);
-
-        if (tp) {
+        if (targetX !== null && targetY !== null) {
           // Stop accepting pointer moves but keep dragPos/dropPos alive
-          // so the grid slot stays hidden during the settle animation.
+          // so the source slot stays hidden during the settle animation.
           pointerRef.current = null;
           dragKindRef.current = null;
 
-          // The DragOverlay is iconSize × iconSize, matching the icon image
-          // inside the AppIcon button. The icon image sits centered
-          // horizontally in the grid column and 4px below the cell top
-          // (the button's paddingTop).
-          const targetX = sidePadding + tp.col * colWidth + (colWidth - metrics.iconSize) / 2;
-          const targetY = metrics.springboardTopPadding + tp.row * rowH + 4;
           const settleSpring = { type: 'spring' as const, ...spring.interactive };
           for (const a of settleAnimsRef.current) a.stop();
           settleAnimsRef.current = [
@@ -591,7 +769,23 @@ export function useIconDrag({
     } else {
       resetAllState();
     }
-  }, [moveApp, moveWidget, clearAutoScroll, resetAllState, metrics, viewportWidth, pages, widgetPages, dragX, dragY]);
+  }, [
+    moveApp,
+    moveWidget,
+    moveAppToDock,
+    moveAppFromDock,
+    reorderDock,
+    clearAutoScroll,
+    resetAllState,
+    metrics,
+    viewportWidth,
+    pages,
+    widgetPages,
+    dockApps,
+    gestureAreaRef,
+    dragX,
+    dragY,
+  ]);
 
   const onPointerUp = useCallback(
     (e: React.PointerEvent<HTMLElement>) => {
@@ -619,8 +813,25 @@ export function useIconDrag({
     for (const a of settleAnimsRef.current) a.stop();
   }, []);
 
-  // Expose state for rendering (state, not ref — React needs the re-render)
-  const dragApp = dragPos ? pages[dragPos.page]?.[dragPos.localIndex] ?? null : null;
+  // Expose state for rendering (state, not ref — React needs the re-render).
+  // Resolve the dragged app from grid OR dock so the overlay can render
+  // either source uniformly.
+  const dragApp = dragPos
+    ? dragPos.page === DOCK_PAGE
+      ? dockApps[dragPos.localIndex] ?? null
+      : pages[dragPos.page]?.[dragPos.localIndex] ?? null
+    : null;
+
+  // Build the Dock's reflow preview from the active drag state. `<Dock>`
+  // uses this to splice the dragged app in/out of its rendered slot list,
+  // mirroring how `IconGrid.effectiveApps` reflows the home grid.
+  const dockDragPreview: DockDragPreview | null = dragApp
+    ? {
+        draggedApp: dragApp,
+        fromIndex: dragPos!.page === DOCK_PAGE ? dragPos!.localIndex : null,
+        toIndex: dropPos?.page === DOCK_PAGE ? dropPos.localIndex : null,
+      }
+    : null;
 
   return {
     // Shared overlay coordinates (MotionValues — no re-render on position change)
@@ -631,6 +842,8 @@ export function useIconDrag({
     dropPos,
     dragApp,
     onDragStart,
+    // Dock drag preview (consumed by `<Dock>` for slot reflow)
+    dockDragPreview,
     // Widget drag
     widgetDrag,
     widgetDropPos,

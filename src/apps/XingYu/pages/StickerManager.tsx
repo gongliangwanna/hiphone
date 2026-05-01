@@ -7,10 +7,17 @@ import {
   ImagePlus,
   Smile,
   X,
+  Link2,
 } from 'lucide-react';
 import { useXYNav } from '../xingYuNavStore';
-import { useStickerStore, compressImage } from '../stickerStore';
+import {
+  useStickerStore,
+  compressImage,
+  compressImageFromUrl,
+  parseUrlImport,
+} from '../stickerStore';
 import type { StickerPack } from '../data';
+import { STICKER_PACK_MAX_COUNT } from '../data';
 import { T, springs } from '../theme';
 
 type View = 'pack-list' | 'pack-detail';
@@ -372,6 +379,9 @@ function PackDetailView({
   const fileRef = useRef<HTMLInputElement>(null);
 
   const [pendingImageData, setPendingImageData] = useState<string | null>(null);
+  const [urlImportOpen, setUrlImportOpen] = useState(false);
+
+  const remainingSlots = Math.max(0, STICKER_PACK_MAX_COUNT - pack.stickers.length);
 
   const handleFileSelect = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -444,6 +454,19 @@ function PackDetailView({
         <span style={{ fontSize: 13, color: T.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
           表情 ({pack.stickers.length})
         </span>
+        <motion.button
+          className="flex items-center gap-1"
+          style={{ padding: '2px 4px' }}
+          onClick={() => setUrlImportOpen(true)}
+          whileTap={{ opacity: 0.5 }}
+          transition={{ duration: 0 }}
+          disabled={remainingSlots === 0}
+        >
+          <Link2 size={13} strokeWidth={2.2} color={remainingSlots === 0 ? T.textMuted : T.accent} />
+          <span style={{ fontSize: 13, fontWeight: 500, color: remainingSlots === 0 ? T.textMuted : T.accent }}>
+            URL 导入
+          </span>
+        </motion.button>
       </div>
 
       <div
@@ -556,6 +579,14 @@ function PackDetailView({
           删除表情包
         </span>
       </motion.button>
+
+      {/* URL Import Dialog */}
+      <UrlImportDialog
+        visible={urlImportOpen}
+        remainingSlots={remainingSlots}
+        onClose={() => setUrlImportOpen(false)}
+        onAdd={onAddSticker}
+      />
 
       {/* Edit Desc Dialog */}
       <EditDescDialog
@@ -693,6 +724,219 @@ function EditDescDialog({
                 whileTap={{ scale: 0.95 }}
               >
                 保存
+              </motion.button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   UrlImportDialog — 多行 "描述：URL" 批量导入
+   ═══════════════════════════════════════════════════════════ */
+
+const URL_IMPORT_PLACEHOLDER =
+  '困：https://example.com/cry.png\n开心：https://example.com/happy.png\n讨厌你: https://example.com/hate.png';
+
+function UrlImportDialog({
+  visible,
+  remainingSlots,
+  onClose,
+  onAdd,
+}: {
+  visible: boolean;
+  remainingSlots: number;
+  onClose: () => void;
+  onAdd: (imageData: string, desc: string) => boolean;
+}) {
+  const [text, setText] = useState('');
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [errors, setErrors] = useState<string[]>([]);
+  // Guards against double-firing: React state updates are async, so a fast
+  // second click can re-enter before `running` flips. A ref is synchronous.
+  const importingRef = useRef(false);
+
+  useEffect(() => {
+    if (visible) {
+      setText('');
+      setRunning(false);
+      setProgress({ done: 0, total: 0 });
+      setErrors([]);
+      importingRef.current = false;
+    }
+  }, [visible]);
+
+  const parsed = parseUrlImport(text);
+  const overflow = parsed.length > remainingSlots;
+  const canImport = parsed.length > 0 && remainingSlots > 0 && !running;
+
+  const handleImport = async () => {
+    if (importingRef.current) return;
+    if (!canImport) return;
+    importingRef.current = true;
+
+    const items = parsed.slice(0, remainingSlots);
+    setRunning(true);
+    setProgress({ done: 0, total: items.length });
+    setErrors([]);
+
+    const failures: string[] = [];
+    try {
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i]!;
+        try {
+          const data = await compressImageFromUrl(item.url);
+          const ok = onAdd(data, item.description);
+          if (!ok) failures.push(`${item.description}（已达上限）`);
+        } catch {
+          failures.push(`${item.description}（拉取失败）`);
+        }
+        setProgress({ done: i + 1, total: items.length });
+      }
+    } finally {
+      setErrors(failures);
+      setRunning(false);
+      // All succeeded → close immediately so a stale queued click can't re-fire.
+      if (failures.length === 0) onClose();
+      else importingRef.current = false;
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.div className="absolute inset-0 z-50 flex items-center justify-center">
+          <motion.div
+            className="absolute inset-0 bg-black/40"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            onClick={running ? undefined : onClose}
+          />
+
+          <motion.div
+            className="relative flex flex-col"
+            style={{
+              width: '86%',
+              maxWidth: 340,
+              backgroundColor: T.card,
+              borderRadius: T.r.xl,
+              padding: 20,
+              boxShadow: T.shadow3,
+            }}
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            transition={springs.gentle}
+          >
+            <span
+              style={{
+                fontSize: 16,
+                fontWeight: 700,
+                color: T.textPrimary,
+                marginBottom: 6,
+                textAlign: 'center',
+              }}
+            >
+              URL 批量导入
+            </span>
+
+            <span
+              style={{
+                fontSize: 12,
+                color: T.textSecondary,
+                lineHeight: 1.5,
+                marginBottom: 12,
+                textAlign: 'center',
+              }}
+            >
+              每行一条，格式：<span style={{ color: T.textPrimary, fontWeight: 500 }}>描述：URL</span>
+              <br />
+              中英文冒号皆可
+            </span>
+
+            <textarea
+              className="w-full bg-transparent outline-none scrollbar-hide"
+              style={{
+                fontSize: 13,
+                color: T.textPrimary,
+                lineHeight: 1.5,
+                border: `1px solid ${T.border}`,
+                borderRadius: T.r.sm,
+                padding: 10,
+                minHeight: 140,
+                maxHeight: 200,
+                resize: 'none',
+                fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+              }}
+              placeholder={URL_IMPORT_PLACEHOLDER}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              disabled={running}
+              autoFocus
+            />
+
+            {/* Status row */}
+            <div className="mt-2 min-h-[18px] px-1">
+              {running ? (
+                <span style={{ fontSize: 12, color: T.textSecondary }}>
+                  正在导入… {progress.done} / {progress.total}
+                </span>
+              ) : errors.length > 0 ? (
+                <span style={{ fontSize: 12, color: T.rose }}>
+                  失败 {errors.length} 项：{errors.join('、')}
+                </span>
+              ) : remainingSlots === 0 ? (
+                <span style={{ fontSize: 12, color: T.rose }}>
+                  表情包已满（{STICKER_PACK_MAX_COUNT} 个）
+                </span>
+              ) : parsed.length > 0 ? (
+                <span style={{ fontSize: 12, color: overflow ? T.rose : T.textSecondary }}>
+                  已识别 {parsed.length} 条
+                  {overflow ? `，仅前 ${remainingSlots} 条会被导入（剩余位 ${remainingSlots}）` : ''}
+                </span>
+              ) : (
+                <span style={{ fontSize: 12, color: T.textMuted }}>
+                  剩余位 {remainingSlots}
+                </span>
+              )}
+            </div>
+
+            <div className="mt-4 flex w-full items-center justify-center gap-4">
+              <motion.button
+                className="flex-1 py-2.5"
+                style={{
+                  fontSize: 15,
+                  fontWeight: 500,
+                  color: T.textSecondary,
+                  borderRadius: T.r.sm,
+                  pointerEvents: running ? 'none' : 'auto',
+                  opacity: running ? 0.5 : 1,
+                }}
+                onClick={onClose}
+                whileTap={{ opacity: 0.5 }}
+              >
+                {errors.length > 0 ? '关闭' : '取消'}
+              </motion.button>
+              <motion.button
+                className="flex-1 py-2.5"
+                style={{
+                  fontSize: 15,
+                  fontWeight: 600,
+                  color: T.textOnAccent,
+                  background: canImport ? T.accentGrad : T.border,
+                  borderRadius: T.r.sm,
+                  opacity: canImport ? 1 : 0.5,
+                  pointerEvents: canImport ? 'auto' : 'none',
+                }}
+                onClick={handleImport}
+                whileTap={{ scale: 0.95 }}
+              >
+                {running ? '导入中…' : '导入'}
               </motion.button>
             </div>
           </motion.div>

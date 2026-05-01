@@ -52,6 +52,8 @@ beforeEach(async () => {
       idolId: 'char-001',
       characterId: 'char-001',
       lastMsg: '', lastTime: 0, unread: 0,
+      // 单聊默认手动触发 AI 回复；这套测试套验证的是 AI 路径本身，所以打开自动回复。
+      aiAutoReply: true,
     }],
     messages: [],
     moments: [],
@@ -76,22 +78,22 @@ describe('XingYu sendMessage flow — memoryStore integration', () => {
     console.log('[t=1500ms]', useCharacterMemory.getState().getAll('char-001').length);
     await new Promise((r) => setTimeout(r, 1000));
     const mem = useCharacterMemory.getState().getAll('char-001');
-    // Order: [marker, user, assistant] — XingYu's sendMessage now calls
-    // fireAppSwitchMarker BEFORE _appendMessage so the [上下文切换] system
-    // event lands ahead of the first user turn in the transcript (bug fix
-    // for the session creator racing the user entry). Assistant entry is
-    // the RENDERED form (spec D1), which after the renderer cleanup no
-    // longer carries a speaker prefix — transcript rendering owns that.
-    expect(mem).toHaveLength(3);
+    // Order: [app-switch, scene, user, assistant]
+    // - fireAppSwitchMarker fires first → [上下文切换] marker
+    // - _appendMessage runs ensureSceneMarker → [场景] marker (single-chat)
+    // - then user entry, then assistant reply (rendered form, spec D1)
+    expect(mem).toHaveLength(4);
     expect(mem[0]!.role).toBe('system');
     expect(mem[0]!.content).toMatch(/上下文切换/);
-    expect(mem[1]!).toMatchObject({
+    expect(mem[1]!.role).toBe('system');
+    expect(mem[1]!.content).toMatch(/场景/);
+    expect(mem[2]!).toMatchObject({
       role: 'user',
       speakerId: 'me',
       content: '今天天气怎么样',
       source: 'xingyu',
     });
-    expect(mem[2]!).toMatchObject({
+    expect(mem[3]!).toMatchObject({
       role: 'assistant',
       speakerId: 'char-001',
       content: '挺不错的呀\n阳光明媚', // ← rendered form, no speaker prefix
@@ -114,14 +116,16 @@ describe('XingYu sendMessage flow — memoryStore integration', () => {
     await new Promise((r) => setTimeout(r, 100));
 
     const mem = useCharacterMemory.getState().getAll('char-001');
-    // [上下文切换] marker (written by fireAppSwitchMarker pre-user) + user
+    // [上下文切换] + [场景] markers (written before the user entry) + user
     // entry. No assistant entry — XingYu's catch path does not append on
     // failure, and the [AI 回复失败] UI bubble isn't routed through
     // memoryStore either.
-    expect(mem).toHaveLength(2);
+    expect(mem).toHaveLength(3);
     expect(mem[0]!.role).toBe('system');
     expect(mem[0]!.content).toMatch(/上下文切换/);
-    expect(mem[1]!.role).toBe('user');
+    expect(mem[1]!.role).toBe('system');
+    expect(mem[1]!.content).toMatch(/场景/);
+    expect(mem[2]!.role).toBe('user');
 
     const xyMsgs = useXYData.getState().messages.filter((m) => !m.streaming);
     const errMsg = xyMsgs.find((m) => m.type === 'text' && m.text.startsWith('[AI 回复失败]'));
@@ -141,16 +145,18 @@ describe('XingYu sendMessage flow — memoryStore integration', () => {
     await new Promise((r) => setTimeout(r, 2500));
 
     const mem = useCharacterMemory.getState().getAll('char-001');
-    // Order: marker + user + rendered assistant (marker lands first now).
-    expect(mem).toHaveLength(3);
+    // Order: app-switch + scene + user + rendered assistant.
+    expect(mem).toHaveLength(4);
     expect(mem[0]!.role).toBe('system');
     expect(mem[0]!.content).toMatch(/上下文切换/);
-    expect(mem[1]!).toMatchObject({
+    expect(mem[1]!.role).toBe('system');
+    expect(mem[1]!.content).toMatch(/场景/);
+    expect(mem[2]!).toMatchObject({
       role: 'user',
       speakerId: 'me',
       content: '[图片 https://example.com/cat.jpg]',
     });
-    expect(mem[2]!).toMatchObject({
+    expect(mem[3]!).toMatchObject({
       role: 'assistant',
       content: '好可爱',
     });
@@ -170,12 +176,14 @@ describe('XingYu sendMessage flow — memoryStore integration', () => {
     await new Promise((r) => setTimeout(r, 2500));
 
     const mem = useCharacterMemory.getState().getAll('char-001');
-    // Order: marker + user + rendered assistant.
-    expect(mem).toHaveLength(3);
+    // Order: app-switch + scene + user + rendered assistant.
+    expect(mem).toHaveLength(4);
     expect(mem[0]!.role).toBe('system');
     expect(mem[0]!.content).toMatch(/上下文切换/);
-    expect(mem[1]!.content).toBe('[表情：笑脸]');
-    expect(mem[2]!).toMatchObject({
+    expect(mem[1]!.role).toBe('system');
+    expect(mem[1]!.content).toMatch(/场景/);
+    expect(mem[2]!.content).toBe('[表情：笑脸]');
+    expect(mem[3]!).toMatchObject({
       role: 'assistant',
       content: '哈哈',
     });

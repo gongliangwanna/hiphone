@@ -30,6 +30,7 @@ function resetSpringboardState() {
   useSpringboardLayoutStore.setState({
     appOrder: null,
     pageWidgets: null,
+    dockOrder: null,
     isEditMode: false,
     isWidgetDrawerOpen: false,
     currentSpringboardPage: 0,
@@ -237,6 +238,119 @@ describe('Springboard', () => {
     });
 
     expectActivePage(2);
+  });
+
+  it('hit-tests the Dock when the user drags a grid app over it', () => {
+    // REGRESSION: `updateDropTargetForPage` and `finishDrag` queried the
+    // dock material via `area.querySelector` (gesture-surface scoped).
+    // The Dock lives OUTSIDE the gesture surface in the DOM, so the lookup
+    // returned null and grid → dock drops never registered. Fix uses
+    // `document.querySelector`.
+    vi.useFakeTimers();
+    const previousSetPointerCapture = HTMLElement.prototype.setPointerCapture;
+    HTMLElement.prototype.setPointerCapture = vi.fn();
+    const getRectSpy = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function getMockRect(this: HTMLElement) {
+        const testId = this.dataset.testid;
+        if (testId === 'springboard-gesture-surface') {
+          return rect(0, 0, 390, 700);
+        }
+        if (testId === 'dock-material') {
+          return rect(20, 740, 350, 80);
+        }
+        if (testId === 'app-icon-calendar') {
+          return rect(22, 24, 78, 96);
+        }
+        return rect(0, 0, 0, 0);
+      });
+
+    try {
+      // Drop one of the four default dock apps so there's a free slot.
+      useSpringboardLayoutStore.setState({
+        isEditMode: true,
+        dockOrder: ['settings', 'safari', 'music'],
+      });
+      render(<Springboard sizeTier="regular" viewportWidth={390} />);
+
+      const surface = screen.getByTestId('springboard-gesture-surface');
+      const gridIcon = screen.getByTestId('app-icon-calendar');
+
+      act(() => {
+        fireEvent.pointerDown(gridIcon, {
+          clientX: 52,
+          clientY: 54,
+          pointerId: 9,
+        });
+        fireEvent.pointerMove(surface, {
+          clientX: 195,
+          clientY: 780,
+          pointerId: 9,
+        });
+        fireEvent.pointerUp(surface, {
+          clientX: 195,
+          clientY: 780,
+          pointerId: 9,
+        });
+        // Flush the settle animation's onComplete (mocked motion.animate
+        // schedules it via setTimeout(0)). Without this the pending
+        // moveAppToDock never runs.
+        vi.runOnlyPendingTimers();
+      });
+
+      const dockOrder = useSpringboardLayoutStore.getState().dockOrder!;
+      expect(dockOrder).toContain('calendar');
+    } finally {
+      getRectSpy.mockRestore();
+      HTMLElement.prototype.setPointerCapture = previousSetPointerCapture;
+      vi.useRealTimers();
+    }
+  });
+
+  it('initiates a drag when the user grabs a Dock icon in edit mode', () => {
+    // REGRESSION: previously `useIconDrag.onDragStart` searched for the icon
+    // element via `area.querySelector` (gesture-surface scoped). The Dock
+    // lives OUTSIDE the gesture surface, so the lookup returned null and
+    // the drag silently aborted before any state was set. The fix uses
+    // `document.querySelector` since canonical app ids are globally unique.
+    const previousSetPointerCapture = HTMLElement.prototype.setPointerCapture;
+    HTMLElement.prototype.setPointerCapture = vi.fn();
+    const getRectSpy = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function getMockRect(this: HTMLElement) {
+        const testId = this.dataset.testid;
+        if (testId === 'springboard-gesture-surface') {
+          return rect(0, 0, 390, 700);
+        }
+        if (testId === 'app-icon-settings') {
+          return rect(40, 760, 60, 60);
+        }
+        return rect(0, 0, 0, 0);
+      });
+
+    try {
+      useSpringboardLayoutStore.setState({ isEditMode: true });
+      render(<Springboard sizeTier="regular" viewportWidth={390} />);
+
+      const dockIcon = screen.getByTestId('app-icon-settings');
+
+      act(() => {
+        fireEvent.pointerDown(dockIcon, {
+          clientX: 70,
+          clientY: 790,
+          pointerId: 11,
+        });
+      });
+
+      // Drag state must be live after pointerdown — without the fix this
+      // never happened for dock icons.
+      expect(
+        screen.queryByTestId('drag-overlay'),
+      ).not.toBeNull();
+    } finally {
+      getRectSpy.mockRestore();
+      HTMLElement.prototype.setPointerCapture = previousSetPointerCapture;
+    }
   });
 
   it('commits an app to an auto-created page after edge autoscroll without another pointer move', () => {

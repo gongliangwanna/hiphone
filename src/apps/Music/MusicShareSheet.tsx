@@ -19,6 +19,7 @@ interface ShareTarget {
   convId: string;
   name: string;
   avatar: string;
+  fallbackText?: string;
   ringIndex: number;
 }
 
@@ -58,7 +59,8 @@ export function MusicShareSheet({ onClose }: MusicShareSheetProps) {
           return {
             convId: conv.id,
             name: conv.groupName,
-            avatar: '/resource/avatars/idol-starlight.jpg',
+            avatar: conv.groupAvatar?.trim() || '',
+            fallbackText: '群',
             ringIndex: 0,
           };
         }
@@ -247,7 +249,7 @@ export function MusicShareSheet({ onClose }: MusicShareSheetProps) {
                 onClick={() => handleShare(target)}
                 disabled={!!sendingTo}
               >
-                <Avatar src={target.avatar} size={40} ringIndex={target.ringIndex} />
+                <Avatar src={target.avatar} fallbackText={target.fallbackText} size={40} ringIndex={target.ringIndex} />
                 <span
                   className="truncate flex-1 text-left"
                   style={{ fontSize: 15, color: '#fff', fontWeight: 400 }}

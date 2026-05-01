@@ -3,6 +3,8 @@ import { T } from '../theme';
 
 interface AvatarProps {
   src: string;
+  /** 当 src 为空时，在头像位置渲染该文字（如群聊兜底显示「群」） */
+  fallbackText?: string;
   size?: number;
   ringIndex?: number;
   online?: boolean;
@@ -17,9 +19,12 @@ const RINGS = [
   'linear-gradient(135deg, #FF2D55, #FF6482)', // 红色
 ];
 
-export function Avatar({ src, size = 48, ringIndex = -1, online }: AvatarProps) {
+const FALLBACK_BG = 'linear-gradient(135deg, #A6C8FF, #6FA8FF)';
+
+export function Avatar({ src, fallbackText, size = 48, ringIndex = -1, online }: AvatarProps) {
   const hasRing = ringIndex >= 0 && ringIndex < RINGS.length;
   const padding = hasRing ? Math.max(2, size * 0.05) : 0;
+  const showText = !src && !!fallbackText;
 
   return (
     <div className="relative inline-block" style={{ width: size, height: size }}>
@@ -33,21 +38,35 @@ export function Avatar({ src, size = 48, ringIndex = -1, online }: AvatarProps) 
 
       {/* 头像本体 */}
       <div
-        className="absolute rounded-full bg-white overflow-hidden flex items-center justify-center"
+        className="absolute rounded-full overflow-hidden flex items-center justify-center"
         style={{
           inset: padding,
+          background: showText ? FALLBACK_BG : '#fff',
           boxShadow: hasRing ? 'none' : 'inset 0 0 0 1px rgba(0,0,0,0.04)',
+          border: hasRing && !showText ? '2px solid #fff' : 'none',
         }}
       >
-        <img
-          src={src}
-          alt=""
-          className="h-full w-full object-cover"
-          style={{
-            borderRadius: '50%',
-            border: hasRing ? '2px solid #fff' : 'none',
-          }}
-        />
+        {showText ? (
+          <span
+            style={{
+              color: '#fff',
+              fontSize: size * 0.46,
+              fontWeight: 600,
+              letterSpacing: 0,
+              userSelect: 'none',
+              lineHeight: 1,
+            }}
+          >
+            {fallbackText}
+          </span>
+        ) : (
+          <img
+            src={src}
+            alt=""
+            className="h-full w-full object-cover"
+            style={{ borderRadius: '50%' }}
+          />
+        )}
       </div>
 
       {/* 在线状态 */}

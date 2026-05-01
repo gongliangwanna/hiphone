@@ -12,6 +12,7 @@
 import type { Conversation, Message } from '@/apps/XingYu/data';
 import { useXYData } from '@/apps/XingYu/xingYuDataStore';
 import { useXYNav } from '@/apps/XingYu/xingYuNavStore';
+import { ensureSceneMarker } from '@/apps/XingYu/sceneMarker';
 import { useCharacterStore } from '@/platform/stores/characterStore';
 import { usePersonaStore } from '@/platform/stores/personaStore';
 import { useCharacterMemory, type MemorySource } from './characterMemoryStore';
@@ -45,14 +46,17 @@ export function _appendMessage(msg: Message, source: MemorySource): void {
   const primaryCharId = deriveCharacterIdFromConv(msg.convId);
   if (!primaryCharId) return;
 
+  const conv = useXYData.getState().conversations.find((c) => c.id === msg.convId);
+
+  // 场景标记：仅当确实有 content entry 要落地时才前置一条 [场景] system entry，
+  // 避免 buildMemoryEntry 返回 null（如错误占位）时孤零零留下空标记。
   const primaryEntry = buildMemoryEntry(msg, source, buildCtx(primaryCharId));
   if (primaryEntry) {
+    if (conv) ensureSceneMarker(primaryCharId, conv);
     useCharacterMemory.getState().append(primaryCharId, primaryEntry);
   }
 
   // ── 3. AI-AI fan-out 或 群聊 fan-out ──
-  const conv = useXYData.getState().conversations.find((c) => c.id === msg.convId);
-
   if (conv?.aiChatParticipants?.length) {
     for (const otherId of conv.aiChatParticipants) {
       if (otherId === primaryCharId) continue;
@@ -66,6 +70,7 @@ export function _appendMessage(msg: Message, source: MemorySource): void {
       if (memberId === primaryCharId) continue; // primary already written above
       const entryForMember = buildMemoryEntry(msg, source, buildCtx(memberId));
       if (entryForMember) {
+        ensureSceneMarker(memberId, conv);
         useCharacterMemory.getState().append(memberId, entryForMember);
       }
     }

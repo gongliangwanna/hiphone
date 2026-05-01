@@ -3,9 +3,12 @@ import { persist } from 'zustand/middleware';
 import { idbStorage } from '@/platform/storage/idbStorage';
 import {
   apps as defaultApps,
+  allBuiltinAppInfos,
   getAppsWithUserInstalled,
+  DEFAULT_DOCK_IDS,
   type AppInfo,
 } from '@/shell/Springboard/apps.data';
+import { canonicalizeAppId } from '@/platform/stores/appProfileStore';
 import {
   GRID_COLS,
   GRID_ROWS,
@@ -17,6 +20,31 @@ import {
 } from './pagePacker';
 
 const PAGE_SIZE = 20;
+
+/** Maximum number of apps the Dock can hold (iOS-style cap). */
+export const DOCK_CAPACITY = 4;
+
+/**
+ * Resolve the effective dock from persisted user state. Returns canonical
+ * app ids. `null` dockOrder = use the catalog default; otherwise the user
+ * order wins. Dedupes by canonical id and clamps to `DOCK_CAPACITY`.
+ */
+export function resolveDock(
+  dockOrder: string[] | null,
+  defaultDockIds: string[] = DEFAULT_DOCK_IDS,
+): string[] {
+  const source = dockOrder ?? defaultDockIds;
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of source) {
+    const canonical = canonicalizeAppId(id);
+    if (seen.has(canonical)) continue;
+    seen.add(canonical);
+    out.push(canonical);
+    if (out.length >= DOCK_CAPACITY) break;
+  }
+  return out;
+}
 
 // ---------------------------------------------------------------------------
 // Widget types
@@ -84,6 +112,14 @@ interface SpringboardLayoutState {
    * null = no widgets placed yet.
    */
   pageWidgets: WidgetInstance[][] | null;
+
+  /**
+   * User-customized Dock order as canonical app ids (length ≤ DOCK_CAPACITY).
+   * `null` = use the catalog default (`DEFAULT_DOCK_IDS`). Always store
+   * canonical ids — the catalog's `safari-dock`-style aliases are collapsed
+   * via `canonicalizeAppId` on every write.
+   */
+  dockOrder: string[] | null;
 
   /** Edit mode flag (not persisted) */
   isEditMode: boolean;
@@ -161,13 +197,39 @@ interface SpringboardLayoutState {
     row: number,
   ) => void;
 
+  /**
+   * Reorder an app within the Dock. Indices are post-removal: `toIndex` is
+   * the slot the moved app ends up at after splicing out `fromIndex`.
+   */
+  reorderDock: (fromIndex: number, toIndex: number) => void;
+
+  /**
+   * Insert a (canonical) app id into the Dock at `toIndex`. Returns true on
+   * success. If the app is already in the Dock, behaves as `reorderDock`. If
+   * the Dock is at `DOCK_CAPACITY` and the app isn't already in it, returns
+   * false and makes no change. Always removes the id from `appOrder` so the
+   * grid never duplicates a Dock app.
+   */
+  moveAppToDock: (appId: string, toIndex: number) => boolean;
+
+  /**
+   * Remove an app from the Dock and place it on the grid at `(toPage, toLocal)`.
+   * Reuses the page packer + cascade so any apps pushed off their page flow
+   * forward, exactly like `moveApp`.
+   */
+  moveAppFromDock: (appId: string, toPage: number, toLocal: number) => void;
+
   /** Reset to default layout */
   resetLayout: () => void;
 }
 
-/** Map from app ID to AppInfo for fast lookup */
+/**
+ * Map from canonical app ID to AppInfo for fast lookup. Includes BOTH grid
+ * apps and dock apps so any canonical id is resolvable regardless of where
+ * it currently sits — needed once dock membership becomes user-mutable.
+ */
 const appInfoMap = new Map<string, AppInfo>(
-  defaultApps.map((a) => [a.id, a]),
+  allBuiltinAppInfos().map((a) => [a.id, a]),
 );
 
 
@@ -260,16 +322,24 @@ export function resolveSlotPages(
   const capacityFor = (pageIdx: number): number =>
     pageAppCapacity(widgetsByPage[pageIdx]);
 
+  // Source of truth for "what apps belong on the grid right now". When the
+  // caller passes `extraApps` (Springboard does, via `getAppsWithUserInstalled`
+  // which is dock-aware), prefer that — it already excludes whatever is
+  // currently in the user's Dock. The static `defaultApps` is filtered only
+  // by the catalog DEFAULT dock and would duplicate apps the user has moved
+  // into the Dock (rendering them on both the grid and the Dock).
+  const gridSource: AppInfo[] = extraApps.length > 0 ? extraApps : defaultApps;
+
   // Build raw app id pages
   let rawAppPages: string[][];
   if (appOrder === null) {
     rawAppPages = [];
     let i = 0;
     let p = 0;
-    while (i < defaultApps.length) {
+    while (i < gridSource.length) {
       const cap = capacityFor(p);
       if (cap > 0) {
-        rawAppPages.push(defaultApps.slice(i, i + cap).map((a) => a.id));
+        rawAppPages.push(gridSource.slice(i, i + cap).map((a) => a.id));
         i += cap;
       } else {
         rawAppPages.push([]);
@@ -278,8 +348,13 @@ export function resolveSlotPages(
     }
     if (rawAppPages.length === 0) rawAppPages = [[]];
   } else {
-    // Keep user's page structure but filter to valid ids
-    rawAppPages = appOrder.map((page) => page.filter((id) => lookupMap.has(id)));
+    // Keep user's page structure but filter to valid ids AND drop any id
+    // that's no longer part of the current grid source (e.g. the user just
+    // moved that app into the Dock — it must vanish from the grid).
+    const gridIds = new Set(gridSource.map((a) => a.id));
+    rawAppPages = appOrder.map((page) =>
+      page.filter((id) => lookupMap.has(id) && gridIds.has(id)),
+    );
   }
 
   // Dedup app ids across pages (earlier pages win)
@@ -295,11 +370,11 @@ export function resolveSlotPages(
     return out;
   });
 
-  // Append new apps (not yet placed) into pages that still have capacity.
-  // Include both builtins (defaultApps) and dynamically-installed user apps.
-  const unseenSources = extraApps.length > 0
-    ? [...defaultApps, ...extraApps.filter((a) => !defaultApps.some((d) => d.id === a.id))]
-    : defaultApps;
+  // Append apps that are part of the current grid source but not yet
+  // placed into any page. Pull from `gridSource` (not `defaultApps`) so
+  // that apps moved out of the Dock reappear on the grid even when
+  // `appOrder` doesn't yet list them.
+  const unseenSources = gridSource;
   const unseen: string[] = [];
   for (const app of unseenSources) {
     if (!seen.has(app.id)) unseen.push(app.id);
@@ -359,6 +434,7 @@ export const useSpringboardLayoutStore = create<SpringboardLayoutState>()(
     (set, get) => ({
       appOrder: null,
       pageWidgets: null,
+      dockOrder: null,
       isEditMode: false,
       isWidgetDrawerOpen: false,
       currentSpringboardPage: 0,
@@ -402,7 +478,7 @@ export const useSpringboardLayoutStore = create<SpringboardLayoutState>()(
         const resolved = resolveOrderedPages(
           appOrder,
           pageWidgets,
-          getAppsWithUserInstalled(),
+          getAppsWithUserInstalled(resolveDock(get().dockOrder)),
         );
         const current = resolved.map((page) => page.map((a) => a.id));
 
@@ -469,7 +545,7 @@ export const useSpringboardLayoutStore = create<SpringboardLayoutState>()(
         const resolvedApps = resolveOrderedPages(
           appOrder,
           current,
-          getAppsWithUserInstalled(),
+          getAppsWithUserInstalled(resolveDock(get().dockOrder)),
         ).map((p) => p.map((a) => a.id));
         while (resolvedApps.length < current.length) resolvedApps.push([]);
         const cascaded = cascadeOverflow(current, resolvedApps);
@@ -552,7 +628,7 @@ export const useSpringboardLayoutStore = create<SpringboardLayoutState>()(
         const resolvedApps = resolveOrderedPages(
           state.appOrder,
           next,
-          getAppsWithUserInstalled(),
+          getAppsWithUserInstalled(resolveDock(get().dockOrder)),
         ).map((p) => p.map((a) => a.id));
         while (resolvedApps.length < next.length) resolvedApps.push([]);
         const cascaded = cascadeOverflow(next, resolvedApps);
@@ -561,60 +637,142 @@ export const useSpringboardLayoutStore = create<SpringboardLayoutState>()(
         set({ pageWidgets: next, appOrder: cascaded });
       },
 
+      reorderDock: (fromIndex, toIndex) => {
+        const { dockOrder } = get();
+        const current = resolveDock(dockOrder);
+        if (fromIndex < 0 || fromIndex >= current.length) return;
+        const next = [...current];
+        const [moved] = next.splice(fromIndex, 1);
+        if (!moved) return;
+        const clamped = Math.max(0, Math.min(toIndex, next.length));
+        next.splice(clamped, 0, moved);
+        set({ dockOrder: next });
+      },
+
+      moveAppToDock: (appId, toIndex) => {
+        const canonical = canonicalizeAppId(appId);
+        const { dockOrder, appOrder } = get();
+        const current = resolveDock(dockOrder);
+
+        const existingIdx = current.indexOf(canonical);
+        if (existingIdx !== -1) {
+          // Already in the dock — treat as in-dock reorder.
+          const next = [...current];
+          next.splice(existingIdx, 1);
+          const clamped = Math.max(0, Math.min(toIndex, next.length));
+          next.splice(clamped, 0, canonical);
+          set({ dockOrder: next });
+          return true;
+        }
+
+        // Capacity gate: iOS-style hard reject when full.
+        if (current.length >= DOCK_CAPACITY) return false;
+
+        const nextDock = [...current];
+        const clamped = Math.max(0, Math.min(toIndex, nextDock.length));
+        nextDock.splice(clamped, 0, canonical);
+
+        // Remove from grid order so a Dock app is never duplicated on the grid.
+        // Removing one app frees a cell — no overflow, no cascade needed.
+        let nextAppOrder: string[][] | null = appOrder;
+        if (appOrder) {
+          nextAppOrder = appOrder.map((page) =>
+            page.filter((id) => canonicalizeAppId(id) !== canonical),
+          );
+        }
+
+        set({ dockOrder: nextDock, appOrder: nextAppOrder });
+        return true;
+      },
+
+      moveAppFromDock: (appId, toPage, toLocal) => {
+        const canonical = canonicalizeAppId(appId);
+        const { dockOrder, appOrder, pageWidgets } = get();
+        const current = resolveDock(dockOrder);
+        if (!current.includes(canonical)) return;
+
+        const nextDock = current.filter((id) => id !== canonical);
+
+        // Materialize the current grid id arrays. The dock currently still
+        // contains `canonical`, so the resolved grid does NOT include it —
+        // safe to splice in without dedupe risk.
+        const resolved = resolveOrderedPages(
+          appOrder,
+          pageWidgets,
+          getAppsWithUserInstalled(current),
+        );
+        const next = resolved.map((page) => page.map((a) => a.id));
+        while (next.length <= toPage) next.push([]);
+
+        const targetPage = next[toPage]!;
+        const clampedLocal = Math.max(0, Math.min(toLocal, targetPage.length));
+        targetPage.splice(clampedLocal, 0, canonical);
+
+        // Cascade overflow exactly like `moveApp`.
+        const widgetsForCascade = (pageWidgets ?? []).map((p) => p.slice());
+        while (widgetsForCascade.length < next.length) widgetsForCascade.push([]);
+        const cascaded = cascadeOverflow(widgetsForCascade, next);
+
+        set({ dockOrder: nextDock, appOrder: cascaded });
+      },
+
       resetLayout: () =>
         set({
           appOrder: null,
           pageWidgets: null,
+          dockOrder: null,
           recentlyAddedItemId: null,
         }),
     }),
     {
       name: 'hiPhone-springboard-layout',
       storage: idbStorage,
-      version: 3,
+      version: 4,
       partialize: (state) => ({
         appOrder: state.appOrder,
         pageWidgets: state.pageWidgets,
+        dockOrder: state.dockOrder,
       }),
       migrate: (persistedState, version) => {
         const state = (persistedState ?? {}) as {
           appOrder?: string[][] | null;
           pageWidgets?: Array<Array<Partial<WidgetInstance>>> | null;
+          dockOrder?: string[] | null;
         };
 
         // v1 → v2: add col/row with sentinel origin
-        if (version < 2) {
-          if (state.pageWidgets && Array.isArray(state.pageWidgets)) {
-            state.pageWidgets = state.pageWidgets.map((page) =>
-              (Array.isArray(page) ? page : []).map((w) => ({
-                id: typeof w?.id === 'string' ? w.id : nextWidgetId('clock'),
-                kind: (w?.kind ?? 'clock') as WidgetKind,
-                size: (w?.size ?? '2x2') as WidgetSize,
-                col:
-                  typeof w?.col === 'number' ? w.col : UNPLACED_SENTINEL,
-                row:
-                  typeof w?.row === 'number' ? w.row : UNPLACED_SENTINEL,
-                styleIndex: 0,
-              })),
-            );
-          }
-          return state;
+        if (version < 2 && state.pageWidgets && Array.isArray(state.pageWidgets)) {
+          state.pageWidgets = state.pageWidgets.map((page) =>
+            (Array.isArray(page) ? page : []).map((w) => ({
+              id: typeof w?.id === 'string' ? w.id : nextWidgetId('clock'),
+              kind: (w?.kind ?? 'clock') as WidgetKind,
+              size: (w?.size ?? '2x2') as WidgetSize,
+              col:
+                typeof w?.col === 'number' ? w.col : UNPLACED_SENTINEL,
+              row:
+                typeof w?.row === 'number' ? w.row : UNPLACED_SENTINEL,
+              styleIndex: 0,
+            })),
+          );
         }
 
         // v2 → v3: add styleIndex (defaults to 0)
-        if (version < 3) {
-          if (state.pageWidgets && Array.isArray(state.pageWidgets)) {
-            state.pageWidgets = state.pageWidgets.map((page) =>
-              (Array.isArray(page) ? page : []).map((w) => ({
-                ...w,
-                styleIndex: typeof w?.styleIndex === 'number' ? w.styleIndex : 0,
-              } as WidgetInstance)),
-            );
-          }
-          return state;
+        if (version < 3 && state.pageWidgets && Array.isArray(state.pageWidgets)) {
+          state.pageWidgets = state.pageWidgets.map((page) =>
+            (Array.isArray(page) ? page : []).map((w) => ({
+              ...w,
+              styleIndex: typeof w?.styleIndex === 'number' ? w.styleIndex : 0,
+            } as WidgetInstance)),
+          );
         }
 
-        return persistedState;
+        // v3 → v4: introduce dockOrder; legacy installs default to null so the
+        // catalog default dock keeps showing until the user customizes it.
+        if (version < 4) {
+          state.dockOrder = null;
+        }
+
+        return state;
       },
     },
   ),

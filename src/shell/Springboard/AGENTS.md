@@ -16,3 +16,7 @@
 7. 拖拽创建的 extra page 只是临时页：只在 `extraPage` 从 false 变 true 时自动导航，提交完成后要移除临时页，避免真实页数增长后继续跳到新的尾部空页。
 8. App 业务身份必须使用 canonical app id。Dock 是展示位置，不允许用 `*-dock` 后缀当业务身份、profile key、存储归属 key。
 9. 同一个 canonical App 不能同时出现在 Dock 和桌面网格。解析默认布局或历史布局时，Dock 优先，桌面重复项过滤。
+10. Dock 是用户可编辑的：长按进入编辑模式后，Dock 图标也支持拖拽（使用 `useIconDrag` 的 `DOCK_PAGE = -1` 哨兵作为来源/目标的页号）。所有 Dock 改动通过 `springboardLayoutStore.{reorderDock, moveAppToDock, moveAppFromDock}`，写入字段 `dockOrder: string[] | null`（null 表示沿用 catalog 默认 dock）。
+11. Dock 容量上限 `DOCK_CAPACITY = 4`。从网格拖入已满的 Dock 必须被静默拒绝（图标回弹到网格落点），不要顶替已有 Dock 项；iOS 也是这个行为。
+12. Widget 永远不能进入 Dock。`useIconDrag.updateDropTargetForPage` 只在 `dragKind === 'app'` 时才检测 Dock 命中区，结构上挡住了 widget 拖入 Dock 的可能性。
+13. Dock 命中区由 `[data-testid="dock-material"]` 元素的 `getBoundingClientRect()` 在每次 pointermove 时实测得到，不要把 Dock 的几何信息硬编码到 metrics 里——Dock 内容会随拖拽预览伸缩。

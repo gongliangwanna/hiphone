@@ -47,6 +47,7 @@ import { withUserAppContext } from '@/platform/userApp/sdk/context';
 import { useXYNav } from './xingYuNavStore';
 import { useStickerStore } from './stickerStore';
 import { registerXingYuAi, XINGYU_APP_ID } from './xingYuRegister';
+import { ensureSceneMarker } from './sceneMarker';
 
 // Idempotent: fires on first module load so the three AI registries
 // know about XingYu before any `scheduleAICharacterReply` runs. Safe to
@@ -204,7 +205,7 @@ interface XingYuDataState {
    */
   ensureIdolConversation: (idolId: string) => string;
   /** 更新单个会话的设置（背景、备注名等） */
-  updateConversationSettings: (convId: string, patch: Partial<Pick<Conversation, 'backgroundUrl' | 'remarkName'>>) => void;
+  updateConversationSettings: (convId: string, patch: Partial<Pick<Conversation, 'backgroundUrl' | 'remarkName' | 'aiAutoReply'>>) => void;
   /** 创建用户自建群聊（裸 characterId 数组；无需传群名，自动派生），返回 convId */
   createGroupConversation: (memberIds: string[]) => string;
   /** 更新群头像 / 公告 / 名称（任意子集） */
@@ -218,6 +219,8 @@ interface XingYuDataState {
   removeGroupMember: (convId: string, memberId: string) => void;
   /** 群聊手动触发某角色回复；若该 conv 已有角色在生成则 no-op */
   triggerGroupReply: (convId: string, characterId: string) => void;
+  /** 单聊（character 会话）手动触发 AI 回复；锁与群聊共用 */
+  triggerSingleReply: (convId: string) => void;
   /** 清除角色的对话记忆（消息+摘要），保留空会话 */
   clearCharacterMemory: (characterId: string) => void;
   /**
@@ -265,6 +268,9 @@ function scheduleIdolReply(
 
   // Character-backed conversation → real AI streaming
   if (conv.characterId) {
+    // 单聊默认手动触发，仅当 aiAutoReply === true 才自动调度。
+    // 群聊不会走到这里（群聊没有 conv.characterId，由 triggerGroupReply 入口）。
+    if (!conv.aiAutoReply) return;
     scheduleAICharacterReply(convId, get);
     return;
   }
@@ -520,6 +526,10 @@ function scheduleAICharacterReply(
       // Assistant memory entry — rendered (natural-language) form. The
       // renderer preserves every decision-relevant identifier (stickerId,
       // action params) so the next prompt still has full context.
+      const convForFanout = useXYData
+        .getState()
+        .conversations.find((c) => c.id === convId);
+      if (convForFanout) ensureSceneMarker(characterId, convForFanout);
       useCharacterMemory.getState().append(characterId, {
         role: 'assistant',
         speakerId: characterId,
@@ -533,12 +543,10 @@ function scheduleAICharacterReply(
       // form as a third-party user turn — speakerId is the senderId so the
       // transcript renderer resolves it to the speaker's display name (it
       // strips one `char-` prefix when looking up charactersById).
-      const convForFanout = useXYData
-        .getState()
-        .conversations.find((c) => c.id === convId);
       if (convForFanout?.groupMemberIds?.length) {
         for (const otherId of convForFanout.groupMemberIds) {
           if (otherId === characterId) continue;
+          ensureSceneMarker(otherId, convForFanout);
           useCharacterMemory.getState().append(otherId, {
             role: 'user',
             speakerId: senderId,
@@ -1035,6 +1043,14 @@ export const useXYData = create<XingYuDataState>()(
         if (get().generatingByConv[convId] !== undefined) return;
         setGeneratingLock(convId, characterId);
         scheduleAICharacterReply(convId, get, characterId);
+      },
+
+      triggerSingleReply: (convId) => {
+        const conv = get().conversations.find((c) => c.id === convId);
+        if (!conv?.characterId) return;
+        if (get().generatingByConv[convId] !== undefined) return;
+        setGeneratingLock(convId, conv.characterId);
+        scheduleAICharacterReply(convId, get);
       },
 
       ensureCharacterConversation: (characterId) => {

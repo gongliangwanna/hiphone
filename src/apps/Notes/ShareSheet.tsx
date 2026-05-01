@@ -21,6 +21,7 @@ interface ShareTarget {
   convId: string;
   name: string;
   avatar: string;
+  fallbackText?: string;
   ringIndex: number;
 }
 
@@ -50,7 +51,8 @@ export function ShareSheet({ noteId }: ShareSheetProps) {
           return {
             convId: conv.id,
             name: conv.groupName,
-            avatar: '/resource/avatars/idol-starlight.jpg',
+            avatar: conv.groupAvatar?.trim() || '',
+            fallbackText: '群',
             ringIndex: 0,
           };
         }
@@ -175,6 +177,7 @@ export function ShareSheet({ noteId }: ShareSheetProps) {
               >
                 <Avatar
                   src={target.avatar}
+                  fallbackText={target.fallbackText}
                   size={40}
                   ringIndex={target.ringIndex}
                 />
