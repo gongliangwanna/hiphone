@@ -2,14 +2,18 @@ import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { Springboard } from '../Springboard';
 import { useInstalledUserAppsStore } from '@/platform/stores/installedUserAppsStore';
+import { useSpringboardLayoutStore } from '@/platform/stores/springboardLayoutStore';
 
 vi.mock('motion/react', async () => {
   const actual = await vi.importActual<typeof import('motion/react')>('motion/react');
 
   return {
     ...actual,
-    animate: vi.fn((value: { set: (target: number) => void }, target: number) => {
+    animate: vi.fn((value: { set: (target: number) => void }, target: number, options?: { onComplete?: () => void }) => {
       value.set(target);
+      if (options?.onComplete) {
+        setTimeout(() => options.onComplete?.(), 0);
+      }
       return {
         stop: vi.fn(),
       };
@@ -19,6 +23,32 @@ vi.mock('motion/react', async () => {
 
 function expectActivePage(page: number) {
   expect(screen.getByTestId(`page-dot-${page}`)).toHaveStyle({ opacity: 1 });
+}
+
+function resetSpringboardState() {
+  useInstalledUserAppsStore.setState({ apps: [] });
+  useSpringboardLayoutStore.setState({
+    appOrder: null,
+    pageWidgets: null,
+    isEditMode: false,
+    isWidgetDrawerOpen: false,
+    currentSpringboardPage: 0,
+    recentlyAddedItemId: null,
+  });
+}
+
+function rect(left: number, top: number, width: number, height: number): DOMRect {
+  return {
+    x: left,
+    y: top,
+    left,
+    top,
+    width,
+    height,
+    right: left + width,
+    bottom: top + height,
+    toJSON: () => ({}),
+  } as DOMRect;
 }
 
 function seedUserApps(count: number) {
@@ -82,9 +112,7 @@ function swipe(
 }
 
 describe('Springboard', () => {
-  beforeEach(() => {
-    useInstalledUserAppsStore.setState({ apps: [] });
-  });
+  beforeEach(resetSpringboardState);
 
   it('uses compact metrics for short mobile widths', () => {
     render(<Springboard sizeTier="compact" viewportWidth={360} />);
@@ -209,5 +237,65 @@ describe('Springboard', () => {
     });
 
     expectActivePage(2);
+  });
+
+  it('commits an app to an auto-created page after edge autoscroll without another pointer move', () => {
+    vi.useFakeTimers();
+    const getRectSpy = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function getMockRect(this: HTMLElement) {
+        const testId = this.dataset.testid;
+        if (testId === 'springboard-gesture-surface') {
+          return rect(0, 0, 390, 700);
+        }
+        if (testId === 'app-icon-calendar') {
+          return rect(22, 24, 78, 96);
+        }
+        return rect(0, 0, 0, 0);
+      });
+    const previousSetPointerCapture = HTMLElement.prototype.setPointerCapture;
+    HTMLElement.prototype.setPointerCapture = vi.fn();
+
+    try {
+      useSpringboardLayoutStore.setState({ isEditMode: true });
+      render(<Springboard sizeTier="regular" viewportWidth={390} />);
+
+      const icon = screen.getByTestId('app-icon-calendar');
+      const surface = screen.getByTestId('springboard-gesture-surface');
+
+      act(() => {
+        fireEvent.pointerDown(icon, {
+          clientX: 52,
+          clientY: 54,
+          pointerId: 7,
+        });
+        fireEvent.pointerMove(surface, {
+          clientX: 385,
+          clientY: 54,
+          pointerId: 7,
+        });
+        vi.advanceTimersByTime(450);
+      });
+
+      expectActivePage(1);
+
+      act(() => {
+        fireEvent.pointerUp(surface, {
+          clientX: 385,
+          clientY: 54,
+          pointerId: 7,
+        });
+        vi.runOnlyPendingTimers();
+      });
+
+      const order = useSpringboardLayoutStore.getState().appOrder;
+      expect(order?.[1]?.[0]).toBe('calendar');
+      expectActivePage(1);
+      expect(screen.queryByTestId('page-dot-2')).toBeNull();
+    } finally {
+      getRectSpy.mockRestore();
+      HTMLElement.prototype.setPointerCapture = previousSetPointerCapture;
+      vi.useRealTimers();
+    }
   });
 });

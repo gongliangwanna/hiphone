@@ -13,6 +13,7 @@ const DEFAULT_SIGNATURE = '还没有个性签名';
 
 export function ProfileTab() {
   const openSettings = useXYNav((s) => s.openSettings);
+  const openAppearance = useXYNav((s) => s.openAppearance);
   const openStickerManager = useXYNav((s) => s.openStickerManager);
   const openFavorites = useXYNav((s) => s.openFavorites);
   const settings = useXYData((s) => s.userSettings);
@@ -41,7 +42,7 @@ export function ProfileTab() {
     const sig = characterSignatures[phoneOwnerId];
     return {
       nickname: char?.name || '???',
-      bio: sig?.current || char?.personality?.slice(0, 60) || '',
+      bio: sig?.current || char?.description?.slice(0, 60) || '',
       avatarUrl: char?.avatar || '',
       coverUrl: '',
       signatureHistory: sig?.history || [],
@@ -230,7 +231,7 @@ export function ProfileTab() {
           </MenuSection>
 
           <MenuSection>
-            <MenuItem icon={ImageIcon} label="个性装扮" desc="聊天背景/气泡" color="#34C759" />
+            <MenuItem icon={ImageIcon} label="个性装扮" desc="聊天背景/气泡" color="#34C759" onClick={openAppearance} />
             <MenuItem icon={Smile} label="表情包库" desc={`已添加 ${stickerPacks.length} 个`} color="#007AFF" isLast onClick={() => openStickerManager()} />
           </MenuSection>
 

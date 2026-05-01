@@ -14,7 +14,7 @@ import { useCharacterStore } from '@/platform/stores/characterStore';
 import { usePersonaStore } from '@/platform/stores/personaStore';
 import { useWorldBookStore } from '@/platform/stores/worldBookStore';
 import { useStickerStore } from '@/apps/XingYu/stickerStore';
-import { getAdapter } from '@/platform/ai/providers';
+import { getAdapter, pickGenerationParams, type GenerationParams } from '@/platform/ai/providers';
 import { chatComplete } from '@/platform/ai/chatComplete';
 import * as promptAssemblyMod from '@/platform/ai/promptAssembly';
 import { buildDeviceContext } from '@/platform/ai/deviceContext';
@@ -95,8 +95,7 @@ interface ProviderBundle {
   apiKey: string;
   model: string;
   providerId: string;
-  temperature?: number;
-  maxTokens: number;
+  generation: GenerationParams;
 }
 
 function requireProvider(): ProviderBundle {
@@ -109,8 +108,7 @@ function requireProvider(): ProviderBundle {
     apiKey: cfg.apiKey,
     model: cfg.model,
     providerId: cfg.provider,
-    temperature: cfg.temperature,
-    maxTokens: cfg.maxTokens,
+    generation: pickGenerationParams(cfg),
   };
 }
 
@@ -126,7 +124,7 @@ export async function complete(
   return chatComplete(
     { endpoint: p.endpoint, apiKey: p.apiKey, model: p.model, providerId: p.providerId },
     messages,
-    { maxTokens: p.maxTokens, temperature: opts.temperature ?? p.temperature },
+    { ...p.generation, temperature: opts.temperature ?? p.generation.temperature },
   );
 }
 
@@ -144,7 +142,7 @@ export async function* streamComplete(
   const full = await chatComplete(
     { endpoint: p.endpoint, apiKey: p.apiKey, model: p.model, providerId: p.providerId },
     messages,
-    { maxTokens: p.maxTokens, temperature: opts.temperature ?? p.temperature },
+    { ...p.generation, temperature: opts.temperature ?? p.generation.temperature },
     opts.signal,
   );
   if (opts.signal?.aborted) throw new AIAbortedError();
@@ -473,7 +471,7 @@ export function chatWithCharacter(
     return chatComplete(
       { endpoint: provider.endpoint, apiKey: provider.apiKey, model: provider.model, providerId: provider.providerId },
       messages,
-      { maxTokens: provider.maxTokens, temperature: provider.temperature },
+      provider.generation,
       controller.signal,
     );
   }

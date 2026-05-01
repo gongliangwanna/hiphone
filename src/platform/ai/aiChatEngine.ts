@@ -16,7 +16,7 @@ import { usePersonaStore } from '@/platform/stores/personaStore';
 import { useWorldBookStore } from '@/platform/stores/worldBookStore';
 import { useXYData } from '@/apps/XingYu/xingYuDataStore';
 import { useCharacterMemory } from './characterMemoryStore';
-import { getAdapter } from '@/platform/ai/providers';
+import { getAdapter, pickGenerationParams } from '@/platform/ai/providers';
 import { chatComplete } from './chatComplete';
 import { assemblePrompt } from './promptAssembly';
 import { parseReply } from './replyParser';
@@ -165,7 +165,7 @@ export async function runAIChat(opts: AIChatOptions): Promise<AIChatResult> {
       rawReply = await chatComplete(
         { endpoint, apiKey: aiConfig.apiKey, model: aiConfig.model, providerId: aiConfig.provider },
         chatMessages,
-        { maxTokens: aiConfig.maxTokens, temperature: aiConfig.temperature },
+        pickGenerationParams(aiConfig),
         signal,
       );
     } catch (e) {

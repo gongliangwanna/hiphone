@@ -1,41 +1,46 @@
 import { useState, useMemo } from 'react';
-import { allPhotos } from '../photosData';
+import type { Photo } from '../photosData';
 import { usePhotosStore } from '../photosStore';
 
 interface CategorySuggestion {
   label: string;
   icon: React.ReactNode;
-  /** Sample photo IDs to show in the category preview */
-  sampleIds: number[];
+  photos: Photo[];
 }
 
-const CATEGORIES: CategorySuggestion[] = [
-  {
-    label: '人物',
-    icon: <PersonIcon />,
-    sampleIds: [1, 2, 3, 5],
-  },
-  {
-    label: '地点',
-    icon: <LocationIcon />,
-    sampleIds: [6, 7, 8, 10],
-  },
-  {
-    label: '类别',
-    icon: <CategoryIcon />,
-    sampleIds: [11, 12, 13, 14],
-  },
-];
-
 export function SearchTab() {
+  const photos = usePhotosStore((s) => s.photos);
   const openPhoto = usePhotosStore((s) => s.openPhoto);
   const [query, setQuery] = useState('');
 
   const filtered = useMemo(() => {
     if (!query.trim()) return [];
-    // Simple mock search: return photos whose IDs contain the query digit
-    return allPhotos.filter((p) => String(p.id).includes(query.trim()));
-  }, [query]);
+    const q = query.trim().toLowerCase();
+    return photos.filter((p) =>
+      String(p.id).includes(q) || p.fileName?.toLowerCase().includes(q),
+    );
+  }, [photos, query]);
+
+  const categories = useMemo<CategorySuggestion[]>(
+    () => [
+      {
+        label: '人物',
+        icon: <PersonIcon />,
+        photos: photos.slice(0, 4),
+      },
+      {
+        label: '地点',
+        icon: <LocationIcon />,
+        photos: photos.slice(4, 8),
+      },
+      {
+        label: '类别',
+        icon: <CategoryIcon />,
+        photos: photos.slice(8, 12),
+      },
+    ],
+    [photos],
+  );
 
   const showResults = query.trim().length > 0;
 
@@ -151,10 +156,19 @@ export function SearchTab() {
             </div>
           )}
         </div>
+      ) : photos.length === 0 ? (
+        <div
+          className="flex items-center justify-center"
+          style={{ height: 260, paddingInline: 20 }}
+        >
+          <span style={{ fontSize: 15, color: 'var(--color-secondaryLabel)' }}>
+            暂无照片
+          </span>
+        </div>
       ) : (
         /* Category suggestions */
         <div style={{ paddingInline: 20 }}>
-          {CATEGORIES.map((cat) => (
+          {categories.map((cat) => (
             <div key={cat.label} style={{ marginBottom: 24 }}>
               <div className="flex items-center" style={{ gap: 8, marginBottom: 10 }}>
                 {cat.icon}
@@ -172,12 +186,10 @@ export function SearchTab() {
                 className="flex gap-2 overflow-x-auto"
                 style={{ scrollbarWidth: 'none' }}
               >
-                {cat.sampleIds.map((id) => {
-                  const photo = allPhotos.find((p) => p.id === id);
-                  if (!photo) return null;
-                  return (
+                {cat.photos.length > 0 ? (
+                  cat.photos.map((photo) => (
                     <button
-                      key={id}
+                      key={photo.id}
                       className="shrink-0"
                       style={{
                         width: 100,
@@ -185,7 +197,7 @@ export function SearchTab() {
                         borderRadius: 8,
                         overflow: 'hidden',
                       }}
-                      onClick={() => openPhoto(id)}
+                      onClick={() => openPhoto(photo.id)}
                     >
                       <img
                         src={photo.thumbnail}
@@ -194,8 +206,22 @@ export function SearchTab() {
                         loading="lazy"
                       />
                     </button>
-                  );
-                })}
+                  ))
+                ) : (
+                  <div
+                    className="flex items-center justify-center"
+                    style={{
+                      width: 100,
+                      height: 100,
+                      borderRadius: 8,
+                      backgroundColor: 'var(--color-tertiarySystemFill)',
+                      color: 'var(--color-secondaryLabel)',
+                      fontSize: 12,
+                    }}
+                  >
+                    暂无
+                  </div>
+                )}
               </div>
             </div>
           ))}

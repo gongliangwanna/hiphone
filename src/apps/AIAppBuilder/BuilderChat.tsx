@@ -14,7 +14,15 @@
  * 停止 button while generating.
  */
 
-import { useState, useRef, useEffect, useMemo, type KeyboardEvent } from 'react';
+import {
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+  useLayoutEffect,
+  type ChangeEvent,
+  type KeyboardEvent,
+} from 'react';
 import { motion } from 'motion/react';
 import {
   Send,
@@ -28,6 +36,13 @@ import {
   ChevronDown,
   ChevronRight,
   Square,
+  Bot,
+  ClipboardList,
+  Code2,
+  Terminal,
+  Check,
+  Paperclip,
+  ArrowUp,
 } from 'lucide-react';
 import { spring } from '@/platform/design-tokens/motion';
 import { useAIAppBuilderStore, type ChatTurn } from './aiAppBuilderStore';
@@ -39,6 +54,14 @@ interface BuilderChatProps {
 
 type ToolGroupPos = 'only' | 'first' | 'middle' | 'last';
 
+const COMPOSER_INPUT_LINE_HEIGHT = 22;
+const COMPOSER_INPUT_VERTICAL_PADDING = 16;
+const COMPOSER_INPUT_MIN_HEIGHT =
+  COMPOSER_INPUT_LINE_HEIGHT + COMPOSER_INPUT_VERTICAL_PADDING;
+const COMPOSER_INPUT_MAX_ROWS = 10;
+const COMPOSER_INPUT_MAX_HEIGHT =
+  COMPOSER_INPUT_LINE_HEIGHT * COMPOSER_INPUT_MAX_ROWS + COMPOSER_INPUT_VERTICAL_PADDING;
+
 export function BuilderChat({ onSend, onAbort }: BuilderChatProps) {
   const chatHistory = useAIAppBuilderStore((s) => s.chatHistory);
   const status = useAIAppBuilderStore((s) => s.status);
@@ -46,6 +69,7 @@ export function BuilderChat({ onSend, onAbort }: BuilderChatProps) {
 
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto-scroll to bottom on new turns. First-mount stays instant; subsequent
   // additions glide so message arrival doesn't feel like a hard cut.
@@ -59,6 +83,19 @@ export function BuilderChat({ onSend, onAbort }: BuilderChatProps) {
     });
     hasScrolledRef.current = true;
   }, [chatHistory.length, status]);
+
+  useLayoutEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+
+    el.style.height = 'auto';
+    const nextHeight = Math.max(
+      COMPOSER_INPUT_MIN_HEIGHT,
+      Math.min(el.scrollHeight, COMPOSER_INPUT_MAX_HEIGHT),
+    );
+    el.style.height = `${nextHeight}px`;
+    el.style.overflowY = el.scrollHeight > COMPOSER_INPUT_MAX_HEIGHT ? 'auto' : 'hidden';
+  }, [input]);
 
   const isGenerating = status === 'generating';
   const canSend = input.trim().length > 0 && !isGenerating;
@@ -119,6 +156,10 @@ export function BuilderChat({ onSend, onAbort }: BuilderChatProps) {
     onSend(text);
   };
 
+  const handleInputChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+  };
+
   const handleKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -131,14 +172,14 @@ export function BuilderChat({ onSend, onAbort }: BuilderChatProps) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', backgroundColor: '#f7f9fd' }}>
       <div
         ref={scrollRef}
         style={{
           flex: 1,
           overflow: 'auto',
-          padding: '12px 16px',
-          backgroundColor: 'var(--color-secondarySystemBackground)',
+          padding: '8px 16px 96px',
+          backgroundColor: '#f7f9fd',
         }}
       >
         {chatHistory.length === 0 && (
@@ -147,8 +188,15 @@ export function BuilderChat({ onSend, onAbort }: BuilderChatProps) {
         {chatHistory.map((turn, i) => {
           switch (turn.kind) {
             case 'user':
+              return <ChatBubble key={i} turn={turn} showAvatar={false} />;
             case 'agent-text':
-              return <ChatBubble key={i} turn={turn} />;
+              return (
+                <ChatBubble
+                  key={i}
+                  turn={turn}
+                  showAvatar={i === 0 || chatHistory[i - 1]?.kind === 'user'}
+                />
+              );
             case 'tool-call':
               return (
                 <ToolCallCard
@@ -185,30 +233,65 @@ export function BuilderChat({ onSend, onAbort }: BuilderChatProps) {
 
       <div
         style={{
-          borderTop: '0.5px solid var(--color-separator)',
-          padding: 12,
-          backgroundColor: 'var(--color-tertiarySystemBackground)',
+          padding: '10px 14px 14px',
+          backgroundColor: 'rgba(247,249,253,0.94)',
         }}
       >
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+        <div
+          style={{
+            minHeight: 56,
+            borderRadius: 20,
+            border: '0.5px solid rgba(60,60,67,0.12)',
+            backgroundColor: 'rgba(255,255,255,0.92)',
+            boxShadow: '0 12px 32px rgba(15,23,42,0.08)',
+            display: 'flex',
+            gap: 10,
+            alignItems: 'flex-end',
+            padding: '8px 10px',
+          }}
+        >
+          <button
+            type="button"
+            aria-label="添加附件"
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 19,
+              border: 'none',
+              background: 'transparent',
+              color: 'var(--color-secondaryLabel)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              cursor: 'pointer',
+            }}
+          >
+            <Paperclip size={23} strokeWidth={2.3} />
+          </button>
           <textarea
+            ref={textareaRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={handleInputChange}
             onKeyDown={handleKey}
             placeholder={chatHistory.length === 0 ? '描述你想要的 app...' : '继续完善...'}
-            rows={2}
+            rows={1}
             style={{
               flex: 1,
+              height: COMPOSER_INPUT_MIN_HEIGHT,
+              minHeight: COMPOSER_INPUT_MIN_HEIGHT,
+              maxHeight: COMPOSER_INPUT_MAX_HEIGHT,
               resize: 'none',
-              fontSize: 15,
-              lineHeight: 1.4,
-              padding: '10px 14px',
-              borderRadius: 22,
+              fontSize: 16,
+              lineHeight: `${COMPOSER_INPUT_LINE_HEIGHT}px`,
+              padding: '8px 12px',
+              borderRadius: 19,
               border: 'none',
-              backgroundColor: 'var(--color-tertiarySystemBackground)',
+              backgroundColor: '#f8f9fc',
               color: 'var(--color-label)',
               outline: 'none',
               fontFamily: 'inherit',
+              overflowY: 'hidden',
             }}
           />
           {isGenerating && onAbort ? (
@@ -219,9 +302,9 @@ export function BuilderChat({ onSend, onAbort }: BuilderChatProps) {
               transition={spring.snappy}
               aria-label="停止生成"
               style={{
-                width: 36,
-                height: 36,
-                borderRadius: 18,
+                width: 44,
+                height: 44,
+                borderRadius: 22,
                 border: 'none',
                 backgroundColor: 'var(--color-systemRed)',
                 color: 'white',
@@ -240,12 +323,13 @@ export function BuilderChat({ onSend, onAbort }: BuilderChatProps) {
               type="button"
               onClick={handleSend}
               disabled={!canSend}
+              aria-label="发送"
               whileTap={canSend ? { scale: 0.92 } : undefined}
               transition={spring.snappy}
               style={{
-                width: 36,
-                height: 36,
-                borderRadius: 18,
+                width: 44,
+                height: 44,
+                borderRadius: 22,
                 border: 'none',
                 backgroundColor: canSend ? 'var(--color-systemBlue)' : 'var(--color-separator)',
                 color: 'white',
@@ -257,7 +341,7 @@ export function BuilderChat({ onSend, onAbort }: BuilderChatProps) {
                 transition: 'background-color 200ms ease',
               }}
             >
-              <Send size={16} />
+              {canSend ? <ArrowUp size={21} strokeWidth={2.6} /> : <Send size={18} />}
             </motion.button>
           )}
         </div>
@@ -287,24 +371,24 @@ function EmptyState({
         flexDirection: 'column',
         alignItems: 'center',
         textAlign: 'center',
-        padding: '48px 16px 16px',
+        padding: '42px 16px 18px',
       }}
     >
       <div
         style={{
           width: 64,
           height: 64,
-          borderRadius: 16,
-          background:
-            'linear-gradient(135deg, var(--color-systemBlue) 0%, var(--color-systemPurple) 100%)',
+          borderRadius: 22,
+          backgroundColor: 'rgba(0,122,255,0.12)',
+          color: 'var(--color-systemBlue)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           marginBottom: 16,
-          boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+          boxShadow: '0 12px 26px rgba(0,122,255,0.10)',
         }}
       >
-        <Sparkles size={32} color="white" strokeWidth={2} />
+        <Sparkles size={32} color="var(--color-systemBlue)" strokeWidth={2} />
       </div>
       <div
         style={{
@@ -345,14 +429,15 @@ function EmptyState({
             transition={spring.snappy}
             style={{
               padding: '10px 14px',
-              borderRadius: 18,
-              border: '0.5px solid var(--color-separator)',
-              backgroundColor: 'var(--color-tertiarySystemBackground)',
+              borderRadius: 16,
+              border: '0.5px solid rgba(60,60,67,0.12)',
+              backgroundColor: 'rgba(255,255,255,0.94)',
               color: 'var(--color-label)',
               fontSize: 14,
               cursor: 'pointer',
               textAlign: 'left',
               fontFamily: 'inherit',
+              boxShadow: '0 8px 18px rgba(15,23,42,0.04)',
             }}
           >
             {text}
@@ -363,7 +448,7 @@ function EmptyState({
   );
 }
 
-function ChatBubble({ turn }: { turn: ChatTurn }) {
+function ChatBubble({ turn, showAvatar }: { turn: ChatTurn; showAvatar: boolean }) {
   // Only handles user / agent-text — other kinds have dedicated components.
   if (turn.kind !== 'user' && turn.kind !== 'agent-text') return null;
   const isUser = turn.kind === 'user';
@@ -375,28 +460,77 @@ function ChatBubble({ turn }: { turn: ChatTurn }) {
       style={{
         display: 'flex',
         justifyContent: isUser ? 'flex-end' : 'flex-start',
-        marginBottom: 8,
+        alignItems: 'flex-end',
+        gap: 10,
+        marginBottom: 14,
       }}
     >
+      {!isUser && (showAvatar ? <AssistantAvatar /> : <div style={{ width: 42, flexShrink: 0 }} />)}
       <div
         style={{
-          maxWidth: '80%',
-          padding: '8px 12px',
-          borderRadius: 14,
-          fontSize: 14,
-          lineHeight: 1.5,
-          backgroundColor: isUser
-            ? 'var(--color-systemBlue)'
-            : 'var(--color-tertiarySystemBackground)',
-          color: isUser ? 'white' : 'var(--color-label)',
-          whiteSpace: 'pre-wrap',
-          wordBreak: 'break-word',
+          maxWidth: isUser ? '76%' : '78%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: isUser ? 'flex-end' : 'flex-start',
+          gap: 4,
         }}
       >
-        {turn.text}
+        <div
+          style={{
+            padding: isUser ? '12px 16px' : '11px 15px',
+            borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+            fontSize: 16,
+            lineHeight: 1.42,
+            backgroundColor: isUser ? 'var(--color-systemBlue)' : 'rgba(255,255,255,0.96)',
+            color: isUser ? 'white' : 'var(--color-label)',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            boxShadow: isUser
+              ? '0 8px 18px rgba(0,122,255,0.24)'
+              : '0 8px 22px rgba(15,23,42,0.06)',
+            border: isUser ? 'none' : '0.5px solid rgba(60,60,67,0.10)',
+          }}
+        >
+          {turn.text}
+        </div>
+        <span
+          style={{
+            fontSize: 12,
+            color: 'var(--color-tertiaryLabel)',
+            paddingInline: 4,
+          }}
+        >
+          {formatChatTime(turn.timestamp)}
+        </span>
       </div>
     </motion.div>
   );
+}
+
+function AssistantAvatar() {
+  return (
+    <div
+      style={{
+        width: 42,
+        height: 42,
+        borderRadius: 21,
+        backgroundColor: 'rgba(0,122,255,0.10)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+        boxShadow: '0 8px 20px rgba(0,122,255,0.08)',
+      }}
+    >
+      <Bot size={21} color="var(--color-systemBlue)" strokeWidth={2.2} />
+    </div>
+  );
+}
+
+function formatChatTime(ts: number): string {
+  if (!Number.isFinite(ts) || ts <= 0) return '';
+  const date = new Date(ts);
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
 function TypingIndicator() {
@@ -408,17 +542,22 @@ function TypingIndicator() {
       style={{
         display: 'flex',
         justifyContent: 'flex-start',
-        marginBottom: 8,
+        alignItems: 'flex-end',
+        gap: 10,
+        marginBottom: 14,
       }}
     >
+      <AssistantAvatar />
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: 6,
-          padding: '10px 14px',
-          borderRadius: 18,
-          backgroundColor: 'var(--color-tertiarySystemBackground)',
+          padding: '13px 16px',
+          borderRadius: '18px 18px 18px 4px',
+          backgroundColor: 'rgba(255,255,255,0.96)',
+          border: '0.5px solid rgba(60,60,67,0.10)',
+          boxShadow: '0 8px 22px rgba(15,23,42,0.06)',
         }}
       >
         {[0, 1, 2].map((i) => (
@@ -445,8 +584,8 @@ function TypingIndicator() {
   );
 }
 
-/** Build a short human-readable summary of a tool call's args. */
-function summarizeToolArgs(tool: string, args: unknown): string {
+/** Build the primary target shown for a tool call row. */
+function summarizeToolTarget(tool: string, args: unknown): string {
   const a = (args ?? {}) as Record<string, unknown>;
   switch (tool) {
     case 'read_file':
@@ -455,7 +594,7 @@ function summarizeToolArgs(tool: string, args: unknown): string {
     case 'compile_check':
       return typeof a.path === 'string' && a.path ? a.path : 'all files';
     case 'list_files':
-      return '...';
+      return 'current draft';
     case 'read_fixture':
       return typeof a.name === 'string' ? a.name : '';
     case 'update_plan': {
@@ -473,22 +612,16 @@ function summarizeToolArgs(tool: string, args: unknown): string {
 
 function ToolCallCard({
   turn,
-  groupPos,
+  groupPos: _groupPos,
 }: {
   turn: Extract<ChatTurn, { kind: 'tool-call' }>;
   groupPos: ToolGroupPos;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const summary = summarizeToolArgs(turn.tool, turn.args);
-  const Icon = turn.ok ? Wrench : XCircle;
-  const iconColor = turn.ok ? 'var(--color-secondaryLabel)' : 'var(--color-systemRed)';
-
-  // iOS Reminders cells: 12px outer radius, hairlines between rows in a group
-  const radTop = groupPos === 'only' || groupPos === 'first' ? 12 : 0;
-  const radBottom = groupPos === 'only' || groupPos === 'last' ? 12 : 0;
-  const showTopBorder = groupPos === 'middle' || groupPos === 'last';
-  const dropBottomBorder = groupPos === 'first' || groupPos === 'middle';
-  const stackedSpacing = groupPos === 'only' || groupPos === 'last' ? 6 : 0;
+  const [showRaw, setShowRaw] = useState(false);
+  const target = summarizeToolTarget(turn.tool, turn.args);
+  const ToolIcon = getToolIcon(turn.tool);
+  const toolTone = getToolTone(turn.tool);
 
   return (
     <motion.div
@@ -498,25 +631,17 @@ function ToolCallCard({
       style={{
         display: 'flex',
         justifyContent: 'flex-start',
-        marginBottom: stackedSpacing,
+        marginBottom: 10,
       }}
     >
       <div
         style={{
-          maxWidth: '90%',
-          borderTopLeftRadius: radTop,
-          borderTopRightRadius: radTop,
-          borderBottomLeftRadius: radBottom,
-          borderBottomRightRadius: radBottom,
-          border: '0.5px solid var(--color-separator)',
-          borderTop: showTopBorder
-            ? '0.5px solid var(--color-separator)'
-            : '0.5px solid var(--color-separator)',
-          borderBottom: dropBottomBorder
-            ? 'none'
-            : '0.5px solid var(--color-separator)',
-          backgroundColor: 'var(--color-tertiarySystemBackground)',
-          fontSize: 13,
+          width: '100%',
+          borderRadius: 17,
+          border: '0.5px solid rgba(60,60,67,0.12)',
+          backgroundColor: 'rgba(255,255,255,0.94)',
+          boxShadow: '0 8px 22px rgba(15,23,42,0.055)',
+          fontSize: 15,
           color: 'var(--color-label)',
           overflow: 'hidden',
         }}
@@ -527,8 +652,9 @@ function ToolCallCard({
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 6,
-            padding: '8px 12px',
+            gap: 11,
+            minHeight: 58,
+            padding: '9px 14px',
             background: 'transparent',
             border: 'none',
             color: 'inherit',
@@ -538,31 +664,194 @@ function ToolCallCard({
             textAlign: 'left',
           }}
         >
+          <span
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 9,
+              backgroundColor: toolTone.background,
+              color: toolTone.color,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <ToolIcon size={18} strokeWidth={2.25} />
+          </span>
+          <span
+            style={{
+              minWidth: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2,
+              flex: 1,
+            }}
+          >
+            <span
+              style={{
+                fontWeight: 800,
+                color: 'var(--color-label)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {target}
+            </span>
+            <span
+              style={{
+                color: 'var(--color-secondaryLabel)',
+                fontSize: 13,
+                fontWeight: 600,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {turn.tool}
+            </span>
+          </span>
+          <span style={{ flex: '0 0 2px' }} />
+          <span
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 14,
+              color: turn.ok ? 'var(--color-systemGreen)' : 'var(--color-systemRed)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            {turn.ok ? <Check size={19} strokeWidth={2.6} /> : <XCircle size={19} strokeWidth={2.2} />}
+          </span>
           {expanded ? (
-            <ChevronDown size={12} color="var(--color-secondaryLabel)" />
+            <ChevronDown size={17} color="var(--color-secondaryLabel)" />
           ) : (
-            <ChevronRight size={12} color="var(--color-secondaryLabel)" />
+            <ChevronRight size={17} color="var(--color-secondaryLabel)" />
           )}
-          <Icon size={12} color={iconColor} />
-          <span style={{ fontWeight: 600 }}>{turn.tool}</span>
-          <span style={{ color: 'var(--color-secondaryLabel)' }}>· {summary}</span>
         </button>
         {expanded && (
           <div
             style={{
-              padding: '0 12px 8px 12px',
+              padding: '0 14px 13px 59px',
               display: 'flex',
               flexDirection: 'column',
-              gap: 6,
+              gap: 8,
             }}
           >
-            <DetailBlock label="args" value={turn.args} />
-            <DetailBlock label="result" value={turn.result} />
+            <StructuredToolDetails turn={turn} />
+            <button
+              type="button"
+              onClick={() => setShowRaw((v) => !v)}
+              style={{
+                minHeight: 32,
+                border: 'none',
+                borderTop: '0.5px solid rgba(60,60,67,0.10)',
+                padding: '8px 0 0',
+                background: 'transparent',
+                color: 'var(--color-systemBlue)',
+                fontSize: 13,
+                fontWeight: 600,
+                textAlign: 'left',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              查看原始 JSON
+            </button>
+            {showRaw && (
+              <>
+                <DetailBlock label="args" value={turn.args} />
+                <DetailBlock label="result" value={turn.result} />
+              </>
+            )}
           </div>
         )}
       </div>
     </motion.div>
   );
+}
+
+function StructuredToolDetails({ turn }: { turn: Extract<ChatTurn, { kind: 'tool-call' }> }) {
+  const args = (turn.args ?? {}) as Record<string, unknown>;
+  const rows: { label: string; value: string }[] = [];
+  if (typeof args.path === 'string') {
+    rows.push({ label: 'path', value: args.path });
+  } else {
+    rows.push({ label: 'target', value: summarizeToolTarget(turn.tool, turn.args) });
+  }
+  if (typeof args.content === 'string') {
+    rows.push({ label: 'content', value: formatContentSize(args.content) });
+  }
+  if (!turn.ok) {
+    rows.push({ label: 'result', value: 'failed' });
+  } else {
+    rows.push({ label: 'result', value: 'ok' });
+  }
+
+  return (
+    <div
+      style={{
+        borderRadius: 12,
+        backgroundColor: '#f4f6fb',
+        border: '0.5px solid rgba(60,60,67,0.10)',
+        overflow: 'hidden',
+      }}
+    >
+      {rows.map((row, index) => (
+        <div
+          key={`${row.label}-${index}`}
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '72px minmax(0, 1fr)',
+            gap: 10,
+            alignItems: 'center',
+            minHeight: 34,
+            padding: '7px 10px',
+            borderBottom: index === rows.length - 1 ? 'none' : '0.5px solid rgba(60,60,67,0.08)',
+            fontSize: 13,
+          }}
+        >
+          <span style={{ color: 'var(--color-secondaryLabel)', fontWeight: 600 }}>{row.label}</span>
+          <span
+            style={{
+              color: 'var(--color-label)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {row.value}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function formatContentSize(content: string): string {
+  const bytes = new Blob([content]).size;
+  if (bytes < 1024) return `${bytes} B`;
+  return `${(bytes / 1024).toFixed(1)} KB`;
+}
+
+function getToolIcon(tool: string) {
+  if (tool === 'compile_check') return Terminal;
+  if (tool.includes('file') || tool.startsWith('replace') || tool.startsWith('append')) return Code2;
+  return Wrench;
+}
+
+function getToolTone(tool: string): { background: string; color: string } {
+  if (tool === 'compile_check') {
+    return { background: 'rgba(52,199,89,0.16)', color: 'var(--color-systemGreen)' };
+  }
+  if (tool.includes('file') || tool.startsWith('replace') || tool.startsWith('append')) {
+    return { background: 'rgba(88,86,214,0.16)', color: 'var(--color-systemIndigo, #5856d6)' };
+  }
+  return { background: 'rgba(0,122,255,0.13)', color: 'var(--color-systemBlue)' };
 }
 
 function DetailBlock({ label, value }: { label: string; value: unknown }) {
@@ -610,33 +899,54 @@ function PlanCard({ turn }: { turn: Extract<ChatTurn, { kind: 'plan-update' }> }
       style={{
         display: 'flex',
         justifyContent: 'flex-start',
-        marginBottom: 6,
+        marginBottom: 14,
       }}
     >
       <div
         style={{
-          maxWidth: '90%',
-          borderRadius: 12,
-          border: '0.5px solid var(--color-separator)',
-          backgroundColor: 'var(--color-tertiarySystemBackground)',
-          padding: '8px 12px',
+          width: '100%',
+          borderRadius: 20,
+          border: '0.5px solid rgba(60,60,67,0.12)',
+          backgroundColor: 'rgba(255,255,255,0.94)',
+          padding: '15px 17px',
           color: 'var(--color-label)',
+          boxShadow: '0 12px 30px rgba(15,23,42,0.07)',
         }}
       >
         <div
           style={{
             display: 'flex',
-            alignItems: 'baseline',
+            alignItems: 'center',
             justifyContent: 'space-between',
-            marginBottom: 6,
+            paddingBottom: 12,
+            borderBottom: '0.5px solid rgba(60,60,67,0.12)',
           }}
         >
-          <span style={{ fontSize: 14, fontWeight: 600 }}>计划</span>
-          <span style={{ fontSize: 12, color: 'var(--color-secondaryLabel)' }}>
-            {done}/{total}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 10,
+                color: 'var(--color-systemBlue)',
+                backgroundColor: 'rgba(0,122,255,0.12)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <ClipboardList size={20} strokeWidth={2.3} />
+            </span>
+            <span style={{ fontSize: 20, fontWeight: 800 }}>计划</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--color-systemBlue)' }}>
+              {done}/{total}
+            </span>
+            <ChevronDown size={18} color="var(--color-secondaryLabel)" />
+          </div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
           {turn.steps.map((step) => {
             const StepIcon =
               step.status === 'done'
@@ -656,8 +966,14 @@ function PlanCard({ turn }: { turn: Extract<ChatTurn, { kind: 'plan-update' }> }
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 6,
-                  fontSize: 13,
+                  gap: 12,
+                  minHeight: 44,
+                  borderBottom:
+                    step === turn.steps[turn.steps.length - 1]
+                      ? 'none'
+                      : '0.5px solid rgba(60,60,67,0.10)',
+                  fontSize: 16,
+                  lineHeight: 1.35,
                   color:
                     step.status === 'skipped'
                       ? 'var(--color-secondaryLabel)'
@@ -665,8 +981,8 @@ function PlanCard({ turn }: { turn: Extract<ChatTurn, { kind: 'plan-update' }> }
                   textDecoration: step.status === 'skipped' ? 'line-through' : 'none',
                 }}
               >
-                <StepIcon size={13} color={iconColor} />
-                <span>{step.title}</span>
+                <StepIcon size={22} color={iconColor} strokeWidth={2.2} />
+                <span style={{ flex: 1 }}>{step.title}</span>
               </div>
             );
           })}
@@ -685,19 +1001,20 @@ function FinishBubble({ turn }: { turn: Extract<ChatTurn, { kind: 'finish' }> })
       style={{
         display: 'flex',
         justifyContent: 'flex-start',
-        marginBottom: 8,
+        marginBottom: 14,
       }}
     >
       <div
         style={{
-          maxWidth: '80%',
-          padding: '8px 12px',
-          borderRadius: 14,
-          fontSize: 14,
-          lineHeight: 1.5,
-          backgroundColor: 'var(--color-tertiarySystemBackground)',
+          maxWidth: '86%',
+          padding: '12px 15px',
+          borderRadius: '18px 18px 18px 4px',
+          fontSize: 16,
+          lineHeight: 1.42,
+          backgroundColor: 'rgba(255,255,255,0.96)',
           color: 'var(--color-label)',
-          border: '1px solid var(--color-systemGreen)',
+          border: '0.5px solid rgba(52,199,89,0.34)',
+          boxShadow: '0 8px 22px rgba(15,23,42,0.06)',
           whiteSpace: 'pre-wrap',
           wordBreak: 'break-word',
           display: 'flex',

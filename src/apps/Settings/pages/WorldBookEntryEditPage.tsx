@@ -1,4 +1,6 @@
+import { Trash2 } from 'lucide-react';
 import { useWorldBookStore } from '@/platform/stores/worldBookStore';
+import { useSettingsNavStore } from '../settingsNavStore';
 import { TextArea, Toggle } from '@/system';
 
 function SectionHeader({ title }: { title: string }) {
@@ -21,6 +23,8 @@ export function WorldBookEntryEditPage() {
   const entryId = useWorldBookStore((s) => s.editingEntryId);
   const books = useWorldBookStore((s) => s.books);
   const updateEntry = useWorldBookStore((s) => s.updateEntry);
+  const removeEntry = useWorldBookStore((s) => s.removeEntry);
+  const pop = useSettingsNavStore((s) => s.pop);
 
   const book = books.find((b) => b.id === bookId);
   const entry = book?.entries.find((e) => e.id === entryId);
@@ -41,6 +45,13 @@ export function WorldBookEntryEditPage() {
   }
 
   const patch = (p: Partial<typeof entry>) => updateEntry(book.id, entry.id, p);
+
+  const handleRemoveEntry = () => {
+    const title = entry.title.trim() || '未命名条目';
+    if (!confirm(`确定删除「${title}」？此操作无法撤销。`)) return;
+    removeEntry(book.id, entry.id);
+    pop();
+  };
 
   return (
     <div
@@ -120,6 +131,31 @@ export function WorldBookEntryEditPage() {
           </span>
           <Toggle value={entry.enabled} onChange={(v) => patch({ enabled: v })} />
         </div>
+      </div>
+
+      {/* 删除条目 */}
+      <div
+        className="mx-4 mb-5 overflow-hidden"
+        style={{
+          backgroundColor: 'var(--color-tertiarySystemBackground)',
+          borderRadius: 'var(--radius-group)',
+        }}
+      >
+        <button
+          onClick={handleRemoveEntry}
+          className="flex w-full items-center justify-center gap-2 px-4"
+          style={{ minHeight: 44 }}
+        >
+          <Trash2 size={18} color="var(--color-systemRed)" />
+          <span
+            style={{
+              fontSize: 'var(--font-size-body)',
+              color: 'var(--color-systemRed)',
+            }}
+          >
+            删除条目
+          </span>
+        </button>
       </div>
 
       <div style={{ height: 40 }} />

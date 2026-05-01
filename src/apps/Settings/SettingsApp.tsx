@@ -7,7 +7,6 @@ import { AboutPage } from './AboutPage';
 import { WallpaperPage } from './WallpaperPage';
 import { AISettingsPage } from './pages/AISettingsPage';
 import { AIToolsPage } from './pages/AIToolsPage';
-import { AIBuilderModelPage } from './pages/AIBuilderModelPage';
 import { PersonaPage } from './pages/PersonaPage';
 import { SystemPromptEditPage, PostHistoryEditPage } from './pages/PromptEditPage';
 import { DisplayPage } from './pages/DisplayPage';
@@ -44,7 +43,6 @@ const PAGE_TITLES: Record<string, string> = {
   persona: '我的身份',
   aiSettings: 'AI 设置',
   aiTools: 'AI 工具',
-  aiBuilderModel: '工坊代码模型',
   characters: '角色管理',
   characterEdit: '编辑角色',
   systemPromptEdit: '系统提示词',
@@ -82,7 +80,6 @@ const PAGE_COMPONENTS: Record<string, ComponentType<SettingsPageProps>> = {
   persona: asPage(PersonaPage),
   aiSettings: asPage(AISettingsPage),
   aiTools: asPage(AIToolsPage),
-  aiBuilderModel: asPage(AIBuilderModelPage),
   characters: asPage(CharactersPage),
   characterEdit: asPage(CharacterEditPage),
   systemPromptEdit: asPage(SystemPromptEditPage),

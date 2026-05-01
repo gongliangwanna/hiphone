@@ -2,6 +2,20 @@ import { useCallback, useMemo } from 'react';
 import { stations } from '../data';
 import { useMusicDataStore } from '../musicDataStore';
 import { MusicArtwork } from '../MusicArtwork';
+import { motion } from 'motion/react';
+import { Radio, Signal, Play } from 'lucide-react';
+import {
+  MUSIC_ACCENT,
+  MUSIC_LABEL,
+  MUSIC_PANEL_STRONG,
+  MUSIC_SECONDARY,
+  MUSIC_SEPARATOR,
+  MUSIC_TERTIARY,
+  MusicHeader,
+  MusicPage,
+  MusicSection,
+  glassStyle,
+} from '../musicUi';
 
 export function RadioTab() {
   const playSong = useMusicDataStore((s) => s.playSong);
@@ -35,87 +49,91 @@ export function RadioTab() {
   }, [featuredIds, songMap]);
 
   return (
-    <div className="h-full overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
-      {/* Large Title */}
-      <div style={{ padding: '8px 20px 12px' }}>
-        <h1 style={{ fontSize: 34, fontWeight: 700, color: '#fff', margin: 0 }}>
-          广播
-        </h1>
-      </div>
+    <MusicPage testId="music-radio-surface" seed="radio">
+      <MusicHeader title="广播" eyebrow="实时电台" />
 
-      {/* Featured Station */}
       {featuredStation && (
         <div style={{ paddingInline: 20, marginBottom: 24 }}>
-          <button
+          <motion.button
+            whileTap={{ scale: 0.975 }}
             className="w-full text-left"
             style={{
-              borderRadius: 12,
+              ...glassStyle,
+              borderRadius: 22,
               overflow: 'hidden',
-              background: featuredStation.gradient,
               position: 'relative',
-              height: 200,
+              height: 214,
+              background:
+                'radial-gradient(circle at 16% 14%, rgba(255,59,72,0.36) 0, transparent 44%), radial-gradient(circle at 90% 100%, rgba(255,204,0,0.18) 0, transparent 46%), linear-gradient(135deg, rgba(44,44,52,0.86), rgba(16,16,20,0.92))',
             }}
             onClick={playRandomFeatured}
           >
+            <div
+              className="absolute right-5 top-5 flex items-center gap-2"
+              style={{ color: MUSIC_SECONDARY, fontSize: 13, fontWeight: 650 }}
+            >
+              <span
+                style={{
+                  width: 9,
+                  height: 9,
+                  borderRadius: 5,
+                  backgroundColor: '#34C759',
+                  boxShadow: '0 0 12px rgba(52,199,89,0.75)',
+                }}
+              />
+              直播
+            </div>
+            <Radio
+              size={96}
+              color="rgba(255,255,255,0.11)"
+              style={{ position: 'absolute', right: 24, bottom: 26 }}
+            />
             <div
               style={{
                 position: 'absolute',
                 bottom: 0,
                 left: 0,
                 right: 0,
-                padding: 20,
+                padding: 22,
               }}
             >
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                直播
+              <div className="flex items-center gap-2" style={{ color: MUSIC_ACCENT, fontSize: 13, fontWeight: 750 }}>
+                <Signal size={16} />
+                HiPhone Radio
               </div>
-              <div style={{ fontSize: 28, fontWeight: 700, color: '#fff' }}>
+              <div style={{ fontSize: 31, fontWeight: 850, color: MUSIC_LABEL, marginTop: 8, lineHeight: 1.05 }}>
                 {featuredStation.name}
               </div>
-              <div style={{ fontSize: 15, color: 'rgba(255,255,255,0.7)' }}>
+              <div style={{ fontSize: 15, color: MUSIC_SECONDARY, marginTop: 7 }}>
                 {featuredStation.description}
               </div>
             </div>
-            <div
-              style={{
-                position: 'absolute',
-                top: 16,
-                right: 16,
-                width: 10,
-                height: 10,
-                borderRadius: 5,
-                backgroundColor: '#34C759',
-                boxShadow: '0 0 6px #34C759',
-              }}
-            />
-          </button>
+          </motion.button>
         </div>
       )}
 
-      {/* Station List */}
-      <div style={{ paddingInline: 20, paddingBottom: 120 }}>
-        <h2 style={{ fontSize: 22, fontWeight: 700, color: '#fff', margin: 0, marginBottom: 12 }}>
-          电台
-        </h2>
-        <div className="flex flex-col gap-3">
+      <MusicSection title="电台" action={false}>
+        <div className="flex flex-col" style={{ gap: 12, paddingInline: 20 }}>
           {stations.slice(1).map((station, i) => {
             const previewSong = stationPreviewSongs[i + 1];
             return (
-              <button
+              <motion.button
+                whileTap={{ scale: 0.985 }}
                 key={station.id}
                 className="flex items-center text-left"
                 style={{
-                  height: 80,
-                  borderRadius: 12,
-                  backgroundColor: 'rgba(28, 28, 30, 0.8)',
+                  minHeight: 86,
+                  borderRadius: 18,
+                  backgroundColor: MUSIC_PANEL_STRONG,
+                  border: `0.5px solid ${MUSIC_SEPARATOR}`,
                   overflow: 'hidden',
                 }}
                 onClick={() => playStation(station.searchTerm)}
               >
                 <div
                   style={{
-                    width: 80,
-                    height: 80,
+                    width: 86,
+                    height: 86,
                     background: station.gradient,
                     flexShrink: 0,
                     position: 'relative',
@@ -131,17 +149,24 @@ export function RadioTab() {
                         width: '100%',
                         height: '100%',
                         objectFit: 'cover',
-                        opacity: 0.6,
+                        opacity: 0.64,
                       }}
                     />
                   )}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      background: 'linear-gradient(135deg, transparent, rgba(0,0,0,0.28))',
+                    }}
+                  />
                 </div>
                 <div style={{ padding: '0 16px', flex: 1, minWidth: 0 }}>
                   <div
                     style={{
                       fontSize: 17,
-                      fontWeight: 600,
-                      color: '#fff',
+                      fontWeight: 700,
+                      color: MUSIC_LABEL,
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
@@ -152,18 +177,32 @@ export function RadioTab() {
                   <div
                     style={{
                       fontSize: 13,
-                      color: 'rgba(235, 235, 245, 0.6)',
+                      color: MUSIC_SECONDARY,
                       marginTop: 2,
                     }}
                   >
                     {station.description}
                   </div>
                 </div>
-              </button>
+                <span
+                  className="flex items-center justify-center"
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    backgroundColor: 'rgba(255,255,255,0.08)',
+                    color: MUSIC_TERTIARY,
+                    marginRight: 12,
+                    flexShrink: 0,
+                  }}
+                >
+                  <Play size={15} fill="currentColor" />
+                </span>
+              </motion.button>
             );
           })}
         </div>
-      </div>
-    </div>
+      </MusicSection>
+    </MusicPage>
   );
 }

@@ -109,7 +109,7 @@ export function CharactersPage() {
                     maxWidth: '100%',
                   }}
                 >
-                  {char.personality || char.description.slice(0, 40) || '无描述'}
+                  {char.description.slice(0, 40) || '无描述'}
                 </div>
               </div>
 

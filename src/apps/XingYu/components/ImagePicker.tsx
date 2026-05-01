@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus } from 'lucide-react';
-import { MOCK_GALLERY_IMAGES } from '../data';
+import { usePhotosStore } from '@/apps/Photos/photosStore';
 import { T } from '../theme';
 
 const MAX_SIZE = 1200;
@@ -43,6 +43,8 @@ interface ImagePickerProps {
 
 export function ImagePicker({ visible, onSelectImage, onClose }: ImagePickerProps) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const photos = usePhotosStore((s) => s.photos);
+  const galleryImages = photos.slice(0, 24).map((photo) => photo.thumbnail);
 
   const handleLocalFile = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -137,7 +139,7 @@ export function ImagePicker({ visible, onSelectImage, onClose }: ImagePickerProp
                 </div>
               </button>
 
-              {MOCK_GALLERY_IMAGES.map((url) => (
+              {galleryImages.map((url) => (
                 <ImageThumb key={url} url={url} onSelect={onSelectImage} />
               ))}
             </div>

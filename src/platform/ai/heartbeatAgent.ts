@@ -31,7 +31,7 @@ import { useWorldBookStore } from '@/platform/stores/worldBookStore';
 import { useXYData } from '@/apps/XingYu/xingYuDataStore';
 import { useCharacterMemory } from './characterMemoryStore';
 import { useStickerStore } from '@/apps/XingYu/stickerStore';
-import { getAdapter } from '@/platform/ai/providers';
+import { getAdapter, pickGenerationParams } from '@/platform/ai/providers';
 import { chatComplete } from './chatComplete';
 import { assemblePrompt, type ChatMessage } from './promptAssembly';
 import { buildDeviceContext } from './deviceContext';
@@ -90,6 +90,7 @@ const ACTION_LABELS: Record<string, (p: ReplyItem, selfId: string) => string> = 
   },
   view_user_signature: () => '查看了用户的个性签名',
   view_user_signature_history: () => '查看了用户的历史签名',
+  view_own_signature_history: () => '查看了自己的历史签名',
   view_unread_messages: () => '查看了未读消息',
   view_unread_interactions: () => '查看了未读互动',
   view_notes: () => '查看了自己的备忘录',
@@ -217,7 +218,7 @@ async function runHeartbeat(
       rawReply = await chatComplete(
         { endpoint, apiKey: aiConfig.apiKey, model: aiConfig.model, providerId: aiConfig.provider },
         messages,
-        { maxTokens: aiConfig.maxTokens, temperature: aiConfig.temperature },
+        pickGenerationParams(aiConfig),
         signal,
       );
     } catch (e) {
@@ -295,7 +296,7 @@ async function runHeartbeat(
 
   // ── Insert heartbeat activity log into chat history ──
   // Filter to write operations only (exclude send_message per user request, and all read-only actions)
-  const READ_ONLY_ACTIONS = new Set(['view_moments', 'view_user_signature', 'view_user_signature_history', 'view_characters', 'view_notes', 'view_unread_messages', 'view_unread_interactions', 'done']);
+  const READ_ONLY_ACTIONS = new Set(['view_moments', 'view_user_signature', 'view_user_signature_history', 'view_own_signature_history', 'view_characters', 'view_notes', 'view_unread_messages', 'view_unread_interactions', 'done']);
   const writeActions = actionsTaken.filter((a) => a.action !== 'send_message' && !READ_ONLY_ACTIONS.has(a.action));
 
   if (actionsTaken.length > 0) {
@@ -316,7 +317,7 @@ async function runHeartbeat(
         narrativeSummary = await chatComplete(
           { endpoint, apiKey: aiConfig.apiKey, model: aiConfig.model, providerId: aiConfig.provider },
           summaryMessages,
-          { maxTokens: aiConfig.maxTokens, temperature: aiConfig.temperature },
+          pickGenerationParams(aiConfig),
           signal,
         );
         narrativeSummary = narrativeSummary.trim();

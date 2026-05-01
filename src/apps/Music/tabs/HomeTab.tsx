@@ -3,10 +3,22 @@ import type { Song } from '../data';
 import { useMusicNavStore } from '../musicStore';
 import { useMusicDataStore } from '../musicDataStore';
 import { MusicArtwork } from '../MusicArtwork';
-import { Loader2 } from 'lucide-react';
+import {
+  AlbumCard,
+  HorizontalShelf,
+  MUSIC_ACCENT,
+  MUSIC_LABEL,
+  MUSIC_SECONDARY,
+  MUSIC_TERTIARY,
+  MusicHeader,
+  MusicPage,
+  MusicSection,
+  RowGroup,
+  SongRow,
+  glassStyle,
+} from '../musicUi';
+import { Loader2, Play, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
-
-const MUSIC_RED = '#FC3C44';
 
 export function HomeTab() {
   const pushPage = useMusicNavStore((s) => s.pushPage);
@@ -47,7 +59,7 @@ export function HomeTab() {
 
   if (isLoading && songs.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center" style={{ color: 'rgba(235,235,245,0.6)' }}>
+      <div className="flex h-full flex-col items-center justify-center" style={{ color: MUSIC_SECONDARY, background: '#07070a' }}>
         <Loader2 size={32} className="animate-spin" style={{ marginBottom: 12 }} />
         <span style={{ fontSize: 15 }}>正在加载音乐...</span>
       </div>
@@ -56,253 +68,171 @@ export function HomeTab() {
 
   if (!isLoading && songs.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center" style={{ color: 'rgba(235,235,245,0.6)' }}>
+      <div className="flex h-full flex-col items-center justify-center" style={{ color: MUSIC_SECONDARY, background: '#07070a' }}>
         <span style={{ fontSize: 15 }}>无法加载音乐，请稍后再试</span>
       </div>
     );
   }
 
   return (
-    <div className="h-full overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
-      {/* Large Title */}
-      <div style={{ padding: '8px 20px 12px' }}>
-        <h1 style={{ fontSize: 34, fontWeight: 700, color: '#fff', margin: 0 }}>
-          现在就听
-        </h1>
-      </div>
+    <MusicPage testId="music-home-surface" seed={heroSong?.title}>
+      <MusicHeader title="现在就听" eyebrow="为你精选" />
 
-      {/* Hero Banner */}
       {heroSong && (
-        <div style={{ paddingInline: 20, marginBottom: 24 }}>
-          <motion.button
-            whileTap={{ scale: 0.96 }}
-            className="w-full text-left"
-            onClick={() => {
-              if (heroSong.albumId) pushPage('album-detail', { albumId: heroSong.albumId });
-              else playSong(heroSong.id, featuredIds);
-            }}
-            style={{
-              borderRadius: 12,
-              overflow: 'hidden',
-              aspectRatio: '16/9',
-              position: 'relative',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
-            }}
-          >
-            <MusicArtwork
-              src={heroSong.artworkUrl}
-              alt={heroSong.title}
-              iconSize={48}
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
-            <div
-              style={{
-                position: 'absolute',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                padding: '40px 16px 16px',
-                background: 'linear-gradient(transparent, rgba(0,0,0,0.7))',
-              }}
-            >
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: 0.5 }}>
-                精选推荐
-              </div>
-              <div style={{ fontSize: 22, fontWeight: 700, color: '#fff' }}>
-                {heroSong.title}
-              </div>
-              <div style={{ fontSize: 15, color: 'rgba(255,255,255,0.7)' }}>
-                {heroSong.artist}
-              </div>
-            </div>
-          </motion.button>
-        </div>
+        <FeaturedHero
+          song={heroSong}
+          onOpen={() => {
+            if (heroSong.albumId) pushPage('album-detail', { albumId: heroSong.albumId });
+            else playSong(heroSong.id, featuredIds);
+          }}
+        />
       )}
 
-      {/* Recently Played */}
       {recentSongs.length > 0 && (
-        <Section title="最近播放">
+        <MusicSection title="最近播放">
           <HorizontalScroll>
             {recentSongs.map((song) => (
-              <SongCard
+              <AlbumCard
                 key={song.id}
                 title={song.title}
                 subtitle={song.artist}
                 artworkUrl={song.artworkUrl}
+                size={136}
                 onClick={() => playSong(song.id, featuredIds)}
               />
             ))}
           </HorizontalScroll>
-        </Section>
+        </MusicSection>
       )}
 
-      {/* For You */}
       {forYouSongs.length > 0 && (
-        <Section title="专属推荐">
+        <MusicSection title="专属推荐">
           <HorizontalScroll>
             {forYouSongs.map((song) => (
-              <SongCard
+              <AlbumCard
                 key={song.id}
                 title={song.title}
                 subtitle={song.artist}
                 artworkUrl={song.artworkUrl}
+                size={154}
                 onClick={() => playSong(song.id, featuredIds)}
               />
             ))}
           </HorizontalScroll>
-        </Section>
+        </MusicSection>
       )}
 
-      {/* New Releases */}
       {newSongs.length > 0 && (
-        <Section title="新歌速递">
-          <div style={{ paddingInline: 20, paddingBottom: 120 }}>
-            {newSongs.map((song, i) => (
-              <motion.button
-                whileTap={{ scale: 0.98, backgroundColor: 'rgba(255,255,255,0.05)' }}
+        <MusicSection title="新歌速递">
+          <RowGroup>
+            {newSongs.slice(0, 9).map((song) => (
+              <SongRow
                 key={song.id}
-                className="flex w-full items-center"
-                style={{
-                  height: 56,
-                  borderBottom: i < newSongs.length - 1 ? '0.5px solid rgba(84, 84, 88, 0.65)' : 'none',
-                  borderRadius: 8,
-                  padding: '0 8px',
-                  margin: '0 -8px',
-                }}
+                song={song}
+                queue={featuredIds}
                 onClick={() => playSong(song.id, featuredIds)}
-              >
-                <MusicArtwork
-                  src={song.artworkUrl}
-                  alt={song.title}
-                  iconSize={16}
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 6,
-                    flexShrink: 0,
-                    marginRight: 12,
-                    objectFit: 'cover',
-                  }}
-                />
-                <div className="flex-1 text-left" style={{ minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontSize: 16,
-                      fontWeight: 500,
-                      color: '#fff',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {song.title}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 13,
-                      color: 'rgba(235, 235, 245, 0.6)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {song.artist}
-                  </div>
-                </div>
-              </motion.button>
+              />
             ))}
-          </div>
-        </Section>
+          </RowGroup>
+        </MusicSection>
       )}
-    </div>
+    </MusicPage>
   );
 }
 
 /* ── Shared sub-components ── */
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div style={{ marginBottom: 24 }}>
-      <div className="flex items-center justify-between" style={{ paddingInline: 20, marginBottom: 12 }}>
-        <h2 style={{ fontSize: 22, fontWeight: 700, color: '#fff', margin: 0 }}>
-          {title}
-        </h2>
-        <button style={{ fontSize: 15, color: MUSIC_RED }}>查看全部</button>
-      </div>
-      {children}
-    </div>
-  );
-}
-
 function HorizontalScroll({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className="flex gap-3 overflow-x-auto"
-      style={{
-        paddingInline: 20,
-        scrollSnapType: 'x mandatory',
-        WebkitOverflowScrolling: 'touch',
-        scrollbarWidth: 'none',
-      }}
-    >
-      {children}
-    </div>
+    <HorizontalShelf>{children}</HorizontalShelf>
   );
 }
 
-function SongCard({
-  title,
-  subtitle,
-  artworkUrl,
-  onClick,
-}: {
-  title: string;
-  subtitle: string;
-  artworkUrl: string;
-  onClick: () => void;
-}) {
+function FeaturedHero({ song, onOpen }: { song: Song; onOpen: () => void }) {
   return (
     <motion.button
-      whileTap={{ scale: 0.96 }}
-      className="shrink-0 text-left"
-      style={{ width: 170, scrollSnapAlign: 'start' }}
-      onClick={onClick}
+      whileTap={{ scale: 0.975 }}
+      className="w-full text-left"
+      onClick={onOpen}
+      style={{
+        ...glassStyle,
+        display: 'block',
+        margin: '0 20px 30px',
+        width: 'calc(100% - 40px)',
+        borderRadius: 22,
+        overflow: 'hidden',
+        position: 'relative',
+        aspectRatio: '1.58',
+      }}
     >
       <MusicArtwork
-        src={artworkUrl}
-        alt={title}
-        iconSize={36}
+        src={song.artworkUrl}
+        alt={song.title}
+        iconSize={52}
         style={{
-          width: 170,
-          height: 170,
-          borderRadius: 8,
+          width: '100%',
+          height: '100%',
           objectFit: 'cover',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
         }}
       />
       <div
         style={{
-          fontSize: 14,
-          fontWeight: 600,
-          color: '#fff',
-          marginTop: 6,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
+          position: 'absolute',
+          inset: 0,
+          background:
+            'linear-gradient(180deg, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0.18) 42%, rgba(0,0,0,0.74) 100%)',
         }}
-      >
-        {title}
-      </div>
+      />
       <div
+        className="absolute left-4 right-4 top-4 flex items-center justify-between"
         style={{
+          color: 'rgba(255,255,255,0.78)',
           fontSize: 12,
-          color: 'rgba(235, 235, 245, 0.6)',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
+          fontWeight: 700,
         }}
       >
-        {subtitle}
+        <span className="flex items-center gap-1">
+          <Sparkles size={14} color={MUSIC_ACCENT} />
+          精选推荐
+        </span>
+        <span style={{ color: MUSIC_TERTIARY }}>HiPhone Music</span>
+      </div>
+      <div className="absolute bottom-0 left-0 right-0" style={{ padding: '54px 18px 18px' }}>
+        <div
+          style={{
+            color: MUSIC_LABEL,
+            fontSize: 28,
+            fontWeight: 800,
+            lineHeight: 1.05,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {song.title}
+        </div>
+        <div
+          className="flex items-center justify-between"
+          style={{ color: MUSIC_SECONDARY, fontSize: 15, marginTop: 7 }}
+        >
+          <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {song.artist}
+          </span>
+          <span
+            className="flex items-center justify-center"
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: 'rgba(255,255,255,0.16)',
+              border: '0.5px solid rgba(255,255,255,0.16)',
+              marginLeft: 12,
+              flexShrink: 0,
+            }}
+          >
+            <Play size={17} fill={MUSIC_LABEL} color={MUSIC_LABEL} />
+          </span>
+        </div>
       </div>
     </motion.button>
   );

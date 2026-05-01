@@ -214,5 +214,5 @@ export const useAIConfigStore = create<AIConfigState>()(
 );
 
 /** Helper: get the adapter for the current provider */
-export { PROVIDER_ADAPTERS, getAdapter, streamChat } from '@/platform/ai/providers';
+export { PROVIDER_ADAPTERS, getAdapter, streamChat, pickGenerationParams } from '@/platform/ai/providers';
 export type { ModelInfo, GenerationParams } from '@/platform/ai/providers';

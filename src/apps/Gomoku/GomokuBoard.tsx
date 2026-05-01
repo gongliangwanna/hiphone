@@ -1,6 +1,11 @@
 import React, { useRef, useCallback, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { BOARD_SIZE, useGomokuStore, type Stone } from './gomokuStore';
+import {
+  BOARD_SIZE,
+  useGomokuStore,
+  type PlayerStone,
+  type Stone,
+} from './gomokuStore';
 
 const CELL_SIZE = 22; // px per cell
 const STONE_R = 9.8;    // stone radius in px
@@ -85,19 +90,26 @@ function StoneView({
   );
 }
 
-export function GomokuBoard() {
+export function GomokuBoard({
+  disabled = false,
+  onPlaceStone,
+  previewStone,
+}: {
+  disabled?: boolean;
+  onPlaceStone?: (row: number, col: number) => void;
+  previewStone?: PlayerStone;
+}) {
   const board = useGomokuStore((s) => s.board);
   const moves = useGomokuStore((s) => s.moves);
   const result = useGomokuStore((s) => s.result);
   const placeStone = useGomokuStore((s) => s.placeStone);
   const currentPlayer = useGomokuStore((s) => s.currentPlayer);
-  const mode = useGomokuStore((s) => s.mode);
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoverCell, setHoverCell] = useState<{row: number, col: number} | null>(null);
 
   const lastMove = moves.length > 0 ? moves[moves.length - 1] : null;
   const winSet = new Set(result?.line.map(([r, c]) => `${r},${c}`) ?? []);
-  const isAITurn = mode === 'pve' && currentPlayer === 'white' && !result;
+  const isLocked = disabled || Boolean(result);
 
   const getCellFromEvent = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     if (!svgRef.current) return null;
@@ -128,20 +140,24 @@ export function GomokuBoard() {
 
   const handleClick = useCallback(
     (e: React.MouseEvent<SVGSVGElement> | React.TouchEvent<SVGSVGElement>) => {
-      if (isAITurn || result) return;
+      if (isLocked) return;
       const cell = getCellFromEvent(e);
       if (cell) {
         // Haptic feedback
         if (navigator.vibrate) navigator.vibrate(10);
-        placeStone(cell.row, cell.col);
+        if (onPlaceStone) {
+          onPlaceStone(cell.row, cell.col);
+        } else {
+          placeStone(cell.row, cell.col);
+        }
         setHoverCell(null);
       }
     },
-    [placeStone, getCellFromEvent, isAITurn, result],
+    [placeStone, getCellFromEvent, isLocked, onPlaceStone],
   );
 
   const handlePointerMove = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    if (isAITurn || result) {
+    if (isLocked) {
       setHoverCell(null);
       return;
     }
@@ -151,7 +167,7 @@ export function GomokuBoard() {
     } else {
       setHoverCell(null);
     }
-  }, [getCellFromEvent, board, isAITurn, result]);
+  }, [getCellFromEvent, board, isLocked]);
 
   const handlePointerLeave = useCallback(() => {
     setHoverCell(null);
@@ -295,12 +311,12 @@ export function GomokuBoard() {
           {winLineElement}
 
           {/* Hover indicator */}
-          {hoverCell && !isAITurn && !result && (
+          {hoverCell && !isLocked && (
             <circle
               cx={PADDING + hoverCell.col * CELL_SIZE}
               cy={PADDING + hoverCell.row * CELL_SIZE}
               r={STONE_R}
-              fill={currentPlayer === 'black' ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.4)'}
+              fill={(previewStone ?? currentPlayer) === 'black' ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.4)'}
               style={{ transition: 'all 0.1s ease-out' }}
             />
           )}

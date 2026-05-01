@@ -1,7 +1,6 @@
 import { useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { usePhotosStore } from './photosStore';
-import { getPhotoById } from './photosData';
 
 export function PhotoViewer() {
   const viewingPhotoId = usePhotosStore((s) => s.viewingPhotoId);
@@ -27,7 +26,8 @@ function PhotoViewerContent({
   photoId: number;
   onClose: () => void;
 }) {
-  const photo = getPhotoById(photoId);
+  const photo = usePhotosStore((s) => s.photos.find((p) => p.id === photoId));
+  const deletePhoto = usePhotosStore((s) => s.deletePhoto);
   const dragYRef = useRef(0);
 
   const handleDragEnd = useCallback(
@@ -39,6 +39,11 @@ function PhotoViewerContent({
     },
     [onClose],
   );
+
+  const handleDelete = useCallback(() => {
+    deletePhoto(photoId);
+    onClose();
+  }, [deletePhoto, onClose, photoId]);
 
   if (!photo) return null;
 
@@ -119,7 +124,7 @@ function PhotoViewerContent({
       >
         <ActionButton icon={<ShareIcon />} label="分享" onClick={() => {}} />
         <ActionButton icon={<HeartIcon />} label="收藏" onClick={() => {}} />
-        <ActionButton icon={<DeleteIcon />} label="删除" onClick={() => {}} />
+        <ActionButton icon={<DeleteIcon />} label="删除" onClick={handleDelete} />
       </div>
     </motion.div>
   );

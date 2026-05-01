@@ -45,7 +45,7 @@ describe('registerHeartbeatAi', () => {
     expect(HEARTBEAT_APP_ID).toBe('heartbeat');
   });
 
-  it('registers 15 tools (14 built-in + done)', () => {
+  it('registers 16 tools (15 built-in + done)', () => {
     registerHeartbeatAi();
     const tools = getTools(HEARTBEAT_APP_ID);
     expect(tools.map((t) => t.type).sort()).toEqual([
@@ -60,6 +60,7 @@ describe('registerHeartbeatAi', () => {
       'view_characters',
       'view_moments',
       'view_notes',
+      'view_own_signature_history',
       'view_unread_interactions',
       'view_unread_messages',
       'view_user_signature',
@@ -72,6 +73,25 @@ describe('registerHeartbeatAi', () => {
     const sendMsg = getTools(HEARTBEAT_APP_ID).find((t) => t.type === 'send_message')!;
     expect(sendMsg.description).toContain('用户');
     expect(sendMsg.description).not.toContain('小星星');
+  });
+
+  it('create_note description discourages duplicate or uncertain notes', () => {
+    registerHeartbeatAi();
+    const tool = getTools(HEARTBEAT_APP_ID).find((t) => t.type === 'create_note')!;
+    expect(tool.description).toContain('不要写重复的备忘录');
+    expect(tool.description).toContain('不知道写什么就不要写');
+    expect(tool.description).toContain('不知道之前写过什么就先用 view_notes 看再写');
+  });
+
+  it('update_signature description requires checking own recent signatures first', () => {
+    registerHeartbeatAi();
+    const viewTool = getTools(HEARTBEAT_APP_ID).find((t) => t.type === 'view_own_signature_history')!;
+    expect(viewTool.param).toBe('{n: number}');
+    expect(viewTool.description).toContain('推荐 n=5');
+
+    const updateTool = getTools(HEARTBEAT_APP_ID).find((t) => t.type === 'update_signature')!;
+    expect(updateTool.description).toContain('必须先用 view_own_signature_history');
+    expect(updateTool.description).toContain('避免写重复签名');
   });
 
   it('chat_with_character.dynamicContext lists other characters + registers aliases', () => {
@@ -184,6 +204,7 @@ describe('registerHeartbeatAi', () => {
     expect(text).toContain('自主行为');
     expect(text).toContain('小星星');
     expect(text).toContain('[行为约束]');
+    expect(text).toContain('view_own_signature_history');
     expect(text).toContain('done');
   });
 
@@ -191,6 +212,6 @@ describe('registerHeartbeatAi', () => {
     registerHeartbeatAi();
     registerHeartbeatAi();
     registerHeartbeatAi();
-    expect(getTools(HEARTBEAT_APP_ID)).toHaveLength(15);
+    expect(getTools(HEARTBEAT_APP_ID)).toHaveLength(16);
   });
 });

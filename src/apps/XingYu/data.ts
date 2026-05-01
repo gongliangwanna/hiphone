@@ -1,7 +1,5 @@
 /* ── 可爱信 Mock Data ── */
 
-import { allPhotos as photosAppPhotos } from '../Photos/photosData';
-
 export interface Idol {
   id: string;
   name: string;
@@ -320,14 +318,6 @@ export const STICKER_MAX_BYTES = 200 * 1024;
 /** 单个表情包最多表情数 */
 export const STICKER_PACK_MAX_COUNT = 30;
 
-
-/* ── Chat Gallery Images ──
- * 聊天内"相册"直接复用 Photos app 的照片数据（picsum.photos）,
- * 保证"手机相册"的照片和"星语聊天选图"看到的是同一套内容。
- * thumbnail 字段已经是 400x400 的缩略图 URL。 */
-export const MOCK_GALLERY_IMAGES: string[] = photosAppPhotos
-  .slice(0, 24)
-  .map((p) => p.thumbnail);
 
 /* ── Idol Auto-Reply Pool ── */
 export const IDOL_REPLY_POOL: Record<string, string[]> = {

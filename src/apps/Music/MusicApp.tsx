@@ -13,6 +13,7 @@ import { LibraryTab } from './tabs/LibraryTab';
 import { AlbumDetail } from './pages/AlbumDetail';
 import { useMusicDataStore } from './musicDataStore';
 import { FailedSongToast } from './FailedSongToast';
+import { MUSIC_BG } from './musicUi';
 
 const SLIDE_MS = 350;
 const SLIDE_EASE = [0.32, 0.72, 0, 1] as const;
@@ -55,14 +56,21 @@ export function MusicApp() {
   const isAtRoot = page === null;
 
   return (
-    <AppScreen backgroundColor="#000">
-      <div className="relative flex min-h-0 flex-1 flex-col" data-testid="music-app">
+    <AppScreen backgroundColor={MUSIC_BG}>
+      <div
+        className="relative flex min-h-0 flex-1 flex-col"
+        data-testid="music-app"
+        style={{
+          contain: 'layout paint',
+          isolation: 'isolate',
+        }}
+      >
         <AnimatePresence initial={false}>
           {isAtRoot ? (
             <motion.div
               key="tab-root"
               className="absolute inset-0 flex min-h-0 flex-col"
-              style={{ backgroundColor: '#000' }}
+              style={{ backgroundColor: MUSIC_BG }}
               initial={{ x: '-30%' }}
               animate={{ x: '0%' }}
               exit={{ x: '-30%' }}
@@ -79,9 +87,9 @@ export function MusicApp() {
               {/* Mini Player + TabBar */}
               <div className="absolute bottom-0 left-0 right-0 z-10 flex flex-col justify-end">
                 {currentSongId && (
-                  <div style={{ paddingBottom: 8 }}>
-                    <MiniPlayer />
-                  </div>
+                    <div style={{ paddingBottom: 10 }}>
+                      <MiniPlayer />
+                    </div>
                 )}
                 <MusicTabBar activeTab={activeTab} onTabChange={setTab} />
               </div>
@@ -90,7 +98,7 @@ export function MusicApp() {
             <motion.div
               key={`page-${page}`}
               className="absolute inset-0 flex min-h-0 flex-col"
-              style={{ backgroundColor: '#000', willChange: 'transform' }}
+              style={{ backgroundColor: MUSIC_BG, willChange: 'transform' }}
               initial={{ x: `${direction * 100}%` }}
               animate={{ x: '0%' }}
               exit={{ x: `${direction * -30}%` }}

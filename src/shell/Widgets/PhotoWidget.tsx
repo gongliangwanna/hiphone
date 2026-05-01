@@ -10,7 +10,7 @@ import {
 import { animate, motion, useMotionValue } from 'motion/react';
 import { WidgetShell } from './WidgetShell';
 import type { WidgetSize } from '@/platform/stores/springboardLayoutStore';
-import { allPhotos, type Photo } from '@/apps/Photos/photosData';
+import type { Photo } from '@/apps/Photos/photosData';
 import { usePhotosStore } from '@/apps/Photos/photosStore';
 import { useSpringboardLayoutStore } from '@/platform/stores/springboardLayoutStore';
 import {
@@ -78,7 +78,11 @@ interface PhotoWidgetProps {
  * page is offscreen (`useIsPageActive`).
  */
 export function PhotoWidget({ size, variant, previewWidth }: PhotoWidgetProps) {
-  const photos = useMemo(() => pickPhotoPool(size), [size]);
+  const libraryPhotos = usePhotosStore((s) => s.photos);
+  const photos = useMemo(
+    () => pickPhotoPool(size, libraryPhotos),
+    [libraryPhotos, size],
+  );
   const isActive = useIsPageActive();
   const isEditMode = useSpringboardLayoutStore((s) => s.isEditMode);
   const openApp = useAppRuntimeStore((s) => s.openApp);
@@ -96,6 +100,13 @@ export function PhotoWidget({ size, variant, previewWidth }: PhotoWidgetProps) {
   const dragY = useMotionValue(0);
   const [currentIndex, setCurrentIndex] = useState(0);
   const currentIndexRef = useRef(0);
+
+  useEffect(() => {
+    if (currentIndexRef.current < photos.length) return;
+    currentIndexRef.current = 0;
+    setCurrentIndex(0);
+    dragY.set(0);
+  }, [dragY, photos.length]);
 
   // Gesture state. We use refs so the handlers don't re-create on every
   // render and so React state updates don't race the next pointer event.
@@ -511,15 +522,15 @@ const PhotoFrame = memo(function PhotoFrame({
  * Pick a small, stable pool of photos for the widget. The pool rotates by
  * day so the widget refreshes daily without thrashing on every render.
  */
-function pickPhotoPool(size: WidgetSize): Photo[] {
-  if (allPhotos.length === 0) return [];
+function pickPhotoPool(size: WidgetSize, photos: Photo[]): Photo[] {
+  if (photos.length === 0) return [];
   const capacity = size === '2x2' ? 6 : size === '4x2' ? 8 : 10;
-  const poolSize = Math.min(capacity, allPhotos.length);
+  const poolSize = Math.min(capacity, photos.length);
   const day = Math.floor(Date.now() / (1000 * 60 * 60 * 24));
-  const offset = day % allPhotos.length;
+  const offset = day % photos.length;
   const pool: Photo[] = [];
   for (let i = 0; i < poolSize; i++) {
-    pool.push(allPhotos[(offset + i) % allPhotos.length]!);
+    pool.push(photos[(offset + i) % photos.length]!);
   }
   return pool;
 }

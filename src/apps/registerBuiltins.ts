@@ -12,6 +12,7 @@ import { SafariApp } from './Safari/SafariApp';
 import { PhotosApp } from './Photos/PhotosApp';
 import { XingYuApp } from './XingYu/XingYuApp';
 import { GomokuApp } from './Gomoku/GomokuApp';
+import { PresenceApp } from './Presence/PresenceApp';
 import { AppStoreApp } from './AppStore/AppStoreApp';
 import { AIAppBuilderApp } from './AIAppBuilder/AIAppBuilderApp';
 
@@ -50,5 +51,6 @@ export function registerBuiltins(): void {
   appRegistry.register({ id: 'safari-dock', name: 'Safari', type: 'builtin', component: SafariApp, perspectiveAware: false, globalData: false });
   appRegistry.register({ id: 'photos', name: '照片', type: 'builtin', component: PhotosApp, perspectiveAware: false, globalData: false });
   appRegistry.register({ id: 'gomoku', name: '五子棋', type: 'builtin', component: GomokuApp, perspectiveAware: false, globalData: false });
+  appRegistry.register({ id: 'presence', name: '在场', type: 'builtin', component: PresenceApp, perspectiveAware: false, globalData: false });
   appRegistry.register({ id: 'ai-app-builder', name: 'AI 工坊', type: 'builtin', component: AIAppBuilderApp, perspectiveAware: false, globalData: false });
 }

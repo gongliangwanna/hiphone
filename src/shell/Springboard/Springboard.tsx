@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { dock, type AppInfo, getAppsWithUserInstalled } from './apps.data';
 import { useInstalledUserAppsStore } from '@/platform/stores/installedUserAppsStore';
@@ -104,13 +104,15 @@ export function Springboard({ sizeTier, viewportWidth }: SpringboardProps) {
     viewportWidth,
   });
 
-  // When extra page is created, navigate to it
-  const prevTotalPagesRef = useRef(totalPages);
+  // When a drag-created extra page first appears, navigate to that scratch
+  // page. Later real page-count changes from committing the drop must not
+  // auto-advance to a new trailing empty page.
+  const prevExtraPageRef = useRef(extraPage);
   useEffect(() => {
-    if (totalPages > prevTotalPagesRef.current && extraPage) {
+    if (extraPage && !prevExtraPageRef.current) {
       goToPage(totalPages - 1);
     }
-    prevTotalPagesRef.current = totalPages;
+    prevExtraPageRef.current = extraPage;
   }, [totalPages, extraPage, goToPage]);
 
   // Publish the active page to the layout store so the widget drawer
@@ -133,6 +135,12 @@ export function Springboard({ sizeTier, viewportWidth }: SpringboardProps) {
     gestureAreaRef,
     onRequestExtraPage: () => setExtraPage(true),
   });
+
+  useLayoutEffect(() => {
+    if (extraPage && !iconDrag.dragPos && !iconDrag.widgetDrag && !iconDrag.isSettling) {
+      setExtraPage(false);
+    }
+  }, [extraPage, iconDrag.dragPos, iconDrag.widgetDrag, iconDrag.isSettling]);
 
   // Compose a single drag-preview snapshot that every IconGrid reads from.
   // Having the source + target in one object lets each page decide whether

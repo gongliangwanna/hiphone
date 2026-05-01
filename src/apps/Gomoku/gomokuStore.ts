@@ -1,39 +1,88 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { idbStorage } from '@/platform/storage/idbStorage';
+import { uid } from '@/platform/utils/uid';
 
 export const BOARD_SIZE = 15;
 export type Stone = 'black' | 'white' | null;
+export type PlayerStone = Exclude<Stone, null>;
 export type GameMode = 'pvp' | 'pve';
-export type GameResult = { winner: 'black' | 'white'; line: [number, number][] } | null;
+export type GameResult = { winner: PlayerStone; line: [number, number][] } | null;
+export type GomokuAiTurnKind = 'game' | 'chat';
+export type GomokuAiStatus =
+  | 'idle'
+  | 'thinking'
+  | 'retrying'
+  | 'failed'
+  | 'fallback';
 
-interface Move {
+export interface Move {
   row: number;
   col: number;
-  stone: 'black' | 'white';
+  stone: PlayerStone;
+}
+
+export interface GomokuScores {
+  user: number;
+  ai: number;
+}
+
+export interface GomokuMessage {
+  id: string;
+  role: 'user' | 'ai' | 'system';
+  text: string;
+  timestamp: number;
+}
+
+interface StartNewGameInput {
+  characterId: string;
+  userStone: PlayerStone;
 }
 
 interface GomokuState {
   board: Stone[][];
-  currentPlayer: 'black' | 'white';
+  currentPlayer: PlayerStone;
   moves: Move[];
   result: GameResult;
   mode: GameMode;
-  scores: { black: number; white: number };
+  scores: GomokuScores;
+  characterId: string;
+  userStone: PlayerStone;
+  aiStone: PlayerStone;
+  aiRequestKind: GomokuAiTurnKind;
+  messages: GomokuMessage[];
+  aiStatus: GomokuAiStatus;
+  lastError: string | null;
+  gameId: string;
+  ignoredChatCount: number;
+  aiSilenced: boolean;
 
   placeStone: (row: number, col: number) => boolean;
   undo: () => void;
   reset: () => void;
   setMode: (mode: GameMode) => void;
+  setCharacterId: (characterId: string) => void;
+  setUserStone: (stone: PlayerStone) => void;
+  setAiRequestKind: (kind: GomokuAiTurnKind) => void;
+  setAiStatus: (status: GomokuAiStatus, lastError?: string | null) => void;
+  noteAiChatResult: (responded: boolean) => void;
+  setAiSilenced: (silenced: boolean) => void;
+  addMessage: (message: Omit<GomokuMessage, 'id' | 'timestamp'>) => GomokuMessage;
+  clearMessages: () => void;
+  startNewGame: (input: StartNewGameInput) => void;
 }
 
-function createEmptyBoard(): Stone[][] {
+export function createEmptyBoard(): Stone[][] {
   return Array.from({ length: BOARD_SIZE }, () =>
     Array<Stone>(BOARD_SIZE).fill(null),
   );
 }
 
-function checkWin(
+export function getOppositeStone(stone: PlayerStone): PlayerStone {
+  return stone === 'black' ? 'white' : 'black';
+}
+
+export function checkWin(
   board: Stone[][],
   row: number,
   col: number,
@@ -74,20 +123,70 @@ function checkWin(
   return null;
 }
 
+function createGameId(): string {
+  return `gomoku-${Date.now()}-${uid()}`;
+}
+
+function normalizeScores(value: unknown): GomokuScores {
+  if (value && typeof value === 'object') {
+    const scoreLike = value as {
+      user?: unknown;
+      ai?: unknown;
+      black?: unknown;
+      white?: unknown;
+    };
+    return {
+      user:
+        typeof scoreLike.user === 'number'
+          ? scoreLike.user
+          : typeof scoreLike.black === 'number'
+            ? scoreLike.black
+            : 0,
+      ai:
+        typeof scoreLike.ai === 'number'
+          ? scoreLike.ai
+          : typeof scoreLike.white === 'number'
+            ? scoreLike.white
+            : 0,
+    };
+  }
+  return { user: 0, ai: 0 };
+}
+
 export const useGomokuStore = create<GomokuState>()(
   persist(
     (set, get) => ({
       board: createEmptyBoard(),
-      currentPlayer: 'black' as const,
-      moves: [] as Move[],
-      result: null as GameResult,
-      mode: 'pve' as GameMode,
-      scores: { black: 0, white: 0 },
+      currentPlayer: 'black',
+      moves: [],
+      result: null,
+      mode: 'pve',
+      scores: { user: 0, ai: 0 },
+      characterId: '',
+      userStone: 'black',
+      aiStone: 'white',
+      aiRequestKind: 'game',
+      messages: [],
+      aiStatus: 'idle',
+      lastError: null,
+      gameId: createGameId(),
+      ignoredChatCount: 0,
+      aiSilenced: false,
 
       placeStone: (row: number, col: number) => {
-        const { board, currentPlayer, moves, result } = get();
+        const {
+          board,
+          currentPlayer,
+          moves,
+          result,
+          scores,
+          userStone,
+          aiStone,
+        } = get();
         if (result) return false;
-        if (board[row]![col] !== null) return false;
+        if (row < 0 || row >= BOARD_SIZE || col < 0 || col >= BOARD_SIZE)
+          return false;
+        if (board[row]?.[col] !== null) return false;
 
         const newBoard = board.map((r) => [...r]);
         newBoard[row]![col] = currentPlayer;
@@ -97,14 +196,23 @@ export const useGomokuStore = create<GomokuState>()(
           ? { winner: currentPlayer, line: winLine }
           : null;
 
-        const { scores } = get();
+        const safeScores = normalizeScores(scores);
         const newScores = newResult
-          ? { ...scores, [currentPlayer]: scores[currentPlayer] + 1 }
-          : scores;
+          ? {
+              user:
+                newResult.winner === userStone
+                  ? safeScores.user + 1
+                  : safeScores.user,
+              ai:
+                newResult.winner === aiStone
+                  ? safeScores.ai + 1
+                  : safeScores.ai,
+            }
+          : safeScores;
 
         set({
           board: newBoard,
-          currentPlayer: currentPlayer === 'black' ? 'white' : 'black',
+          currentPlayer: getOppositeStone(currentPlayer),
           moves: [...moves, { row, col, stone: currentPlayer }],
           result: newResult,
           scores: newScores,
@@ -127,10 +235,8 @@ export const useGomokuStore = create<GomokuState>()(
         }
 
         const lastMove = newMoves[newMoves.length - 1];
-        const nextPlayer: 'black' | 'white' = lastMove
-          ? lastMove.stone === 'black'
-            ? 'white'
-            : 'black'
+        const nextPlayer: PlayerStone = lastMove
+          ? getOppositeStone(lastMove.stone)
           : 'black';
 
         set({
@@ -138,21 +244,104 @@ export const useGomokuStore = create<GomokuState>()(
           moves: newMoves,
           currentPlayer: nextPlayer,
           result: null,
+          aiStatus: 'idle',
+          lastError: null,
         });
       },
 
       reset: () => {
         set({
           board: createEmptyBoard(),
-          currentPlayer: 'black' as const,
+          currentPlayer: 'black',
           moves: [],
           result: null,
+          aiStatus: 'idle',
+          lastError: null,
+          gameId: createGameId(),
+          ignoredChatCount: 0,
+          aiSilenced: false,
         });
       },
 
       setMode: (mode: GameMode) => {
         set({ mode });
         get().reset();
+      },
+
+      setCharacterId: (characterId: string) => {
+        set({ characterId });
+      },
+
+      setUserStone: (stone: PlayerStone) => {
+        set({
+          userStone: stone,
+          aiStone: getOppositeStone(stone),
+        });
+        get().reset();
+      },
+
+      setAiRequestKind: (kind: GomokuAiTurnKind) => {
+        set({ aiRequestKind: kind });
+      },
+
+      setAiStatus: (aiStatus, lastError = null) => {
+        set({ aiStatus, lastError });
+      },
+
+      noteAiChatResult: (responded) => {
+        if (responded) {
+          set({ ignoredChatCount: 0 });
+          return;
+        }
+        const next = get().ignoredChatCount + 1;
+        set({
+          ignoredChatCount: next,
+          aiSilenced: next >= 2,
+        });
+      },
+
+      setAiSilenced: (aiSilenced) => {
+        set({
+          aiSilenced,
+          ignoredChatCount: aiSilenced ? get().ignoredChatCount : 0,
+        });
+      },
+
+      addMessage: (message) => {
+        const entry: GomokuMessage = {
+          ...message,
+          id: uid(),
+          timestamp: Date.now(),
+        };
+        set((state) => ({
+          messages: [...state.messages, entry],
+        }));
+        return entry;
+      },
+
+      clearMessages: () => {
+        set({ messages: [] });
+      },
+
+      startNewGame: ({ characterId, userStone }) => {
+        set({
+          board: createEmptyBoard(),
+          currentPlayer: 'black',
+          moves: [],
+          result: null,
+          mode: 'pve',
+          characterId,
+          userStone,
+          aiStone: getOppositeStone(userStone),
+          aiRequestKind: 'game',
+          messages: [],
+          aiStatus: 'idle',
+          lastError: null,
+          ignoredChatCount: 0,
+          aiSilenced: false,
+          gameId: createGameId(),
+          scores: normalizeScores(get().scores),
+        });
       },
     }),
     {
@@ -165,7 +354,37 @@ export const useGomokuStore = create<GomokuState>()(
         result: state.result,
         mode: state.mode,
         scores: state.scores,
+        characterId: state.characterId,
+        userStone: state.userStone,
+        aiStone: state.aiStone,
+        messages: state.messages,
+        aiStatus: state.aiStatus,
+        lastError: state.lastError,
+        gameId: state.gameId,
+        ignoredChatCount: state.ignoredChatCount,
+        aiSilenced: state.aiSilenced,
       }),
+      merge: (persisted, current) => {
+        const incoming =
+          persisted && typeof persisted === 'object'
+            ? (persisted as Partial<GomokuState>)
+            : {};
+        return {
+          ...current,
+          ...incoming,
+          scores: normalizeScores(incoming.scores),
+          userStone: incoming.userStone ?? current.userStone,
+          aiStone:
+            incoming.aiStone ??
+            getOppositeStone(incoming.userStone ?? current.userStone),
+          messages: incoming.messages ?? current.messages,
+          aiStatus: 'idle',
+          lastError: null,
+          gameId: incoming.gameId ?? current.gameId,
+          ignoredChatCount: incoming.ignoredChatCount ?? 0,
+          aiSilenced: incoming.aiSilenced ?? false,
+        };
+      },
     },
   ),
 );

@@ -2,12 +2,19 @@ import { useEffect, useMemo } from 'react';
 import type { Song } from '../data';
 import { useMusicNavStore } from '../musicStore';
 import { useMusicDataStore } from '../musicDataStore';
-import { formatDuration } from '../data';
 import { MusicArtwork } from '../MusicArtwork';
-import { NavBar } from '@/system';
-import { Play, Shuffle, Loader2 } from 'lucide-react';
-
-const MUSIC_RED = '#FC3C44';
+import { Play, Shuffle, Loader2, ChevronLeft } from 'lucide-react';
+import {
+  MUSIC_ACCENT,
+  MUSIC_LABEL,
+  MUSIC_SECONDARY,
+  MUSIC_SEPARATOR,
+  MUSIC_TERTIARY,
+  RowGroup,
+  SongRow,
+  createMusicBackdrop,
+  glassStyle,
+} from '../musicUi';
 
 export function AlbumDetail() {
   const albumId = useMusicNavStore((s) => s.activeAlbumId);
@@ -45,31 +52,59 @@ export function AlbumDetail() {
   const isLoading = albumId != null && !songIds;
 
   return (
-    <div className="flex h-full flex-col" style={{ backgroundColor: '#000' }}>
-      <NavBar title="" showBack onBack={popPage} backLabel="返回" />
+    <div className="relative flex h-full flex-col overflow-hidden" style={{ background: createMusicBackdrop(displayTitle) }}>
+      <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(8,8,11,0.42), rgba(5,5,7,0.96))' }} />
 
-      <div className="min-h-0 flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
-        {/* Album header */}
-        <div className="flex flex-col items-center" style={{ padding: '12px 24px 20px' }}>
+      <div
+        className="relative flex items-center justify-center"
+        style={{
+          height: 48,
+          borderBottom: `0.5px solid ${MUSIC_SEPARATOR}`,
+          backgroundColor: 'rgba(10,10,14,0.42)',
+          backdropFilter: 'blur(14px) saturate(150%)',
+          WebkitBackdropFilter: 'blur(14px) saturate(150%)',
+        }}
+      >
+        <button
+          className="absolute left-2 flex items-center"
+          style={{
+            minWidth: 44,
+            minHeight: 44,
+            color: MUSIC_ACCENT,
+            fontSize: 17,
+            fontWeight: 600,
+          }}
+          onClick={popPage}
+        >
+          <ChevronLeft size={26} strokeWidth={2.5} />
+          返回
+        </button>
+        <div style={{ color: MUSIC_LABEL, fontSize: 17, fontWeight: 700 }}>专辑</div>
+      </div>
+
+      <div className="relative min-h-0 flex-1 overflow-y-auto scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <div className="flex flex-col items-center" style={{ padding: '24px 24px 24px' }}>
           <MusicArtwork
             src={displayArtwork}
             alt={displayTitle}
             iconSize={40}
             style={{
-              width: 200,
-              height: 200,
-              borderRadius: 8,
+              width: 216,
+              height: 216,
+              borderRadius: 18,
               objectFit: 'cover',
-              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
-              marginBottom: 16,
+              boxShadow: '0 28px 58px rgba(0, 0, 0, 0.52), 0 0 0 0.5px rgba(255,255,255,0.1)',
+              marginBottom: 18,
             }}
           />
           <div
             style={{
-              fontSize: 22,
-              fontWeight: 700,
-              color: '#fff',
+              fontSize: 25,
+              fontWeight: 820,
+              color: MUSIC_LABEL,
               textAlign: 'center',
+              lineHeight: 1.12,
+              maxWidth: '100%',
             }}
           >
             {displayTitle}
@@ -77,9 +112,10 @@ export function AlbumDetail() {
           <div
             style={{
               fontSize: 17,
-              color: MUSIC_RED,
+              color: MUSIC_ACCENT,
+              fontWeight: 650,
               textAlign: 'center',
-              marginTop: 2,
+              marginTop: 5,
             }}
           >
             {displayArtist}
@@ -88,7 +124,7 @@ export function AlbumDetail() {
             <div
               style={{
                 fontSize: 13,
-                color: 'rgba(235, 235, 245, 0.3)',
+                color: MUSIC_TERTIARY,
                 marginTop: 4,
               }}
             >
@@ -97,16 +133,15 @@ export function AlbumDetail() {
           )}
         </div>
 
-        {/* Play / Shuffle buttons */}
         <div className="flex gap-3" style={{ paddingInline: 20, marginBottom: 16 }}>
           <button
             className="flex flex-1 items-center justify-center gap-2"
             style={{
+              ...glassStyle,
               height: 48,
-              borderRadius: 10,
-              backgroundColor: 'rgba(255, 255, 255, 0.1)',
-              color: MUSIC_RED,
-              fontWeight: 600,
+              borderRadius: 14,
+              color: MUSIC_ACCENT,
+              fontWeight: 750,
               fontSize: 16,
             }}
             onClick={() => {
@@ -119,11 +154,11 @@ export function AlbumDetail() {
           <button
             className="flex flex-1 items-center justify-center gap-2"
             style={{
+              ...glassStyle,
               height: 48,
-              borderRadius: 10,
-              backgroundColor: 'rgba(255, 255, 255, 0.1)',
-              color: MUSIC_RED,
-              fontWeight: 600,
+              borderRadius: 14,
+              color: MUSIC_ACCENT,
+              fontWeight: 750,
               fontSize: 16,
             }}
             onClick={() => {
@@ -136,63 +171,23 @@ export function AlbumDetail() {
           </button>
         </div>
 
-        {/* Song list */}
-        <div style={{ paddingInline: 20, paddingBottom: 120 }}>
+        <div style={{ paddingBottom: 158 }}>
           {isLoading ? (
             <div className="flex items-center justify-center" style={{ paddingTop: 30 }}>
-              <Loader2 size={24} className="animate-spin" color="rgba(235,235,245,0.6)" />
+              <Loader2 size={24} className="animate-spin" color={MUSIC_SECONDARY} />
             </div>
           ) : (
-            albumSongs.map((song, i) => (
-              <button
-                key={song.id}
-                className="flex w-full items-center"
-                style={{
-                  height: 52,
-                  borderBottom:
-                    i < albumSongs.length - 1
-                      ? '0.5px solid rgba(84, 84, 88, 0.65)'
-                      : 'none',
-                }}
-                onClick={() => playSong(song.id, displaySongIds)}
-              >
-                <span
-                  style={{
-                    width: 24,
-                    fontSize: 15,
-                    color: 'rgba(235, 235, 245, 0.4)',
-                    textAlign: 'right',
-                    flexShrink: 0,
-                    marginRight: 12,
-                  }}
-                >
-                  {i + 1}
-                </span>
-                <div className="flex-1 text-left" style={{ minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontSize: 16,
-                      color: '#fff',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {song.title}
-                  </div>
-                </div>
-                <span
-                  style={{
-                    fontSize: 13,
-                    color: 'rgba(235, 235, 245, 0.4)',
-                    marginLeft: 8,
-                    flexShrink: 0,
-                  }}
-                >
-                  {formatDuration(song.duration)}
-                </span>
-              </button>
-            ))
+            <RowGroup>
+              {albumSongs.map((song) => (
+                <SongRow
+                  key={song.id}
+                  song={song}
+                  queue={displaySongIds}
+                  showDuration
+                  onClick={() => playSong(song.id, displaySongIds)}
+                />
+              ))}
+            </RowGroup>
           )}
         </div>
       </div>

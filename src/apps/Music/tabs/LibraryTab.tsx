@@ -1,11 +1,19 @@
 import { useMemo } from 'react';
 import type { Song } from '../data';
 import { useMusicDataStore } from '../musicDataStore';
-import { MusicArtwork } from '../MusicArtwork';
 import { ListMusic, User, Disc3, Music, Download, ChevronRight } from 'lucide-react';
 import { motion } from 'motion/react';
-
-const MUSIC_RED = '#FC3C44';
+import {
+  AlbumCard,
+  MUSIC_ACCENT,
+  MUSIC_LABEL,
+  MUSIC_PANEL,
+  MUSIC_SECONDARY,
+  MUSIC_SEPARATOR,
+  MusicHeader,
+  MusicPage,
+  MusicSection,
+} from '../musicUi';
 
 interface CategoryItem {
   id: string;
@@ -14,11 +22,11 @@ interface CategoryItem {
 }
 
 const libraryCategories: CategoryItem[] = [
-  { id: 'playlists', label: '播放列表', icon: <ListMusic size={22} color={MUSIC_RED} /> },
-  { id: 'artists', label: '艺人', icon: <User size={22} color={MUSIC_RED} /> },
-  { id: 'albums', label: '专辑', icon: <Disc3 size={22} color={MUSIC_RED} /> },
-  { id: 'songs', label: '歌曲', icon: <Music size={22} color={MUSIC_RED} /> },
-  { id: 'downloaded', label: '已下载', icon: <Download size={22} color={MUSIC_RED} /> },
+  { id: 'playlists', label: '播放列表', icon: <ListMusic size={22} color={MUSIC_ACCENT} /> },
+  { id: 'artists', label: '艺人', icon: <User size={22} color={MUSIC_ACCENT} /> },
+  { id: 'albums', label: '专辑', icon: <Disc3 size={22} color={MUSIC_ACCENT} /> },
+  { id: 'songs', label: '歌曲', icon: <Music size={22} color={MUSIC_ACCENT} /> },
+  { id: 'downloaded', label: '已下载', icon: <Download size={22} color={MUSIC_ACCENT} /> },
 ];
 
 export function LibraryTab() {
@@ -41,36 +49,49 @@ export function LibraryTab() {
   }, [featuredIds, songMap]);
 
   return (
-    <div className="h-full overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
-      {/* Large Title */}
-      <div style={{ padding: '8px 20px 12px' }}>
-        <h1 style={{ fontSize: 34, fontWeight: 700, color: '#fff', margin: 0 }}>
-          资料库
-        </h1>
-      </div>
+    <MusicPage testId="music-library-surface" seed="library">
+      <MusicHeader title="资料库" eyebrow="本机音乐" />
 
-      {/* Category List */}
-      <div style={{ paddingInline: 20 }}>
-        <div style={{ backgroundColor: 'rgba(28, 28, 30, 0.5)', borderRadius: 10, overflow: 'hidden' }}>
+      <div style={{ paddingInline: 20, marginBottom: 28 }}>
+        <div
+          style={{
+            backgroundColor: MUSIC_PANEL,
+            borderRadius: 18,
+            overflow: 'hidden',
+            border: `0.5px solid ${MUSIC_SEPARATOR}`,
+          }}
+        >
           {libraryCategories.map((cat, i) => (
             <motion.button
               whileTap={{ backgroundColor: 'rgba(255,255,255,0.1)' }}
               key={cat.id}
               className="flex w-full items-center"
               style={{
-                height: 48,
+                height: 55,
                 padding: '0 16px',
               }}
               onClick={() => {}}
             >
-              <span style={{ marginRight: 12 }}>{cat.icon}</span>
+              <span
+                className="flex items-center justify-center"
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 10,
+                  backgroundColor: 'rgba(255, 59, 73, 0.13)',
+                  marginRight: 12,
+                }}
+              >
+                {cat.icon}
+              </span>
               <span
                 style={{
-                  fontSize: 20,
-                  color: '#fff',
+                  fontSize: 18,
+                  fontWeight: 650,
+                  color: MUSIC_LABEL,
                   flex: 1,
                   textAlign: 'left',
-                  borderBottom: i < libraryCategories.length - 1 ? '0.5px solid rgba(84, 84, 88, 0.65)' : 'none',
+                  borderBottom: i < libraryCategories.length - 1 ? `0.5px solid ${MUSIC_SEPARATOR}` : 'none',
                   height: '100%',
                   display: 'flex',
                   alignItems: 'center',
@@ -78,77 +99,38 @@ export function LibraryTab() {
               >
                 {cat.label}
               </span>
-              <ChevronRight size={14} color="rgba(235,235,245,0.3)" />
+              <ChevronRight size={16} color="rgba(235,235,245,0.34)" />
             </motion.button>
           ))}
         </div>
       </div>
 
-      {/* Recently Added */}
-      <div style={{ padding: '24px 20px 8px' }}>
-        <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
-          <h2 style={{ fontSize: 22, fontWeight: 700, color: '#fff', margin: 0 }}>
-            最近添加
-          </h2>
-          <button style={{ fontSize: 15, color: MUSIC_RED }}>查看全部</button>
-        </div>
-
-        {/* 2-column grid */}
+      <MusicSection title="最近添加">
         <div
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(2, 1fr)',
             gap: 16,
-            paddingBottom: 120,
+            paddingInline: 20,
           }}
         >
           {albumSongs.map((song) => (
-            <motion.button
-              whileTap={{ scale: 0.96 }}
+            <AlbumCard
               key={song.albumId}
-              className="text-left"
+              title={song.album}
+              subtitle={song.artist}
+              artworkUrl={song.artworkUrl}
+              size={0}
               onClick={() => playSong(song.id, featuredIds)}
-            >
-              <MusicArtwork
-                src={song.artworkUrl}
-                alt={song.title}
-                iconSize={36}
-                style={{
-                  width: '100%',
-                  aspectRatio: '1',
-                  borderRadius: 8,
-                  objectFit: 'cover',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                }}
-              />
-              <div
-                style={{
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: '#fff',
-                  marginTop: 6,
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {song.album}
-              </div>
-              <div
-                style={{
-                  fontSize: 12,
-                  color: 'rgba(235, 235, 245, 0.6)',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {song.artist}
-              </div>
-            </motion.button>
+            />
           ))}
         </div>
-      </div>
-    </div>
+        {albumSongs.length === 0 && (
+          <div style={{ paddingInline: 20, color: MUSIC_SECONDARY, fontSize: 15 }}>
+            暂无音乐
+          </div>
+        )}
+      </MusicSection>
+    </MusicPage>
   );
 }

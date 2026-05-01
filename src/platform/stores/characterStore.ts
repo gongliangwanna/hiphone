@@ -2,18 +2,31 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { idbStorage } from '@/platform/storage/idbStorage';
 
-/** Character Card — CCV2 compatible subset */
+/**
+ * Character Card — CCV2 compatible storage shape.
+ *
+ * Product editing treats `description` as the single role-definition source.
+ * The SillyTavern/CCV2 split fields remain only for legacy import/export and
+ * are folded into `description` during normalization.
+ */
 export interface CharacterCard {
   id: string;
   name: string;
   avatar: string;
   description: string;
+  /** @deprecated Folded into description; do not read for runtime behavior. */
   personality: string;
+  /** @deprecated Folded into description; do not read for runtime behavior. */
   scenario: string;
+  /** @deprecated AI does not initiate chats; kept for legacy import/export. */
   firstMessage: string;
+  /** @deprecated Example dialogues are no longer part of role prompting. */
   messageExamples: string;
+  /** @deprecated AI does not initiate chats; kept for legacy import/export. */
   alternateGreetings: string[];
+  /** @deprecated Folded into description; do not read for runtime behavior. */
   systemPrompt: string;
+  /** @deprecated Folded into description; do not read for runtime behavior. */
   postHistoryInstructions: string;
   creatorNotes: string;
   tags: string[];
@@ -51,6 +64,58 @@ function nextDefaultAvatar() {
   return av;
 }
 
+function text(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+function textList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+}
+
+function labeled(label: string, value: string): string {
+  const trimmed = value.trim();
+  return trimmed ? `${label}：${trimmed}` : '';
+}
+
+function normalizeCharacterCard(raw: Partial<CharacterCard>): CharacterCard {
+  const card: CharacterCard = {
+    id: text(raw.id) || genId(),
+    name: text(raw.name) || 'Unnamed',
+    avatar: text(raw.avatar),
+    description: text(raw.description),
+    personality: text(raw.personality),
+    scenario: text(raw.scenario),
+    firstMessage: text(raw.firstMessage),
+    messageExamples: text(raw.messageExamples),
+    alternateGreetings: textList(raw.alternateGreetings),
+    systemPrompt: text(raw.systemPrompt),
+    postHistoryInstructions: text(raw.postHistoryInstructions),
+    creatorNotes: text(raw.creatorNotes),
+    tags: textList(raw.tags),
+    version: text(raw.version) || '1.0',
+  };
+
+  const description = [
+    card.description.trim(),
+    labeled('性格', card.personality),
+    labeled('情境', card.scenario),
+    labeled('补充设定', card.systemPrompt),
+    labeled('回复约束', card.postHistoryInstructions),
+  ].filter(Boolean).join('\n\n');
+
+  return {
+    ...card,
+    description,
+    personality: '',
+    scenario: '',
+    firstMessage: '',
+    messageExamples: '',
+    alternateGreetings: [],
+    systemPrompt: '',
+    postHistoryInstructions: '',
+  };
+}
+
 export const useCharacterStore = create<CharacterState>()(
   persist(
     (set, get) => ({
@@ -62,7 +127,7 @@ export const useCharacterStore = create<CharacterState>()(
         set((s) => ({
           characters: [
             ...s.characters,
-            { ...c, id, avatar: c.avatar || nextDefaultAvatar() } as CharacterCard,
+            normalizeCharacterCard({ ...c, id, avatar: c.avatar || nextDefaultAvatar() }),
           ],
         }));
       },
@@ -97,7 +162,7 @@ export const useCharacterStore = create<CharacterState>()(
           const raw = JSON.parse(json);
           const data = raw.data ?? raw;
           const id = genId();
-          const card: CharacterCard = {
+          const card = normalizeCharacterCard({
             id,
             name: data.name ?? 'Unnamed',
             avatar: data.avatar || nextDefaultAvatar(),
@@ -112,7 +177,7 @@ export const useCharacterStore = create<CharacterState>()(
             creatorNotes: data.creator_notes ?? '',
             tags: data.tags ?? [],
             version: data.character_version ?? '1.0',
-          };
+          });
           set((s) => ({ characters: [...s.characters, card] }));
           return id;
         } catch {
@@ -154,6 +219,20 @@ export const useCharacterStore = create<CharacterState>()(
         characters: s.characters,
         activeCharacterId: s.activeCharacterId,
       }),
+      merge: (persisted, current) => {
+        const state = persisted as Partial<Pick<CharacterState, 'characters' | 'activeCharacterId'>> | null;
+        const characters = Array.isArray(state?.characters)
+          ? state.characters.map((c) => normalizeCharacterCard(c))
+          : [];
+        const activeId = text(state?.activeCharacterId);
+        return {
+          ...current,
+          characters,
+          activeCharacterId: characters.some((c) => c.id === activeId)
+            ? activeId
+            : characters[0]?.id || '',
+        };
+      },
     },
   ),
 );

@@ -37,6 +37,8 @@ interface XingYuNavState {
   closeMomentComposer: () => void;
   openSettings: () => void;
   closeSettings: () => void;
+  openAppearance: () => void;
+  closeAppearance: () => void;
   openStickerManager: (from?: string) => void;
   closeStickerManager: () => void;
   openChatSettings: () => void;
@@ -77,6 +79,8 @@ export const useXYNav = create<XingYuNavState>()((set, get) => ({
   closeMomentComposer: () => set({ momentComposerOpen: false }),
   openSettings: () => set({ page: 'settings' }),
   closeSettings: () => set({ page: null }),
+  openAppearance: () => set({ page: 'appearance' }),
+  closeAppearance: () => set({ page: null }),
   openStickerManager: (from) => set({ page: 'sticker-manager', stickerManagerOrigin: from ?? null }),
   closeStickerManager: () => {
     const origin = get().stickerManagerOrigin;

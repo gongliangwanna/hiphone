@@ -124,7 +124,7 @@ function CharacterRow({
   isLast?: boolean;
 }) {
   const avatar = character.avatar?.trim() || FALLBACK_AVATAR;
-  const subtitle = character.description?.slice(0, 40) || character.personality || '';
+  const subtitle = character.description?.slice(0, 40) || '';
 
   return (
     <motion.div

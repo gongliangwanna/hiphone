@@ -8,8 +8,10 @@ import {
   type WidgetInstance,
 } from '../springboardLayoutStore';
 import { apps } from '@/shell/Springboard/apps.data';
+import { useInstalledUserAppsStore } from '../installedUserAppsStore';
 
 function resetStore() {
+  useInstalledUserAppsStore.setState({ apps: [] });
   useSpringboardLayoutStore.setState({
     appOrder: null,
     pageWidgets: null,
@@ -25,8 +27,8 @@ describe('springboardLayoutStore', () => {
   describe('resolveOrderedPages', () => {
     it('returns default pages when appOrder is null', () => {
       const pages = resolveOrderedPages(null);
-      expect(pages.length).toBe(Math.ceil(apps.length / 20));
-      expect(pages[0]!.length).toBe(20);
+      expect(pages.length).toBe(Math.max(1, Math.ceil(apps.length / 20)));
+      expect(pages[0]!.length).toBe(Math.min(20, apps.length));
       expect(pages[0]![0]!.id).toBe(apps[0]!.id);
     });
 
@@ -47,8 +49,8 @@ describe('springboardLayoutStore', () => {
     it('appends new apps not found in any page', () => {
       const order = [[apps[0]!.id]];
       const pages = resolveOrderedPages(order);
-      // First page has app[0] + 19 unseen apps filling the page
-      expect(pages[0]!.length).toBe(20);
+      // First page has app[0] + unseen apps up to the page capacity.
+      expect(pages[0]!.length).toBe(Math.min(20, apps.length));
       // Remaining unseen apps are on subsequent pages
       const totalApps = pages.reduce((sum, p) => sum + p.length, 0);
       expect(totalApps).toBe(apps.length);
@@ -92,11 +94,16 @@ describe('springboardLayoutStore', () => {
     });
 
     it('moves an app to a different existing page', () => {
+      const initialOrder = [
+        apps.slice(0, 5).map((a) => a.id),
+        apps.slice(5).map((a) => a.id),
+      ];
+      useSpringboardLayoutStore.setState({ appOrder: initialOrder });
       const store = useSpringboardLayoutStore.getState();
       store.moveApp(0, 0, 1, 0);
       const order = useSpringboardLayoutStore.getState().appOrder!;
-      // First app from page 0 is now first on page 1
-      expect(order[0]!.length).toBe(19);
+      // First app from page 0 is now first on page 1.
+      expect(order[0]).toEqual(initialOrder[0]!.slice(1));
       expect(order[1]![0]).toBe(apps[0]!.id);
     });
 
@@ -108,23 +115,54 @@ describe('springboardLayoutStore', () => {
       expect(order[5]![0]).toBe(apps[0]!.id);
     });
 
+    it('moves an installed user app onto newly created pages', () => {
+      useInstalledUserAppsStore.setState({
+        apps: [
+          {
+            id: 'user-drag-app',
+            name: '用户 App',
+            iconDataUrl: null,
+            page: 1,
+            perspectiveAware: false,
+            version: '1.0.0',
+            installedAt: 1_700_000_000_000,
+            sizeBytes: 0,
+          },
+        ],
+      });
+
+      const store = useSpringboardLayoutStore.getState();
+      const userAppIndex = apps.length;
+
+      store.moveApp(0, userAppIndex, 1, 0);
+      let order = useSpringboardLayoutStore.getState().appOrder!;
+      expect(order[1]![0]).toBe('user-drag-app');
+
+      store.moveApp(1, 0, 2, 0);
+      order = useSpringboardLayoutStore.getState().appOrder!;
+      expect(order[2]![0]).toBe('user-drag-app');
+    });
+
     it('does nothing for invalid source', () => {
       const store = useSpringboardLayoutStore.getState();
       store.moveApp(99, 0, 0, 0);
       expect(useSpringboardLayoutStore.getState().appOrder).toBeNull();
     });
 
-    it('cascades overflow when a page exceeds 20 apps', () => {
+    it('cascades overflow when a page exceeds widget-adjusted capacity', () => {
       const store = useSpringboardLayoutStore.getState();
-      // Page 0 has 20 apps. Move from page 1 index 0 → page 0 index 10.
-      // This should push the last app of page 0 to the start of page 1.
-      store.moveApp(1, 0, 0, 10);
+      useSpringboardLayoutStore.setState({
+        appOrder: [apps.slice(0, 10).map((a) => a.id)],
+        pageWidgets: [
+          [{ id: 'big', kind: 'photo', size: '4x4', col: 0, row: 0, styleIndex: 0 }],
+        ],
+      });
+      // Page 0 has a 4x4 widget, so only 4 app cells remain. Any move on
+      // that page should cascade the overflow forward.
+      store.moveApp(0, 0, 0, 2);
       const order = useSpringboardLayoutStore.getState().appOrder!;
-      expect(order[0]!.length).toBe(20);
-      // The moved app is at position 10 on page 0
-      expect(order[0]![10]).toBe(apps[20]!.id);
-      // The app that was bumped off page 0 is now at the start of page 1
-      expect(order[1]![0]).toBe(apps[19]!.id);
+      expect(order[0]!.length).toBeLessThanOrEqual(4);
+      expect(order.flat()).toHaveLength(apps.length);
     });
   });
 
@@ -251,8 +289,8 @@ describe('springboardLayoutStore', () => {
         [{ id: 'w1', kind: 'clock', size: '2x2', col: 0, row: 0, styleIndex: 0 }],
       ];
       const pages = resolveOrderedPages(null, widgets);
-      // 16 app slots left on page 0 after the 2x2 widget
-      expect(pages[0]!.length).toBe(16);
+      // A 2x2 widget leaves at most 16 app slots on page 0.
+      expect(pages[0]!.length).toBe(Math.min(16, apps.length));
     });
   });
 

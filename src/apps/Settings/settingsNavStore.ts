@@ -12,7 +12,6 @@ export type SettingsPageId =
   | 'persona'
   | 'aiSettings'
   | 'aiTools'
-  | 'aiBuilderModel'
   | 'characters'
   | 'characterEdit'
   | 'systemPromptEdit'

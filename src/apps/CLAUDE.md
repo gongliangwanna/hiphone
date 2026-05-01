@@ -20,7 +20,7 @@
 | `maps` | `Maps/MapsApp` | 地图，Leaflet + OSM + Nominatim 搜索 + 底部面板 |
 | `music` | `Music/MusicApp` | 音乐，4 Tab(现在就听/浏览/广播/资料库) + MiniPlayer + NowPlaying全屏播放器 + 专辑详情 |
 | `camera` | `Camera/CameraApp` | 相机，全屏取景器 + 实时摄像头(带降级) + 6模式选择器 + 闪光灯/翻转 + 快门动画 |
-| `photos` | `Photos/PhotosApp` | 照片，4 Tab(图库/为你推荐/相簿/搜索) + 月份分组网格 + 全屏PhotoViewer + picsum.photos模拟数据 |
+| `photos` | `Photos/PhotosApp` | 照片，默认空图库 + 手动上传图片 + 4 Tab(图库/为你推荐/相簿/搜索) + 月份分组网格 + 全屏PhotoViewer |
 | `safari` | `Safari/SafariApp` | 浏览器，底部URL栏 + iframe WebView + 标签页网格 + 起始页收藏夹 + DuckDuckGo搜索 |
 
 | `xingyu` | `XingYu/XingYuApp` | 星语，原创可爱虚拟偶像聊天App，4 Tab(消息/通讯录/动态/我的) + 粉彩渐变主题 + bouncy动画 + 偶像卡片 + 朋友圈 + localStorage持久化 |

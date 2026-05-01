@@ -38,6 +38,40 @@ function systemBlock(input: PromptInput): string {
 }
 
 describe('promptAssembly chunks 7 / 8 (M4.2.5 unified)', () => {
+  it('builds the role definition from description only and ignores legacy split fields', () => {
+    const assembled = assemblePrompt({
+      ...BASE,
+      character: {
+        ...BASE.character,
+        description: '这是唯一应该进入角色设定的描述。',
+        personality: '旧性格不应进入 prompt',
+        scenario: '旧情境不应进入 prompt',
+        systemPrompt: '旧角色级系统提示词不应进入 prompt',
+        postHistoryInstructions: '旧角色后置指令不应进入 prompt',
+        messageExamples: '<START>\n旧示例对话不应进入 prompt',
+      },
+      aiConfig: {
+        ...BASE.aiConfig,
+        systemPrompt: '全局系统提示词仍然生效',
+      },
+    });
+    const out = assembled.messages
+      .map((m) => (typeof m.content === 'string' ? m.content : ''))
+      .join('\n');
+
+    expect(out).toContain('You are 小星.');
+    expect(out).toContain('这是唯一应该进入角色设定的描述。');
+    expect(out).toContain('全局系统提示词仍然生效');
+    expect(out).not.toContain('旧性格');
+    expect(out).not.toContain('Personality:');
+    expect(out).not.toContain('旧情境');
+    expect(out).not.toContain('Scenario:');
+    expect(out).not.toContain('旧角色级系统提示词');
+    expect(out).not.toContain('旧角色后置指令');
+    expect(out).not.toContain('旧示例对话');
+    expect(out).not.toContain('[对话示例]');
+  });
+
   it('chunk 7 emits unified template when tools registered', () => {
     const tools: ToolDefinition[] = [
       { type: 'text', description: 't', param: 'string' },

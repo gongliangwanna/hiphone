@@ -1,7 +1,11 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { idbStorage } from '@/platform/storage/idbStorage';
-import { apps as defaultApps, type AppInfo } from '@/shell/Springboard/apps.data';
+import {
+  apps as defaultApps,
+  getAppsWithUserInstalled,
+  type AppInfo,
+} from '@/shell/Springboard/apps.data';
 import {
   GRID_COLS,
   GRID_ROWS,
@@ -181,8 +185,9 @@ const appInfoMap = new Map<string, AppInfo>(
 export function resolveOrderedPages(
   appOrder: string[][] | null,
   pageWidgets: WidgetInstance[][] | null = null,
+  extraApps: AppInfo[] = [],
 ): AppInfo[][] {
-  const slotPages = resolveSlotPages(appOrder, pageWidgets);
+  const slotPages = resolveSlotPages(appOrder, pageWidgets, extraApps);
   return slotPages.map((slots) =>
     slots.filter((s): s is AppSlot => s.type === 'app').map((s) => s.app),
   );
@@ -394,7 +399,11 @@ export const useSpringboardLayoutStore = create<SpringboardLayoutState>()(
         // appends unseen apps — we must operate on the resolved version. Pass
         // pageWidgets so per-page app capacity respects widget cell budgets.
         const { appOrder, pageWidgets } = get();
-        const resolved = resolveOrderedPages(appOrder, pageWidgets);
+        const resolved = resolveOrderedPages(
+          appOrder,
+          pageWidgets,
+          getAppsWithUserInstalled(),
+        );
         const current = resolved.map((page) => page.map((a) => a.id));
 
         const sourcePage = current[fromPage];
@@ -457,9 +466,11 @@ export const useSpringboardLayoutStore = create<SpringboardLayoutState>()(
         // Re-cascade apps so anything pushed off by the new widget flows to
         // subsequent pages. Uses the currently-displayed app order as input
         // so that default-layout fallbacks are respected.
-        const resolvedApps = resolveOrderedPages(appOrder, current).map((p) =>
-          p.map((a) => a.id),
-        );
+        const resolvedApps = resolveOrderedPages(
+          appOrder,
+          current,
+          getAppsWithUserInstalled(),
+        ).map((p) => p.map((a) => a.id));
         while (resolvedApps.length < current.length) resolvedApps.push([]);
         const cascaded = cascadeOverflow(current, resolvedApps);
 
@@ -538,9 +549,11 @@ export const useSpringboardLayoutStore = create<SpringboardLayoutState>()(
         // Widgets changed → apps may need to cascade. Re-resolve through
         // resolveOrderedPages so the displayed app ids stay stable, then let
         // the packer redistribute any overflow.
-        const resolvedApps = resolveOrderedPages(state.appOrder, next).map((p) =>
-          p.map((a) => a.id),
-        );
+        const resolvedApps = resolveOrderedPages(
+          state.appOrder,
+          next,
+          getAppsWithUserInstalled(),
+        ).map((p) => p.map((a) => a.id));
         while (resolvedApps.length < next.length) resolvedApps.push([]);
         const cascaded = cascadeOverflow(next, resolvedApps);
         while (next.length < cascaded.length) next.push([]);

@@ -63,6 +63,24 @@ describe('chatComplete', () => {
     expect(body.top_p).toBe(0.9);
   });
 
+  it('forwards reasoning_effort when set', async () => {
+    makeFetchOk('response');
+
+    await chatComplete(baseConfig, messages, { reasoningEffort: 'medium' });
+
+    const body = JSON.parse(mockFetch.mock.calls[0]![1].body);
+    expect(body.reasoning_effort).toBe('medium');
+  });
+
+  it('omits reasoning_effort when not provided', async () => {
+    makeFetchOk('response');
+
+    await chatComplete(baseConfig, messages, { temperature: 0.5 });
+
+    const body = JSON.parse(mockFetch.mock.calls[0]![1].body);
+    expect(body.reasoning_effort).toBeUndefined();
+  });
+
   it('throws on API error', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: false,

@@ -1,6 +1,11 @@
-import { albums } from '../photosData';
+import { useMemo } from 'react';
+import { getAlbums } from '../photosData';
+import { usePhotosStore } from '../photosStore';
 
 export function AlbumsTab() {
+  const photos = usePhotosStore((s) => s.photos);
+  const albums = useMemo(() => getAlbums(photos), [photos]);
+
   return (
     <div
       className="h-full overflow-y-auto"
@@ -85,7 +90,7 @@ function AlbumCard({
 }: {
   name: string;
   count: number;
-  coverUrl: string;
+  coverUrl: string | null;
 }) {
   return (
     <div data-testid={`album-${name}`}>
@@ -98,12 +103,21 @@ function AlbumCard({
           backgroundColor: 'var(--color-tertiarySystemFill)',
         }}
       >
-        <img
-          src={coverUrl}
-          alt={name}
-          className="h-full w-full object-cover"
-          loading="lazy"
-        />
+        {coverUrl ? (
+          <img
+            src={coverUrl}
+            alt={name}
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div
+            className="flex h-full w-full items-center justify-center"
+            style={{ color: 'var(--color-secondaryLabel)', fontSize: 13 }}
+          >
+            暂无照片
+          </div>
+        )}
       </div>
       <div
         style={{

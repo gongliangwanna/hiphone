@@ -109,6 +109,8 @@ export async function executeHeartbeatTool(
       return execViewUserSignature();
     case 'view_user_signature_history':
       return execViewUserSignatureHistory();
+    case 'view_own_signature_history':
+      return execViewOwnSignatureHistory(input, characterId);
     case 'update_signature':
       return execUpdateSignature(input, characterId);
     case 'view_notes':
@@ -354,6 +356,49 @@ function execViewUserSignatureHistory(): ToolResult {
   });
 
   lines.unshift(`${userSettings.nickname}的历史签名（最近${lines.length}条）：`);
+  return { observation: lines.join('\n'), done: false };
+}
+
+const DEFAULT_SIGNATURE_HISTORY_LIMIT = 5;
+
+function formatSignatureTime(timestamp: number): string {
+  const d = new Date(timestamp);
+  const mo = d.getMonth() + 1;
+  const dd = d.getDate();
+  const hh = d.getHours().toString().padStart(2, '0');
+  const mm = d.getMinutes().toString().padStart(2, '0');
+  return `${mo}/${dd} ${hh}:${mm}`;
+}
+
+function normalizeSignatureHistoryLimit(value: unknown): number {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_SIGNATURE_HISTORY_LIMIT;
+  return Math.floor(n);
+}
+
+function execViewOwnSignatureHistory(
+  input: Record<string, unknown>,
+  characterId: string,
+): ToolResult {
+  const limit = normalizeSignatureHistoryLimit(input.n);
+  const signature = useXYData.getState().characterSignatures[characterId];
+  const current = signature?.current?.trim() ?? '';
+  const history = signature?.history ?? [];
+  const recent = history.slice(0, limit);
+
+  const lines: string[] = [];
+  lines.push(current ? `当前签名：「${current}」` : '当前还没有设置个性签名。');
+
+  if (history.length === 0) {
+    lines.push('还没有历史签名记录。更新签名前仍要避免重复当前签名。');
+    return { observation: lines.join('\n'), done: false };
+  }
+
+  lines.push(`最近${recent.length}条历史签名（共${history.length}条，建议查看5条）：`);
+  for (const record of recent) {
+    lines.push(`- 「${record.text}」 (${formatSignatureTime(record.timestamp)})`);
+  }
+
   return { observation: lines.join('\n'), done: false };
 }
 

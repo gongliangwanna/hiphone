@@ -7,7 +7,7 @@ import { useSpringboardLayoutStore } from '@/platform/stores/springboardLayoutSt
 import { useAppRuntimeStore } from '@/platform/stores/appRuntimeStore';
 import { MusicWidget } from '../MusicWidget';
 import { PhotoWidget } from '../PhotoWidget';
-import { allPhotos } from '@/apps/Photos/photosData';
+import type { Photo } from '@/apps/Photos/photosData';
 import { usePhotosStore } from '@/apps/Photos/photosStore';
 
 // useWeatherData hits the network on mount. Short-circuit it.
@@ -50,6 +50,20 @@ vi.mock('@/apps/Weather/useWeatherData', () => ({
 
 const SIZES: WidgetSize[] = ['2x2', '4x2', '4x4'];
 const KINDS: WidgetKind[] = ['clock', 'date', 'weather', 'music', 'photo'];
+
+function makeTestPhotos(count: number): Photo[] {
+  return Array.from({ length: count }, (_, i) => {
+    const id = i + 1;
+    return {
+      id,
+      thumbnail: `https://example.test/id/${id}/400/400`,
+      fullSize: `https://example.test/id/${id}/1200/1200`,
+      date: new Date(2026, 3, 11 - i),
+      isFavorite: i % 3 === 0,
+      fileName: `photo-${id}.jpg`,
+    };
+  });
+}
 
 describe('widget registry', () => {
   it('registers every kind with a component', () => {
@@ -238,10 +252,18 @@ describe('MusicWidget interactivity', () => {
 // clearly exceeds it and deterministically flips to the next index.
 // ---------------------------------------------------------------------------
 describe('PhotoWidget interactivity', () => {
+  let seededPhotos: Photo[];
+
   beforeEach(() => {
     useSpringboardLayoutStore.setState({ isEditMode: false });
     useAppRuntimeStore.setState({ activeAppId: null, appOrigin: null });
-    usePhotosStore.getState().reset();
+    seededPhotos = makeTestPhotos(12);
+    usePhotosStore.setState({
+      photos: seededPhotos,
+      activeTab: 'library',
+      viewingPhotoId: null,
+      isDismissing: false,
+    });
     // Deterministic photo pool rotation — freeze "today" so pickPhotoPool
     // lands on the same first photo across runs.
     vi.useFakeTimers();
@@ -283,9 +305,15 @@ describe('PhotoWidget interactivity', () => {
     expect(
       container.querySelectorAll('[data-photo-frame]').length,
     ).toBeGreaterThanOrEqual(2);
-    // Pool should never exceed the real photo library.
+    // Pool should never exceed the current photo library.
     const frames = container.querySelectorAll('[data-photo-frame]').length;
-    expect(frames).toBeLessThanOrEqual(allPhotos.length);
+    expect(frames).toBeLessThanOrEqual(seededPhotos.length);
+  });
+
+  it('renders an empty placeholder when the library has no photos', () => {
+    usePhotosStore.setState({ photos: [] });
+    render(<PhotoWidget size="4x2" />);
+    expect(screen.getByText('无照片')).toBeInTheDocument();
   });
 
   it('a vertical up-swipe commits to the next photo', () => {
@@ -448,7 +476,7 @@ describe('PhotoWidget interactivity', () => {
     // viewingId should correspond to the 2nd frame, i.e. != the 1st.
     // We can't derive the id from the src directly, but we can assert
     // that calling openPhoto(firstFrameId) would have yielded a different
-    // viewingId — cheap proxy: viewingId must match allPhotos[N] at an
+    // viewingId — cheap proxy: viewingId must match the seeded pool at an
     // index that is NOT 0 relative to the pool's first entry.
     const poolFirstId = Number(
       firstImg?.src.match(/\/id\/(\d+)\//)?.[1] ?? -1,

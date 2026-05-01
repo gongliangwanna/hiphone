@@ -118,6 +118,33 @@ export interface GenerationParams {
 }
 
 /**
+ * Map an aiConfig-shaped object to a GenerationParams. Centralizes the
+ * `reasoningEffort: 'off' → undefined` rule so call sites don't each
+ * re-implement it (and forget to pass the field, which is exactly how
+ * the thinking-mode setting silently no-op'd before).
+ */
+export function pickGenerationParams(cfg: {
+  maxTokens?: number;
+  temperature?: number;
+  topP?: number;
+  frequencyPenalty?: number;
+  presencePenalty?: number;
+  reasoningEffort?: 'off' | 'low' | 'medium' | 'high';
+}): GenerationParams {
+  return {
+    maxTokens: cfg.maxTokens,
+    temperature: cfg.temperature,
+    topP: cfg.topP,
+    frequencyPenalty: cfg.frequencyPenalty,
+    presencePenalty: cfg.presencePenalty,
+    reasoningEffort:
+      cfg.reasoningEffort && cfg.reasoningEffort !== 'off'
+        ? cfg.reasoningEffort
+        : undefined,
+  };
+}
+
+/**
  * Send a chat completion request and stream tokens back via callback.
  * Works for any OpenAI-compatible provider.
  */
@@ -152,6 +179,7 @@ export async function streamChat(
   if (generationParams?.topP != null) body.top_p = generationParams.topP;
   if (generationParams?.frequencyPenalty != null) body.frequency_penalty = generationParams.frequencyPenalty;
   if (generationParams?.presencePenalty != null) body.presence_penalty = generationParams.presencePenalty;
+  if (generationParams?.reasoningEffort) body.reasoning_effort = generationParams.reasoningEffort;
 
   const res = await fetch(`${endpoint}/chat/completions`, {
     method: 'POST',

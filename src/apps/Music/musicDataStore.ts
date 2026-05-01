@@ -22,6 +22,7 @@ interface MusicDataState {
 
   // ── Content (fetched from API) ──
   featuredIds: string[];
+  featuredFetchedDate: string | null;
   searchResultIds: string[];
   searchQuery: string;
   isLoadingFeatured: boolean;
@@ -49,6 +50,30 @@ interface MusicDataState {
   loadLyrics: (songId: string) => Promise<void>;
 }
 
+function getLocalDateKey(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function daysSinceEpoch(dateKey: string): number {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  if (!year || !month || !day) return 0;
+  return Math.floor(Date.UTC(year, month - 1, day) / 86_400_000);
+}
+
+function orderSongsForDate(songs: Song[], dateKey: string): Song[] {
+  if (songs.length <= 1) return songs;
+  const offset = daysSinceEpoch(dateKey) % songs.length;
+  return [...songs.slice(offset), ...songs.slice(0, offset)];
+}
+
+function sameIds(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((id, index) => id === b[index]);
+}
+
 export const useMusicDataStore = create<MusicDataState>()(
   persist(
     (set, get) => ({
@@ -68,6 +93,7 @@ export const useMusicDataStore = create<MusicDataState>()(
 
       // Content
       featuredIds: [],
+      featuredFetchedDate: null,
       searchResultIds: [],
       searchQuery: '',
       isLoadingFeatured: false,
@@ -148,13 +174,17 @@ export const useMusicDataStore = create<MusicDataState>()(
         }),
 
       fetchFeatured: async () => {
-        const { featuredIds, isLoadingFeatured } = get();
-        if (featuredIds.length > 0 || isLoadingFeatured) return;
+        const today = getLocalDateKey();
+        const { featuredIds, featuredFetchedDate, isLoadingFeatured } = get();
+        if (isLoadingFeatured) return;
+        if (featuredIds.length > 0 && featuredFetchedDate === today) return;
+
+        const previousFeaturedIds = featuredIds;
 
         set({ isLoadingFeatured: true });
         try {
           // Load from NetEase playlists via Meting (client-side, has CORS)
-          const songs = await fetchFeaturedFromMeting(50);
+          const songs = orderSongsForDate(await fetchFeaturedFromMeting(50), today);
           if (songs.length === 0) return;
 
           const songMap: Record<string, Song> = { ...get().songMap };
@@ -167,7 +197,8 @@ export const useMusicDataStore = create<MusicDataState>()(
           set((s) => ({
             songMap: { ...s.songMap, ...songMap },
             featuredIds: ids,
-            queue: s.queue.length === 0 ? ids : s.queue,
+            featuredFetchedDate: today,
+            queue: s.queue.length === 0 || sameIds(s.queue, previousFeaturedIds) ? ids : s.queue,
           }));
         } finally {
           set({ isLoadingFeatured: false });
@@ -254,6 +285,7 @@ export const useMusicDataStore = create<MusicDataState>()(
         songMap: s.songMap,
         albumMap: s.albumMap,
         featuredIds: s.featuredIds,
+        featuredFetchedDate: s.featuredFetchedDate,
         albumSongIds: s.albumSongIds,
       }),
       migrate: () => ({}), // discard old data on version mismatch

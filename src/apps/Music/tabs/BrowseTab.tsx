@@ -2,10 +2,23 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { Song } from '../data';
 import { categories } from '../data';
 import { useMusicDataStore } from '../musicDataStore';
-import { MusicArtwork } from '../MusicArtwork';
 import { Search, X, Loader2 } from 'lucide-react';
-
-const MUSIC_RED = '#FC3C44';
+import {
+  AlbumCard,
+  HorizontalShelf,
+  MUSIC_ACCENT,
+  MUSIC_LABEL,
+  MUSIC_PANEL,
+  MUSIC_SECONDARY,
+  MUSIC_SEPARATOR,
+  MUSIC_TERTIARY,
+  MusicHeader,
+  MusicPage,
+  MusicSection,
+  RowGroup,
+  SongRow,
+  getMusicPalette,
+} from '../musicUi';
 
 export function BrowseTab() {
   const playSong = useMusicDataStore((s) => s.playSong);
@@ -72,26 +85,21 @@ export function BrowseTab() {
   }, [featuredIds, songMap]);
 
   return (
-    <div className="h-full overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
-      {/* Large Title */}
-      <div style={{ padding: '8px 20px 4px' }}>
-        <h1 style={{ fontSize: 34, fontWeight: 700, color: '#fff', margin: 0 }}>
-          浏览
-        </h1>
-      </div>
+    <MusicPage testId="music-browse-surface" seed={query || 'browse'}>
+      <MusicHeader title="浏览" eyebrow="探索音乐" />
 
-      {/* Search Bar */}
-      <div style={{ padding: '8px 20px 12px' }} className="flex items-center gap-2">
+      <div style={{ padding: '0 20px 18px' }} className="flex items-center gap-2">
         <div
           className="flex flex-1 items-center"
           style={{
-            height: 36,
-            borderRadius: 10,
-            backgroundColor: 'rgba(118, 118, 128, 0.24)',
-            paddingInline: 8,
+            height: 42,
+            borderRadius: 13,
+            backgroundColor: 'rgba(118, 118, 128, 0.20)',
+            border: `0.5px solid ${MUSIC_SEPARATOR}`,
+            paddingInline: 12,
           }}
         >
-          <Search size={16} color="rgba(235,235,245,0.6)" style={{ flexShrink: 0 }} />
+          <Search size={17} color={MUSIC_TERTIARY} style={{ flexShrink: 0 }} />
           <input
             ref={inputRef}
             type="text"
@@ -104,7 +112,7 @@ export function BrowseTab() {
               background: 'none',
               border: 'none',
               outline: 'none',
-              color: '#fff',
+              color: MUSIC_LABEL,
               fontSize: 16,
               padding: '0 8px',
             }}
@@ -118,153 +126,64 @@ export function BrowseTab() {
               className="flex items-center justify-center"
               style={{ width: 20, height: 20 }}
             >
-              <X size={16} color="rgba(235,235,245,0.6)" />
+              <X size={16} color={MUSIC_TERTIARY} />
             </button>
           )}
         </div>
         {isSearchMode && (
           <button
             onClick={cancelSearch}
-            style={{ fontSize: 16, color: MUSIC_RED, flexShrink: 0 }}
+            style={{ fontSize: 16, color: MUSIC_ACCENT, flexShrink: 0, minHeight: 42 }}
           >
             取消
           </button>
         )}
       </div>
 
-      {/* Search Results */}
       {isSearchMode && query ? (
-        <div style={{ paddingInline: 20, paddingBottom: 120 }}>
+        <div style={{ paddingBottom: 20 }}>
           {isSearching ? (
             <div className="flex items-center justify-center" style={{ paddingTop: 40 }}>
-              <Loader2 size={24} className="animate-spin" color="rgba(235,235,245,0.6)" />
+              <Loader2 size={24} className="animate-spin" color={MUSIC_SECONDARY} />
             </div>
           ) : searchResults.length === 0 ? (
-            <div className="flex items-center justify-center" style={{ paddingTop: 40, color: 'rgba(235,235,245,0.6)', fontSize: 15 }}>
+            <div className="flex items-center justify-center" style={{ paddingTop: 40, color: MUSIC_SECONDARY, fontSize: 15 }}>
               未找到结果
             </div>
           ) : (
-            searchResults.map((song, i) => (
-              <button
-                key={song.id}
-                className="flex w-full items-center"
-                style={{
-                  height: 60,
-                  borderBottom: i < searchResults.length - 1 ? '0.5px solid rgba(84, 84, 88, 0.65)' : 'none',
-                }}
-                onClick={() => playSong(song.id, searchResultIds)}
-              >
-                <MusicArtwork
-                  src={song.artworkUrl}
-                  alt={song.title}
-                  iconSize={18}
-                  style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: 6,
-                    flexShrink: 0,
-                    marginRight: 12,
-                    objectFit: 'cover',
-                  }}
+            <RowGroup>
+              {searchResults.map((song) => (
+                <SongRow
+                  key={song.id}
+                  song={song}
+                  queue={searchResultIds}
+                  onClick={() => playSong(song.id, searchResultIds)}
                 />
-                <div className="flex-1 text-left" style={{ minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontSize: 16,
-                      fontWeight: 500,
-                      color: '#fff',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {song.title}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: 13,
-                      color: 'rgba(235, 235, 245, 0.6)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {song.artist} — {song.album}
-                  </div>
-                </div>
-              </button>
-            ))
+              ))}
+            </RowGroup>
           )}
         </div>
       ) : (
         <>
-          {/* Hot Albums */}
           {hotAlbumSongs.length > 0 && (
-            <div style={{ marginBottom: 24 }}>
-              <h2 style={{ fontSize: 22, fontWeight: 700, color: '#fff', margin: 0, paddingInline: 20, marginBottom: 12 }}>
-                热门专辑
-              </h2>
-              <div
-                className="flex gap-3 overflow-x-auto"
-                style={{
-                  paddingInline: 20,
-                  scrollSnapType: 'x mandatory',
-                  scrollbarWidth: 'none',
-                }}
-              >
+            <MusicSection title="热门专辑">
+              <HorizontalShelf>
                 {hotAlbumSongs.map((song) => (
-                  <button
+                  <AlbumCard
                     key={song.albumId}
-                    className="shrink-0 text-left"
-                    style={{ width: 160, scrollSnapAlign: 'start' }}
+                    title={song.album}
+                    subtitle={song.artist}
+                    artworkUrl={song.artworkUrl}
+                    size={146}
                     onClick={() => playSong(song.id, featuredIds)}
-                  >
-                    <MusicArtwork
-                      src={song.artworkUrl}
-                      alt={song.title}
-                      iconSize={36}
-                      style={{
-                        width: 160,
-                        height: 160,
-                        borderRadius: 8,
-                        objectFit: 'cover',
-                      }}
-                    />
-                    <div
-                      style={{
-                        fontSize: 14,
-                        fontWeight: 600,
-                        color: '#fff',
-                        marginTop: 6,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {song.album}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: 12,
-                        color: 'rgba(235, 235, 245, 0.6)',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {song.artist}
-                    </div>
-                  </button>
+                  />
                 ))}
-              </div>
-            </div>
+              </HorizontalShelf>
+            </MusicSection>
           )}
 
-          {/* Categories Grid */}
-          <div style={{ paddingInline: 20, paddingBottom: 120 }}>
-            <h2 style={{ fontSize: 22, fontWeight: 700, color: '#fff', margin: 0, marginBottom: 12 }}>
-              按类别浏览
-            </h2>
+          <MusicSection title="按类别浏览" action={false}>
+            <div style={{ paddingInline: 20 }}>
             <div
               style={{
                 display: 'grid',
@@ -276,24 +195,49 @@ export function BrowseTab() {
                 <button
                   key={cat.id}
                   style={{
-                    height: 56,
-                    borderRadius: 8,
-                    background: `linear-gradient(135deg, ${cat.gradient[0]}, ${cat.gradient[1]})`,
+                    height: 72,
+                    borderRadius: 16,
+                    background: createCategoryBackground(cat.id, cat.gradient),
+                    border: `0.5px solid ${MUSIC_SEPARATOR}`,
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
+                    justifyContent: 'space-between',
+                    padding: '0 14px 0 16px',
+                    overflow: 'hidden',
                   }}
                   onClick={() => handleCategoryTap(cat.searchTerm)}
                 >
-                  <span style={{ fontSize: 16, fontWeight: 600, color: '#fff' }}>
+                  <span style={{ fontSize: 18, fontWeight: 750, color: MUSIC_LABEL }}>
                     {cat.name}
+                  </span>
+                  <span
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: 14,
+                      backgroundColor: 'rgba(255,255,255,0.13)',
+                    }}
+                    className="flex items-center justify-center"
+                  >
+                    <Search size={14} color="rgba(255,255,255,0.78)" />
                   </span>
                 </button>
               ))}
             </div>
-          </div>
+            </div>
+          </MusicSection>
         </>
       )}
-    </div>
+    </MusicPage>
   );
+}
+
+function createCategoryBackground(id: string, fallback: [string, string]) {
+  const [a, b] = getMusicPalette(id);
+  return [
+    `radial-gradient(circle at 12% 0%, ${a} 0, transparent 62%)`,
+    `radial-gradient(circle at 110% 104%, ${b} 0, transparent 60%)`,
+    `linear-gradient(135deg, ${fallback[0]}77, ${fallback[1]}55)`,
+    `linear-gradient(135deg, ${MUSIC_PANEL}, ${MUSIC_PANEL})`,
+  ].join(', ');
 }

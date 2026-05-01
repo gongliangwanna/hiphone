@@ -25,10 +25,15 @@ import { useMemoryState } from './memoryStateStore';
 export interface PromptCharacter {
   name: string;
   description: string;
+  /** @deprecated 旧角色卡兼容字段；角色设定只使用 description。 */
   personality: string;
+  /** @deprecated 旧角色卡兼容字段；角色设定只使用 description。 */
   scenario: string;
+  /** @deprecated 旧角色卡兼容字段；角色设定只使用 description。 */
   systemPrompt: string;
+  /** @deprecated 旧角色卡兼容字段；角色设定只使用 description。 */
   postHistoryInstructions: string;
+  /** @deprecated 旧角色卡兼容字段；角色设定只使用 description。 */
   messageExamples: string;
 }
 
@@ -327,48 +332,32 @@ function buildSystemBlock(
 ): string {
   const chunks: string[] = [];
 
-  // 1. Character-level system prompt override
-  if (character.systemPrompt?.trim()) {
-    chunks.push(character.systemPrompt.trim());
-  }
-
-  // 2. Global system prompt override
+  // 1. Global system prompt override
   if (aiConfig.systemPrompt?.trim()) {
     chunks.push(aiConfig.systemPrompt.trim());
   }
 
-  // 3. World book (already formatted by buildSystemPromptChunk)
+  // 2. World book (already formatted by buildSystemPromptChunk)
   if (worldBookChunk) {
     chunks.push(worldBookChunk);
   }
 
-  // 4. Baseline auto-generated from character fields
+  // 3. Baseline auto-generated from the single role description field.
   const baselineParts: string[] = [];
   baselineParts.push(`You are ${character.name}.`);
   if (character.description?.trim()) {
     baselineParts.push(character.description.trim());
   }
-  if (character.personality?.trim()) {
-    baselineParts.push(`Personality: ${character.personality.trim()}`);
-  }
-  if (character.scenario?.trim()) {
-    baselineParts.push(`Scenario: ${character.scenario.trim()}`);
-  }
   chunks.push(baselineParts.join('\n'));
 
-  // 5. Persona
+  // 4. Persona
   if (persona.name && persona.description?.trim()) {
     chunks.push(`[关于用户]\n${persona.name}: ${persona.description.trim()}`);
   } else if (persona.name && persona.name !== '用户') {
     chunks.push(`[关于用户]\n用户的名字是${persona.name}。`);
   }
 
-  // 6. Message examples (few-shot)
-  if (character.messageExamples?.trim()) {
-    chunks.push(`[对话示例]\n${character.messageExamples.trim()}`);
-  }
-
-  // 6.5 / 7 / 8 — Format / tools / app-task chunks.
+  // 5 / 6 / 7 — Format / tools / app-task chunks.
   //
   // Priority (first match wins):
   //   1. Legacy XingYu   → old 7 [回复格式] + [可用表情包]. Fires when availableStickers
@@ -514,7 +503,6 @@ function buildTailToolStateChunk(
 }
 
 function buildPostHistory(
-  character: PromptCharacter,
   aiConfig: PromptAIConfig,
   now: Date,
   deviceContext?: string,
@@ -523,9 +511,6 @@ function buildPostHistory(
 ): string {
   const parts: string[] = [];
 
-  if (character.postHistoryInstructions?.trim()) {
-    parts.push(character.postHistoryInstructions.trim());
-  }
   if (aiConfig.postHistoryInstructions?.trim()) {
     parts.push(aiConfig.postHistoryInstructions.trim());
   }
@@ -606,7 +591,7 @@ export function inspectPrompt(input: PromptInput): PromptInspection {
   };
   const tailContext = buildTailToolStateChunk(input.availableTools, toolBuildCtx);
   let postHistory = buildPostHistory(
-    character, aiConfig, now, deviceContext, input.sceneHint, tailContext,
+    aiConfig, now, deviceContext, input.sceneHint, tailContext,
   );
   postHistory = expandMacros(postHistory, character, persona, now);
 
@@ -710,7 +695,7 @@ export function assemblePrompt(input: PromptInput): PromptOutput {
   };
   const tailContext = buildTailToolStateChunk(input.availableTools, toolBuildCtx);
   let postHistory = buildPostHistory(
-    character, aiConfig, now, deviceContext, input.sceneHint, tailContext,
+    aiConfig, now, deviceContext, input.sceneHint, tailContext,
   );
   postHistory = expandMacros(postHistory, character, persona, now);
 

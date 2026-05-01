@@ -20,6 +20,7 @@ import { InteractionList } from './pages/InteractionList';
 import { ForwardDetail } from './pages/ForwardDetail';
 import { ContactSelect } from './pages/ContactSelect';
 import { Favorites } from './pages/Favorites';
+import { Appearance } from './pages/Appearance';
 
 const SLIDE_MS = 350;
 const SLIDE_EASE = [0.32, 0.72, 0, 1] as const;
@@ -89,6 +90,7 @@ export function XingYuApp() {
               {page === 'forward-detail' && <ForwardDetail />}
               {page === 'contact-select' && <ContactSelect />}
               {page === 'favorites' && <Favorites />}
+              {page === 'appearance' && <Appearance />}
             </motion.div>
           )}
         </AnimatePresence>

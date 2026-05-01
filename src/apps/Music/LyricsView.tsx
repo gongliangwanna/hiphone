@@ -99,20 +99,18 @@ function LyricsScroller({
           animate={{
             opacity: i === activeIdx ? 1 : 0.4,
             scale: i === activeIdx ? 1 : 0.9,
-            filter: i === activeIdx ? 'blur(0px)' : 'blur(0.5px)',
           }}
           transition={{ 
             duration: 0.6,
             ease: [0.32, 0.72, 0, 1] // iOS style spring-like easing
           }}
           style={{
-            fontSize: i === activeIdx ? 34 : 28,
-            fontWeight: i === activeIdx ? 700 : 600,
+            fontSize: 32,
+            fontWeight: i === activeIdx ? 760 : 620,
             color: '#fff',
             padding: '16px 0',
             lineHeight: 1.3,
             transformOrigin: 'left center',
-            transition: 'font-size 0.6s cubic-bezier(0.32, 0.72, 0, 1)',
             textShadow: i === activeIdx ? '0 4px 12px rgba(0,0,0,0.3)' : 'none',
           }}
         >

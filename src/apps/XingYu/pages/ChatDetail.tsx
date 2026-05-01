@@ -18,7 +18,10 @@ import { QuotePreview, getQuotePreviewText } from '../components/QuotePreview';
 import { QuoteBlock } from '../components/QuoteBlock';
 import { MultiSelectToolbar } from '../components/MultiSelectToolbar';
 import { ForwardCardBubble } from '../components/ForwardCardBubble';
+import { BubbleRenderer } from '../components/BubbleRenderer';
+import { resolveBubbleSkin, timestampToCss } from '../bubbleSkins';
 import { Check } from 'lucide-react';
+import { useBubbleSkinStore } from '../bubbleSkinStore';
 
 /** Character 对话头像兜底路径,和 ContactsTab 保持一致 */
 const CHAR_FALLBACK_AVATAR = '/resource/avatars/preset-01.jpg';
@@ -39,6 +42,11 @@ import { ImagePicker } from '../components/ImagePicker';
 import { T, springs } from '../theme';
 
 type PickerMode = 'none' | 'sticker' | 'image';
+
+const CHAT_INPUT_LINE_HEIGHT = 22;
+const CHAT_INPUT_VERTICAL_PADDING = 18;
+const CHAT_INPUT_MIN_HEIGHT = 40;
+const CHAT_INPUT_MAX_HEIGHT = CHAT_INPUT_LINE_HEIGHT * 10 + CHAT_INPUT_VERTICAL_PADDING;
 
 export function ChatDetail() {
   const activeChatId = useXYNav((s) => s.activeChatId);
@@ -67,7 +75,7 @@ export function ChatDetail() {
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [selectedMsgIds, setSelectedMsgIds] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   // Dedup between pointerdown + click firing for the same tap on mobile.
   const lastSendAtRef = useRef(0);
@@ -83,6 +91,18 @@ export function ChatDetail() {
   // scrollTop back to the bottom mid-drag (the cause of "page jumps when
   // I drag down at the bottom of the chat" with the keyboard up).
   const userTouchingRef = useRef(false);
+
+  const resizeChatInput = useCallback((el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = `${CHAT_INPUT_MIN_HEIGHT}px`;
+    const nextHeight = Math.min(el.scrollHeight, CHAT_INPUT_MAX_HEIGHT);
+    el.style.height = `${Math.max(CHAT_INPUT_MIN_HEIGHT, nextHeight)}px`;
+    el.style.overflowY = el.scrollHeight > CHAT_INPUT_MAX_HEIGHT ? 'auto' : 'hidden';
+  }, []);
+
+  useLayoutEffect(() => {
+    resizeChatInput(inputRef.current);
+  }, [input, resizeChatInput]);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
     const el = scrollRef.current;
@@ -421,11 +441,14 @@ export function ChatDetail() {
     sendMessage(activeChatId, text, ref);
     setInput('');
     setPickerMode('none');
-    if (inputRef.current) inputRef.current.value = '';
-  }, [input, activeChatId, sendMessage, quoteMsg]);
+    if (inputRef.current) {
+      inputRef.current.value = '';
+      resizeChatInput(inputRef.current);
+    }
+  }, [input, activeChatId, sendMessage, quoteMsg, resizeChatInput]);
 
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         handleSend();
@@ -785,7 +808,7 @@ export function ChatDetail() {
           {isViewingOther ? '只读模式 — 正在查看对方手机' : '旁观模式 — AI 角色间的私聊'}
         </div>
       ) : <div
-        className="flex shrink-0 items-center gap-2 px-3"
+        className="flex shrink-0 items-end gap-2 px-3"
         style={{
           minHeight: 56,
           paddingTop: 10,
@@ -819,8 +842,8 @@ export function ChatDetail() {
           <Image size={22} strokeWidth={1.8} color={pickerMode === 'image' ? T.accent : T.textMuted} />
         </button>
 
-<div
-          className="flex min-w-0 flex-1 items-center gap-1"
+        <div
+          className="flex min-w-0 flex-1 items-end gap-1"
           style={{
             minHeight: 40,
             borderRadius: T.r.xl,
@@ -830,13 +853,30 @@ export function ChatDetail() {
             border: `1px solid ${T.border}`,
           }}
         >
-          <input
+          <textarea
             ref={inputRef}
-            className="min-w-0 flex-1 bg-transparent outline-none"
-            style={{ fontSize: 16, color: T.textPrimary, height: 36 }}
+            className="scrollbar-hide min-w-0 flex-1 resize-none bg-transparent outline-none"
+            style={{
+              fontSize: 16,
+              color: T.textPrimary,
+              lineHeight: `${CHAT_INPUT_LINE_HEIGHT}px`,
+              minHeight: CHAT_INPUT_MIN_HEIGHT,
+              maxHeight: CHAT_INPUT_MAX_HEIGHT,
+              height: CHAT_INPUT_MIN_HEIGHT,
+              paddingTop: CHAT_INPUT_VERTICAL_PADDING / 2,
+              paddingBottom: CHAT_INPUT_VERTICAL_PADDING / 2,
+              border: 'none',
+              boxSizing: 'border-box',
+              overflowY: 'hidden',
+            }}
             placeholder="说点什么..."
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            rows={1}
+            data-testid="xy-chat-input"
+            onChange={(e) => {
+              setInput(e.target.value);
+              resizeChatInput(e.currentTarget);
+            }}
             onKeyDown={handleKeyDown}
             onFocus={() => {
               setPickerMode('none');
@@ -983,6 +1023,8 @@ const MsgBubble = memo(function MsgBubble({
   const showTime = !prevMsg || msg.timestamp - prevMsg.timestamp > 15 * 60_000;
   const [imgLoaded, setImgLoaded] = useState(false);
   const userSettings = useXYData((s) => s.userSettings);
+  const selectedBubbleSkinId = useBubbleSkinStore((s) => s.selectedSkinId);
+  const selectedBubbleSkin = resolveBubbleSkin(selectedBubbleSkinId);
   const characters = useCharacterStore((s) => s.characters);
 
   // AI 流式回复的占位 message 在开始的瞬间只有 streaming=true 还没有任何内容,
@@ -1026,15 +1068,7 @@ const MsgBubble = memo(function MsgBubble({
       {showTime && (
         <div className="py-2.5 text-center">
           <span
-            style={{
-              fontSize: 11,
-              color: '#fff',
-              backgroundColor: 'rgba(0,0,0,0.3)',
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)',
-              borderRadius: T.r.full,
-              padding: '3px 10px',
-            }}
+            style={timestampToCss(selectedBubbleSkin)}
           >
             {formatChatTime(msg.timestamp)}
           </span>
@@ -1333,21 +1367,7 @@ const MsgBubble = memo(function MsgBubble({
               </div>
             </button>
           ) : msg.type === 'text' && msg.text && (
-            <div
-              style={{
-                padding: '10px 14px',
-                borderRadius: T.r.xl,
-                borderTopRightRadius: isMine ? 6 : T.r.xl,
-                borderTopLeftRadius: isMine ? T.r.xl : 6,
-                background: isMine ? T.accentGrad : T.card,
-                color: isMine ? T.textOnAccent : T.textPrimary,
-                boxShadow: T.shadow1,
-                border: isMine ? 'none' : `1px solid ${T.border}`,
-                fontSize: 15,
-                lineHeight: 1.5,
-                wordBreak: 'break-word',
-              }}
-            >
+            <BubbleRenderer isMine={isMine} skinId={selectedBubbleSkinId}>
               {msg.quoteRef && onQuoteTap && (
                 <QuoteBlock
                   quoteRef={msg.quoteRef}
@@ -1357,7 +1377,7 @@ const MsgBubble = memo(function MsgBubble({
                 />
               )}
               {msg.text}
-            </div>
+            </BubbleRenderer>
           )}
 
           {msg.type === 'forward_card' && (

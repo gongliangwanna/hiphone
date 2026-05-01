@@ -15,8 +15,14 @@
 ## 派生 selector
 - `useGestureIntent()` —— 返回 `'idle' | 'switcher-active'`。消费者不应从 `presentationMode` 手动拼判断逻辑。
 
+## 角色数据
+1. `characterStore` 的产品级角色设定只以 `description` 为 source of truth。`personality`、`scenario`、`firstMessage`、`messageExamples`、`systemPrompt`、`postHistoryInstructions` 等旧 CCV2 拆分字段只用于兼容导入/导出和历史数据归一化。
+2. AI 不主动开场。任何会话创建、清除记忆、重新打开角色聊天的流程都不应从 `firstMessage` 或 `alternateGreetings` 注入消息。
+3. 如果需要保留旧角色卡的性格、情境、角色级系统提示词、后置约束，应在写入 `characterStore` 时折叠进 `description`，不要在 prompt 组装或 UI 中直接读取这些旧字段。
+
 ## 踩坑
 1. 如果从 Switcher 激活 app 时又出现"缩回图标再放大"的错误动画，先检查是不是把 app 切换错误地复用了 icon 打开路径。
 2. 如果 Switcher 里删掉当前前台 app 后界面状态乱掉，优先检查 `removeApp()` 是否同时维护了 `activeAppId`、`appOrigin` 和 `switcherAppId`。
 3. `finishCardDismiss` 返回结构化对象（`FinishCardDismissResult`），消费者需要 `committed` 判断走哪个 spring target，需要 `velocity` 设置 spring 初速度。
 4. `activateAppFromCard` **不要**只收 cardRect；viewport 尺寸是一起传进来的，因为 AppHost 是 full-bleed 层，其 unscaled 尺寸等于 viewport，算 morph 时两项缺一不可。
+5. `springboardLayoutStore` 提交 App 布局时必须用与 Springboard 渲染一致的 App 集合（内置 + 已安装用户 App）；只按静态内置列表解析会让用户 App 跨页拖拽提交失败并跳回原页。

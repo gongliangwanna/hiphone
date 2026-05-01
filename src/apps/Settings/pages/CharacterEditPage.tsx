@@ -1,9 +1,10 @@
-import { useRef, useState } from 'react';
-import { Camera, Trash2, Brain, ChevronRight } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Camera, Trash2, Brain, ChevronRight, Loader2, Sparkles } from 'lucide-react';
 import { useCharacterStore } from '@/platform/stores/characterStore';
 import { useXYData } from '@/apps/XingYu/xingYuDataStore';
 import { useSettingsNavStore } from '../settingsNavStore';
 import { TextArea } from '@/system';
+import { generateCharacterDescription } from '../characterDescriptionGenerator';
 
 function SectionHeader({ title }: { title: string }) {
   return (
@@ -78,9 +79,18 @@ export function CharacterEditPage() {
   const push = useSettingsNavStore((s) => s.push);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [clearDone, setClearDone] = useState(false);
+  const [generationSeed, setGenerationSeed] = useState('');
+  const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
+  const [generationError, setGenerationError] = useState('');
 
   const char = characters.find((c) => c.id === activeId) ?? characters[0];
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const generationAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => generationAbortRef.current?.abort();
+  }, []);
+
   if (!char) return null;
 
   const update = (patch: Record<string, unknown>) => updateCharacter(char.id, patch);
@@ -109,6 +119,41 @@ export function CharacterEditPage() {
     };
     reader.readAsDataURL(file);
     e.target.value = '';
+  };
+
+  const handleGenerateDescription = async () => {
+    const seed = generationSeed.trim();
+    if (!seed || isGeneratingDescription) {
+      if (!seed) setGenerationError('请输入简短角色描述');
+      return;
+    }
+
+    generationAbortRef.current?.abort();
+    const controller = new AbortController();
+    generationAbortRef.current = controller;
+    setIsGeneratingDescription(true);
+    setGenerationError('');
+
+    try {
+      const description = await generateCharacterDescription({
+        characterName: char.name,
+        tags: char.tags,
+        seed,
+        currentDescription: char.description,
+        signal: controller.signal,
+      });
+      update({ description });
+      setGenerationSeed('');
+    } catch (e) {
+      if (!controller.signal.aborted) {
+        setGenerationError(e instanceof Error ? e.message : String(e));
+      }
+    } finally {
+      if (generationAbortRef.current === controller) {
+        generationAbortRef.current = null;
+        setIsGeneratingDescription(false);
+      }
+    }
   };
 
   return (
@@ -196,14 +241,67 @@ export function CharacterEditPage() {
                 .filter(Boolean),
             })
           }
-          placeholder="温柔, 学姐, 恋爱"
-        />
-        <FieldRow
-          label="版本"
-          value={char.version}
-          onChange={(v) => update({ version: v })}
+          placeholder="温柔男友, 年上, 甜宠"
           isLast
         />
+      </div>
+
+      <SectionHeader title="AI 生成" />
+      <div className="mx-4 mb-2">
+        <TextArea
+          value={generationSeed}
+          onChange={(v) => {
+            setGenerationSeed(v);
+            if (generationError) setGenerationError('');
+          }}
+          placeholder="例如：冷静克制的年上律师，和我有一段没说出口的旧事。"
+          rows={3}
+          autoGrow
+          testId="character-generation-seed"
+        />
+      </div>
+      <div className="mx-4 mb-5 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={handleGenerateDescription}
+          disabled={isGeneratingDescription || !generationSeed.trim()}
+          className="inline-flex items-center gap-1.5"
+          style={{
+            height: 34,
+            padding: '0 14px',
+            borderRadius: 17,
+            border: 'none',
+            backgroundColor:
+              isGeneratingDescription || !generationSeed.trim()
+                ? 'rgba(120,120,128,0.16)'
+                : 'var(--color-systemBlue)',
+            color:
+              isGeneratingDescription || !generationSeed.trim()
+                ? 'var(--color-tertiaryLabel)'
+                : 'white',
+            fontSize: 'var(--font-size-footnote)',
+            fontWeight: 600,
+            cursor: isGeneratingDescription || !generationSeed.trim() ? 'default' : 'pointer',
+          }}
+        >
+          {isGeneratingDescription ? (
+            <Loader2 size={15} className="animate-spin" strokeWidth={2.2} />
+          ) : (
+            <Sparkles size={15} strokeWidth={2.2} />
+          )}
+          {isGeneratingDescription ? '生成中' : '生成角色描述'}
+        </button>
+        {generationError && (
+          <span
+            className="min-w-0 flex-1"
+            style={{
+              fontSize: 'var(--font-size-caption1)',
+              color: 'var(--color-systemRed)',
+            }}
+          >
+            {generationError}
+          </span>
+        )}
       </div>
 
       {/* Character Definition */}
@@ -212,96 +310,10 @@ export function CharacterEditPage() {
         <TextArea
           value={char.description}
           onChange={(v) => update({ description: v })}
-          placeholder="角色的身份、背景、外貌描写……"
-          rows={5}
+          placeholder="写清楚这个角色是谁、怎么说话、如何行动，以及需要遵守的边界。"
+          rows={8}
           autoGrow
         />
-      </div>
-
-      <SectionHeader title="性格" />
-      <div className="mx-4 mb-5">
-        <TextArea
-          value={char.personality}
-          onChange={(v) => update({ personality: v })}
-          placeholder="角色的性格特征、行为模式……"
-          rows={3}
-          autoGrow
-        />
-      </div>
-
-      <SectionHeader title="情境" />
-      <div className="mx-4 mb-5">
-        <TextArea
-          value={char.scenario}
-          onChange={(v) => update({ scenario: v })}
-          placeholder="当前的关系、情境背景……"
-          rows={3}
-          autoGrow
-        />
-      </div>
-
-      {/* Dialogue */}
-      <SectionHeader title="开场白" />
-      <div className="mx-4 mb-5">
-        <TextArea
-          value={char.firstMessage}
-          onChange={(v) => update({ firstMessage: v })}
-          placeholder="角色对用户说的第一句话……"
-          rows={3}
-          autoGrow
-        />
-      </div>
-
-      <SectionHeader title="示例对话" />
-      <div className="mx-4 mb-2">
-        <TextArea
-          value={char.messageExamples}
-          onChange={(v) => update({ messageExamples: v })}
-          placeholder={'<START>\n{{user}}: 你好\n{{char}}: 你好呀~'}
-          rows={5}
-          autoGrow
-        />
-      </div>
-      <div
-        className="mx-4 mb-5"
-        style={{
-          fontSize: 'var(--font-size-footnote)',
-          color: 'var(--color-secondaryLabel)',
-        }}
-      >
-        示例对话帮助 AI 学习角色的说话风格。用 {'<START>'} 分隔不同示例，用 {'{{user}}'} 和 {'{{char}}'} 代指用户和角色。
-      </div>
-
-      {/* Advanced */}
-      <SectionHeader title="高级" />
-      <div className="mx-4 mb-5">
-        <TextArea
-          value={char.systemPrompt}
-          onChange={(v) => update({ systemPrompt: v })}
-          placeholder="角色专属系统提示词（覆盖全局）"
-          rows={3}
-          autoGrow
-        />
-      </div>
-
-      <SectionHeader title="创作者备注" />
-      <div className="mx-4 mb-2">
-        <TextArea
-          value={char.creatorNotes}
-          onChange={(v) => update({ creatorNotes: v })}
-          placeholder="仅在编辑时可见，不会发送给 AI"
-          rows={2}
-          autoGrow
-        />
-      </div>
-      <div
-        className="mx-4 mb-5"
-        style={{
-          fontSize: 'var(--font-size-footnote)',
-          color: 'var(--color-secondaryLabel)',
-        }}
-      >
-        备注内容不会进入对话上下文。
       </div>
 
       {/* Data section */}

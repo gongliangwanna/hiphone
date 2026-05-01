@@ -129,6 +129,22 @@ function emptyDraft(id: string, firstUserPrompt: string): Draft {
   };
 }
 
+export function normalizeHydratedDrafts(drafts: Record<string, Draft>): Record<string, Draft> {
+  let changed = false;
+  const next: Record<string, Draft> = {};
+
+  for (const [id, draft] of Object.entries(drafts)) {
+    if (draft.status === 'generating') {
+      changed = true;
+      next[id] = { ...draft, status: 'idle' };
+    } else {
+      next[id] = draft;
+    }
+  }
+
+  return changed ? next : drafts;
+}
+
 /** Project the active draft into the top-level mirror fields. */
 function mirrorOf(draft: Draft | undefined): Pick<
   AIAppBuilderState,
@@ -314,6 +330,7 @@ export const useAIAppBuilderStore = create<AIAppBuilderState>()(
       // Rebuild the mirror after rehydrate.
       onRehydrateStorage: () => (state) => {
         if (!state) return;
+        state.drafts = normalizeHydratedDrafts(state.drafts ?? {});
         const draft = state.activeDraftId
           ? state.drafts[state.activeDraftId]
           : undefined;

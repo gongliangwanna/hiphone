@@ -357,6 +357,69 @@ export function useIconDrag({
     [gestureAreaRef, cancelSwipe, widgetPages],
   );
 
+  const updateDropTargetForPage = useCallback(
+    (page: number) => {
+      const kind = dragKindRef.current;
+
+      if (kind === 'app' && dragPosRef.current) {
+        // Compute app drop target from icon center. We feed `getDropTarget`
+        // the page's widgets so it can pack and find the actual cell-to-
+        // localIndex mapping (widgets carve holes in the row-major fill).
+        const centerX = dragX.get() + metrics.iconSize / 2;
+        const centerY = dragY.get() + metrics.iconSize / 2;
+        const pageApps = pages[page] ?? [];
+        const pageWidgetsHere = widgetPages[page] ?? [];
+
+        // Match `effectiveApps` in IconGrid and the post-removal contract of
+        // `moveApp`: when the source page is the same as the hovered page,
+        // the dragged app must be excluded from the layout used to compute
+        // drop indices.
+        const dragOriginatesHere = dragPosRef.current.page === page;
+        const appIds = dragOriginatesHere
+          ? pageApps
+              .filter((_, i) => i !== dragPosRef.current!.localIndex)
+              .map((a) => a.id)
+          : pageApps.map((a) => a.id);
+
+        const target = getDropTarget(
+          centerX,
+          centerY,
+          page,
+          pageWidgetsHere,
+          appIds,
+          metrics,
+          viewportWidth,
+        );
+        const prev = dropPosRef.current;
+        if (!prev || prev.page !== target.page || prev.localIndex !== target.localIndex) {
+          setDropPos(target);
+        }
+      } else if (kind === 'widget' && widgetDragRef.current) {
+        // Widget drop origin is computed from the ghost's top-left corner.
+        const target = getWidgetDropTarget(
+          dragX.get(),
+          dragY.get(),
+          widgetDragRef.current.widget.size,
+          metrics,
+          viewportWidth,
+        );
+        const prev = widgetDropRef.current;
+        if (!prev || prev.page !== page || prev.col !== target.col || prev.row !== target.row) {
+          setWidgetDropPos({ page, col: target.col, row: target.row });
+        }
+      }
+    },
+    [dragX, dragY, metrics, pages, viewportWidth, widgetPages],
+  );
+
+  // Auto-scroll changes the active page even when the finger is stationary.
+  // Recompute the drop target on that page transition; otherwise releasing
+  // immediately after a new page appears commits to the stale page.
+  useEffect(() => {
+    if (!pointerRef.current || dragKindRef.current === null) return;
+    updateDropTargetForPage(currentPage);
+  }, [currentPage, updateDropTargetForPage]);
+
   const onPointerMove = useCallback(
     (e: React.PointerEvent<HTMLElement>) => {
       const ptr = pointerRef.current;
@@ -374,55 +437,7 @@ export function useIconDrag({
       dragY.set(newY);
 
       const cp = currentPageRef.current;
-
-      if (kind === 'app' && dragPosRef.current) {
-        // Compute app drop target from icon center. We feed `getDropTarget`
-        // the page's widgets so it can pack and find the actual cell-to-
-        // localIndex mapping (widgets carve holes in the row-major fill).
-        const centerX = newX + metrics.iconSize / 2;
-        const centerY = newY + metrics.iconSize / 2;
-        const pageApps = pages[cp] ?? [];
-        const pageWidgetsHere = widgetPages[cp] ?? [];
-
-        // Match `effectiveApps` in IconGrid and the post-removal contract of
-        // `moveApp`: when the source page is the same as the hovered page,
-        // the dragged app must be excluded from the layout used to compute
-        // drop indices.
-        const dragOriginatesHere = dragPosRef.current.page === cp;
-        const appIds = dragOriginatesHere
-          ? pageApps
-              .filter((_, i) => i !== dragPosRef.current!.localIndex)
-              .map((a) => a.id)
-          : pageApps.map((a) => a.id);
-
-        const target = getDropTarget(
-          centerX,
-          centerY,
-          cp,
-          pageWidgetsHere,
-          appIds,
-          metrics,
-          viewportWidth,
-        );
-        // Only trigger re-render when the target cell actually changes.
-        const prev = dropPosRef.current;
-        if (!prev || prev.page !== target.page || prev.localIndex !== target.localIndex) {
-          setDropPos(target);
-        }
-      } else if (kind === 'widget' && widgetDragRef.current) {
-        // Widget drop origin is computed from the ghost's top-left corner.
-        const target = getWidgetDropTarget(
-          newX,
-          newY,
-          widgetDragRef.current.widget.size,
-          metrics,
-          viewportWidth,
-        );
-        const prev = widgetDropRef.current;
-        if (!prev || prev.page !== cp || prev.col !== target.col || prev.row !== target.row) {
-          setWidgetDropPos({ page: cp, col: target.col, row: target.row });
-        }
-      }
+      updateDropTargetForPage(cp);
 
       // Edge detection for auto-scroll (shared for both kinds)
       const relativeX = e.clientX - areaRect.left;
@@ -457,13 +472,11 @@ export function useIconDrag({
     },
     [
       gestureAreaRef,
-      metrics,
       viewportWidth,
-      pages,
-      widgetPages,
       goToPage,
       clearAutoScroll,
       onRequestExtraPage,
+      updateDropTargetForPage,
     ],
   );
 

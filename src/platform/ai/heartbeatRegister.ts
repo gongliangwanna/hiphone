@@ -103,8 +103,13 @@ export function registerHeartbeatAi(): void {
       param: '',
     },
     {
+      type: 'view_own_signature_history',
+      description: '查看自己最近 n 条历史个性签名,推荐 n=5; 更新签名前必须先查看,避免重复当前或历史签名',
+      param: '{n: number}',
+    },
+    {
       type: 'update_signature',
-      description: '修改自己的个性签名,不要频繁更换',
+      description: '修改自己的个性签名,不要频繁更换; 调用前必须先用 view_own_signature_history 查看最近签名,避免写重复签名',
       param: '{text: string}',
     },
     {
@@ -114,7 +119,8 @@ export function registerHeartbeatAi(): void {
     },
     {
       type: 'create_note',
-      description: '创建一条备忘录(可用来写日记、记录想法)',
+      description:
+        '创建一条备忘录(可用来写日记、记录想法)。不要写重复的备忘录；如果不知道写什么就不要写；如果不知道之前写过什么就先用 view_notes 看再写',
       param: '{title: string, body: string}',
     },
     {
@@ -195,7 +201,7 @@ export function registerHeartbeatAi(): void {
       '- 主动发消息要自然,不要太频繁或太刻意',
       '- 发动态要像真人发朋友圈,内容自然真实',
       '- 不要每次心跳都做很多事,有时候看看就够了',
-      '- 签名不要改太频繁,只在心情变化时更新',
+      '- 签名不要改太频繁,只在心情变化时更新; 更新签名前必须先用 view_own_signature_history 查看最近5条签名,避免重复',
       '- 可以偶尔写备忘录记录心情、想法或有趣的事,就像真人写日记或便签一样',
       '- 如果有其他角色,偶尔可以主动找他们聊聊天,就像真人会找朋友聊天一样',
       `- 想找其他角色说话必须用 chat_with_character,send_message 只能给${userName}发消息。不要搞混!`,

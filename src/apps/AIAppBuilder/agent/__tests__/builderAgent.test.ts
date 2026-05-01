@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { runBuilderAgent, MAX_ITERATIONS } from '../builderAgent';
+import { runBuilderAgent } from '../builderAgent';
 import { useAIAppBuilderStore } from '../../aiAppBuilderStore';
 import { useBuilderPlanStore } from '../builderPlanStore';
 import * as chatCompleteMod from '@/platform/ai/chatComplete';
@@ -13,7 +13,15 @@ const VALID_MANIFEST = JSON.stringify({
 });
 
 beforeEach(() => {
-  useAIAppBuilderStore.setState({ draftFiles: {} });
+  useAIAppBuilderStore.setState({
+    drafts: {},
+    activeDraftId: null,
+    draftId: null,
+    draftFiles: {},
+    chatHistory: [],
+    status: 'idle',
+    lastError: null,
+  });
   useBuilderPlanStore.getState().clear();
   useAIConfigStore.setState({
     provider: 'openrouter',
@@ -88,6 +96,17 @@ describe('runBuilderAgent', () => {
 
   it('emits a thought as agent-text before the tool-call event', async () => {
     const events: unknown[] = [];
+    useAIAppBuilderStore.setState({
+      draftFiles: {
+        'manifest.json': JSON.stringify({
+          id: 'ai-app-x-9999',
+          name: '示例',
+          version: '1.0.0',
+          entry: 'App.tsx',
+        }),
+        'App.tsx': 'export default function App() { return null; }',
+      },
+    });
 
     vi.spyOn(chatCompleteMod, 'chatComplete')
       .mockResolvedValueOnce(JSON.stringify({ thought: '先列文件', tool: 'list_files', args: {} }))
@@ -104,6 +123,44 @@ describe('runBuilderAgent', () => {
     expect((events[1] as any).kind).toBe('tool-call');
     expect((events[1] as any).tool).toBe('list_files');
     expect((events[2] as any).kind).toBe('finish');
+  });
+
+  it('rejects finish until the final compile_check gate passes', async () => {
+    const events: unknown[] = [];
+
+    vi.spyOn(chatCompleteMod, 'chatComplete')
+      .mockResolvedValueOnce(JSON.stringify({
+        tool: 'write_file',
+        args: { path: 'manifest.json', content: VALID_MANIFEST },
+      }))
+      .mockResolvedValueOnce(JSON.stringify({
+        tool: 'finish',
+        args: { summary: '先结束' },
+      }))
+      .mockResolvedValueOnce(JSON.stringify({
+        tool: 'write_file',
+        args: { path: 'App.tsx', content: 'export default function App() { return null; }' },
+      }))
+      .mockResolvedValueOnce(JSON.stringify({
+        tool: 'finish',
+        args: { summary: '已完成' },
+      }));
+
+    await runBuilderAgent({
+      draftId: 'ai-app-tomato-1234',
+      userMessage: '帮我做一个番茄钟',
+      onTurn: (e) => events.push(e),
+    });
+
+    const gateFailure = events.find(
+      (e: any) => e.kind === 'tool-call' && e.tool === 'compile_check' && e.ok === false,
+    ) as any;
+    expect(gateFailure).toBeDefined();
+    expect(JSON.stringify(gateFailure.result)).toMatch(/entry.*not found/);
+
+    const last = events[events.length - 1] as any;
+    expect(last.kind).toBe('finish');
+    expect(last.summary).toBe('已完成');
   });
 
   it('retries once on parse failure with a stricter reminder, then exits with agent-text on second failure', async () => {
@@ -147,12 +204,49 @@ describe('runBuilderAgent', () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
-  it('emits a max-iteration warning when finish never fires', async () => {
+  it('does not execute a stale tool if the signal is aborted while chatComplete is in flight', async () => {
+    const ac = new AbortController();
     const events: unknown[] = [];
 
-    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue(
-      JSON.stringify({ tool: 'list_files', args: {} }),
-    );
+    const spy = vi.spyOn(chatCompleteMod, 'chatComplete').mockImplementationOnce(async () => {
+      ac.abort();
+      return JSON.stringify({
+        tool: 'write_file',
+        args: { path: 'App.tsx', content: 'export default function App() { return null; }' },
+      });
+    });
+
+    await runBuilderAgent({
+      draftId: 'ai-app-x-9999',
+      userMessage: '...',
+      signal: ac.signal,
+      onTurn: (e) => events.push(e),
+    });
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(events).toEqual([]);
+    expect(useAIAppBuilderStore.getState().draftFiles).toEqual({});
+  });
+
+  it('continues past the former 25-iteration limit until finish fires', async () => {
+    const events: unknown[] = [];
+    useAIAppBuilderStore.setState({
+      draftFiles: {
+        'manifest.json': JSON.stringify({
+          id: 'ai-app-x-9999',
+          name: '示例',
+          version: '1.0.0',
+          entry: 'App.tsx',
+        }),
+        'App.tsx': 'export default function App() { return null; }',
+      },
+    });
+
+    const spy = vi.spyOn(chatCompleteMod, 'chatComplete');
+    for (let i = 0; i < 26; i++) {
+      spy.mockResolvedValueOnce(JSON.stringify({ tool: 'list_files', args: {} }));
+    }
+    spy.mockResolvedValueOnce(JSON.stringify({ tool: 'finish', args: { summary: '完成' } }));
 
     await runBuilderAgent({
       draftId: 'ai-app-x-9999',
@@ -160,9 +254,9 @@ describe('runBuilderAgent', () => {
       onTurn: (e) => events.push(e),
     });
 
-    expect(events.length).toBe(MAX_ITERATIONS + 1);
+    expect(spy).toHaveBeenCalledTimes(27);
     const last = events[events.length - 1] as any;
-    expect(last.kind).toBe('agent-text');
-    expect(last.text).toMatch(/上限|finish/);
+    expect(last.kind).toBe('finish');
+    expect(last.summary).toBe('完成');
   });
 });

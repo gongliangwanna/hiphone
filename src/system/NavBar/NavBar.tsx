@@ -7,6 +7,7 @@ interface NavBarButton {
   icon: ReactNode;
   onClick: () => void;
   testId?: string;
+  ariaLabel?: string;
 }
 
 interface NavBarProps {
@@ -56,8 +57,10 @@ export function NavBar({
           <div className="flex items-center gap-0.5">
             {rightButtons.map((btn, i) => (
               <button
+                type="button"
                 key={btn.testId ?? i}
                 onClick={btn.onClick}
+                aria-label={btn.ariaLabel}
                 className="flex items-center justify-center"
                 style={{
                   minWidth: 44,
@@ -132,8 +135,10 @@ export function NavBar({
         <div className="absolute right-2 flex items-center gap-0.5">
           {rightButtons.map((btn, i) => (
             <button
+              type="button"
               key={btn.testId ?? i}
               onClick={btn.onClick}
+              aria-label={btn.ariaLabel}
               className="flex items-center justify-center"
               style={{
                 minWidth: 44,

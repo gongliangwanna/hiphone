@@ -55,6 +55,13 @@ describe('appMetadataResolver', () => {
     });
   });
 
+  it('uses the generated bitmap icon for Presence instead of the old SVG', () => {
+    const presence = catalogApps.find((app) => app.id === 'presence');
+
+    expect(presence?.icon).toBe('/resource/icons/popular-cn/presence.png');
+    expect(presence?.icon).not.toContain('.svg');
+  });
+
   it('includes installed user apps with user kind', () => {
     useInstalledUserAppsStore.getState().replaceAll([
       {

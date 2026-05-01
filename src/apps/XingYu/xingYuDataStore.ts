@@ -192,7 +192,8 @@ interface XingYuDataState {
   /** 更新角色个性签名（AI 调用或手动） */
   updateCharacterSignature: (characterId: string, text: string) => void;
   /**
-   * 确保指定 character 的会话存在,不存在则创建并插入 firstMessage。
+   * 确保指定 character 的会话存在,不存在则创建空会话。
+   * AI 不主动开场,只在用户消息或系统任务触发时回复。
    * 返回 convId,供导航跳转使用。
    */
   ensureCharacterConversation: (characterId: string) => string;
@@ -217,7 +218,7 @@ interface XingYuDataState {
   removeGroupMember: (convId: string, memberId: string) => void;
   /** 群聊手动触发某角色回复；若该 conv 已有角色在生成则 no-op */
   triggerGroupReply: (convId: string, characterId: string) => void;
-  /** 清除角色的对话记忆（消息+摘要），保留会话并重注入开场白 */
+  /** 清除角色的对话记忆（消息+摘要），保留空会话 */
   clearCharacterMemory: (characterId: string) => void;
   /**
    * 确保两个 AI 角色之间的会话存在,不存在则创建。
@@ -1047,34 +1048,21 @@ export const useXYData = create<XingYuDataState>()(
           .characters.find((c) => c.id === characterId);
         if (!character) return convId;
 
-        const senderId = `char-${characterId}`;
         const now = Date.now();
-        const firstMsgText = character.firstMessage?.trim() || '';
-        const seedMessages: Message[] = firstMsgText
-          ? [
-              {
-                id: uid(),
-                convId,
-                senderId,
-                type: 'text',
-                text: firstMsgText,
-                timestamp: now,
-              },
-            ]
-          : [];
+        const senderId = `char-${characterId}`;
 
         const conv: Conversation = {
           id: convId,
           idolId: senderId, // placeholder so getIdol() won't crash; ChatDetail should branch on characterId
           characterId,
-          lastMsg: firstMsgText || character.name,
+          lastMsg: character.name,
           lastTime: now,
-          unread: firstMsgText ? 1 : 0,
+          unread: 0,
         };
 
         set({
           conversations: [conv, ...state.conversations],
-          messages: [...state.messages, ...seedMessages],
+          messages: state.messages,
         });
         return convId;
       },
@@ -1098,34 +1086,16 @@ export const useXYData = create<XingYuDataState>()(
         const character = useCharacterStore
           .getState()
           .characters.find((c) => c.id === characterId);
-        const senderId = `char-${characterId}`;
         const now = Date.now();
-        const firstMsgText = character?.firstMessage?.trim() || '';
-
-        // Re-inject firstMessage as fresh start
-        const seedMessages: Message[] = firstMsgText
-          ? [{
-              id: uid(),
-              convId,
-              senderId,
-              type: 'text',
-              text: firstMsgText,
-              timestamp: now,
-            }]
-          : [];
 
         set((s) => ({
-          // Remove all messages for this conversation, then add seed
-          messages: [
-            ...s.messages.filter((m) => m.convId !== convId),
-            ...seedMessages,
-          ],
+          messages: s.messages.filter((m) => m.convId !== convId),
           // Reset summary and update lastMsg
           conversations: s.conversations.map((c) =>
             c.id === convId
               ? {
                   ...c,
-                  lastMsg: firstMsgText || character?.name || '',
+                  lastMsg: character?.name || '',
                   lastTime: now,
                   unread: 0,
                 }

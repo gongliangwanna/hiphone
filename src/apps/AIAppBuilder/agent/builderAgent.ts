@@ -4,8 +4,9 @@
  * Each iteration: assemble messages → chatComplete → parseToolCall →
  * executeTool → emit AgentTurnEvent → feed tool result back as the next
  * user message. Exits on `finish` tool, two consecutive parse failures,
- * abort, or hitting MAX_ITERATIONS. All non-throw errors surface via
- * onTurn('agent-text', ...); chatComplete throws are propagated.
+ * or abort. All non-throw errors surface via
+ * onTurn('agent-text', ...); chatComplete throws are propagated. `finish`
+ * is accepted only after a final full compile_check passes.
  *
  * See docs/plan/2026-04-27-0245-ai-app-builder-v1.5-agentic-impl.md S7
  */
@@ -31,8 +32,6 @@ export type AgentTurnEvent =
   | { kind: 'tool-call'; tool: string; args: unknown; result: unknown; ok: boolean }
   | { kind: 'plan-update'; steps: PlanStep[] }
   | { kind: 'finish'; summary: string };
-
-export const MAX_ITERATIONS = 25;
 
 function buildStateDigest(): string {
   const draftFiles = useAIAppBuilderStore.getState().draftFiles;
@@ -63,7 +62,7 @@ export async function runBuilderAgent(input: RunAgentInput): Promise<void> {
 
   let parseRetryUsed = false;
 
-  for (let i = 0; i < MAX_ITERATIONS; i++) {
+  while (true) {
     if (signal?.aborted) return;
 
     const cfg = resolveBuilderProviderConfig();
@@ -75,9 +74,10 @@ export async function runBuilderAgent(input: RunAgentInput): Promise<void> {
         providerId: cfg.providerId,
       },
       messages,
-      { maxTokens: cfg.maxTokens, temperature: cfg.temperature },
+      cfg.generation,
       signal,
     );
+    if (signal?.aborted) return;
 
     const parsed = parseToolCall(raw);
     if (!parsed) {
@@ -101,12 +101,43 @@ export async function runBuilderAgent(input: RunAgentInput): Promise<void> {
     // Reset retry budget on every successful parse (per-cluster, not global).
     parseRetryUsed = false;
 
+    if (signal?.aborted) return;
+
     if (parsed.thought) {
       onTurn?.({ kind: 'agent-text', text: parsed.thought });
     }
 
+    if (signal?.aborted) return;
+
     if (parsed.tool === 'finish') {
+      const gateResult = await executeTool('compile_check', {}, { draftId });
+      if (signal?.aborted) return;
+      if (!gateResult.ok) {
+        onTurn?.({
+          kind: 'tool-call',
+          tool: 'compile_check',
+          args: {},
+          result: gateResult,
+          ok: false,
+        });
+        messages.push({
+          role: 'assistant',
+          content: JSON.stringify({ tool: parsed.tool, args: parsed.args }),
+        });
+        messages.push({
+          role: 'user',
+          content: JSON.stringify({
+            ok: false,
+            error: 'finish rejected: final compile_check failed',
+            result: gateResult,
+          }),
+        });
+        continue;
+      }
+
+      if (signal?.aborted) return;
       const result = await executeTool('finish', parsed.args, { draftId });
+      if (signal?.aborted) return;
       const summary =
         result.ok && typeof (result.data as { summary?: unknown } | undefined)?.summary === 'string'
           ? (result.data as { summary: string }).summary
@@ -116,6 +147,7 @@ export async function runBuilderAgent(input: RunAgentInput): Promise<void> {
     }
 
     if (parsed.tool === 'update_plan') {
+      if (signal?.aborted) return;
       const result = await executeTool('update_plan', parsed.args, { draftId });
       if (result.ok) {
         const steps = useBuilderPlanStore.getState().steps;
@@ -137,7 +169,9 @@ export async function runBuilderAgent(input: RunAgentInput): Promise<void> {
       continue;
     }
 
+    if (signal?.aborted) return;
     const result = await executeTool(parsed.tool, parsed.args, { draftId });
+    if (signal?.aborted) return;
     onTurn?.({
       kind: 'tool-call',
       tool: parsed.tool,
@@ -153,8 +187,6 @@ export async function runBuilderAgent(input: RunAgentInput): Promise<void> {
     messages.push({ role: 'user', content: JSON.stringify(result) });
   }
 
-  onTurn?.({
-    kind: 'agent-text',
-    text: `[到达 ${MAX_ITERATIONS} 轮上限] 还未调用 finish,请用户手动确认或重新发起。`,
-  });
+  // Unreachable: the loop exits via finish, parse-failure handling, thrown
+  // chatComplete errors, or AbortSignal.
 }

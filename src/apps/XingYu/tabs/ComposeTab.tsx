@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, ImagePlus } from 'lucide-react';
-import { MOCK_GALLERY_IMAGES } from '../data';
+import { usePhotosStore } from '@/apps/Photos/photosStore';
 import { useXYData } from '../xingYuDataStore';
 import { useXYNav } from '../xingYuNavStore';
 import { T, springs } from '../theme';
@@ -9,6 +9,8 @@ import { T, springs } from '../theme';
 export function ComposeTab() {
   const addMoment = useXYData((s) => s.addMoment);
   const setTab = useXYNav((s) => s.setTab);
+  const photos = usePhotosStore((s) => s.photos);
+  const galleryImages = photos.slice(0, 12).map((photo) => photo.thumbnail);
 
   const [text, setText] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -127,7 +129,7 @@ export function ComposeTab() {
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.2 }}
             >
-              {MOCK_GALLERY_IMAGES.slice(0, 12).map((url) => (
+              {galleryImages.map((url) => (
                 <motion.button
                   key={url}
                   className="overflow-hidden"

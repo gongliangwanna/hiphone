@@ -1,9 +1,22 @@
+import { Download } from 'lucide-react';
+import { triggerAIWorkshopCodexKitDownload } from '@/apps/AIAppBuilder/agent/builderPromptExport';
 import { usePerfDebugStore } from '@/platform/stores/perfDebugStore';
+import { show as toastShow } from '@/platform/userApp/sdk/toast';
 import { List, ListSection, ListRow } from '@/system';
 
 export function DeveloperToolsPage() {
   const perfEnabled = usePerfDebugStore((s) => s.enabled);
   const setEnabled = usePerfDebugStore((s) => s.setEnabled);
+
+  const handleExportAIWorkshopKit = () => {
+    try {
+      const result = triggerAIWorkshopCodexKitDownload();
+      toastShow(`已导出 ${result.filename}`);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      toastShow(`导出失败: ${message}`);
+    }
+  };
 
   return (
     <List>
@@ -38,6 +51,17 @@ export function DeveloperToolsPage() {
               />
             </div>
           }
+          isLast
+        />
+      </ListSection>
+
+      <ListSection footer="导出 Markdown，包含 AI 工坊 system prompt、SDK 使用示例、沙箱限制和推荐文件结构，可交给 Codex 辅助开发 user app。">
+        <ListRow
+          icon={<Download size={17} />}
+          iconColor="#007AFF"
+          title="导出 AI 工坊开发包"
+          detail="Markdown"
+          onClick={handleExportAIWorkshopKit}
           isLast
         />
       </ListSection>

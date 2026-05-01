@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { useAIAppBuilderStore } from '../aiAppBuilderStore';
+import { normalizeHydratedDrafts, useAIAppBuilderStore, type Draft } from '../aiAppBuilderStore';
 
 describe('aiAppBuilderStore', () => {
   beforeEach(() => {
@@ -253,6 +253,35 @@ describe('aiAppBuilderStore', () => {
       const list = useAIAppBuilderStore.getState().listDrafts();
       expect(list[0]!.id).toBe(idA); // most recently updated
       expect(list[1]!.id).toBe(idB);
+    });
+  });
+
+  describe('normalizeHydratedDrafts', () => {
+    it('converts persisted generating drafts to idle because reloads drop controllers', () => {
+      const now = Date.now();
+      const generating: Draft = {
+        id: 'draft-a',
+        files: {},
+        chatHistory: [],
+        status: 'generating',
+        lastError: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      const ready: Draft = {
+        ...generating,
+        id: 'draft-b',
+        status: 'ready',
+      };
+
+      const normalized = normalizeHydratedDrafts({
+        [generating.id]: generating,
+        [ready.id]: ready,
+      });
+
+      expect(normalized['draft-a']!.status).toBe('idle');
+      expect(normalized['draft-b']).toBe(ready);
+      expect(generating.status).toBe('generating');
     });
   });
 

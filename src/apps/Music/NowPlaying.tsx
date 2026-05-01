@@ -1,5 +1,5 @@
-import { useCallback, useRef, useState } from 'react';
-import { motion } from 'motion/react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useMusicDataStore, useCurrentSong } from './musicDataStore';
 import { useMusicNavStore } from './musicStore';
 import { formatDuration } from './data';
@@ -15,16 +15,24 @@ import {
   ListMusic,
   Shuffle,
   Repeat,
-  Repeat1
+  Repeat1,
 } from 'lucide-react';
 import { PlayIcon, PauseIcon, SkipNextIcon, SkipPrevIcon } from './PlaybackIcons';
 import { LyricsView } from './LyricsView';
 import { MusicShareSheet } from './MusicShareSheet';
-import { AnimatePresence } from 'motion/react';
+import {
+  MUSIC_ACCENT,
+  MUSIC_BG,
+  MUSIC_LABEL,
+  MUSIC_SECONDARY,
+  MUSIC_SEPARATOR,
+  MUSIC_TERTIARY,
+  createMusicBackdrop,
+  glassStyle,
+} from './musicUi';
 
-/** Dismiss threshold: drag distance (px) or velocity (px/ms) to trigger close. */
 const DISMISS_DIST = 100;
-const DISMISS_VEL = 0.5; // px/ms ≈ 500 px/s
+const DISMISS_VEL = 0.5;
 
 export function NowPlaying() {
   const currentSong = useCurrentSong();
@@ -48,12 +56,21 @@ export function NowPlaying() {
     seekAudio(seconds);
   }, []);
 
-  // ── Swipe-down-to-dismiss gesture ──
   const contentRef = useRef<HTMLDivElement>(null);
   const dragStartY = useRef<number | null>(null);
   const prevY = useRef(0);
   const prevTime = useRef(0);
   const velocityY = useRef(0);
+  const dragFrameRef = useRef<number | null>(null);
+  const pendingDragY = useRef(0);
+
+  useEffect(() => {
+    return () => {
+      if (dragFrameRef.current != null) {
+        cancelAnimationFrame(dragFrameRef.current);
+      }
+    };
+  }, []);
 
   const onDragStart = useCallback((e: React.PointerEvent) => {
     dragStartY.current = e.clientY;
@@ -61,14 +78,25 @@ export function NowPlaying() {
     prevTime.current = performance.now();
     velocityY.current = 0;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    if (contentRef.current) contentRef.current.style.transition = 'none';
+    if (contentRef.current) {
+      contentRef.current.style.transition = 'none';
+      contentRef.current.style.willChange = 'transform';
+    }
   }, []);
 
   const onDragMove = useCallback((e: React.PointerEvent) => {
     if (dragStartY.current === null) return;
     const dy = Math.max(0, e.clientY - dragStartY.current);
-    if (contentRef.current) contentRef.current.style.transform = `translateY(${dy}px)`;
-    // Track velocity
+    pendingDragY.current = dy;
+    if (dragFrameRef.current == null) {
+      dragFrameRef.current = requestAnimationFrame(() => {
+        dragFrameRef.current = null;
+        if (contentRef.current) {
+          contentRef.current.style.transform = `translateY(${pendingDragY.current}px)`;
+        }
+      });
+    }
+
     const now = performance.now();
     const dt = now - prevTime.current;
     if (dt > 0) velocityY.current = (e.clientY - prevY.current) / dt;
@@ -80,12 +108,19 @@ export function NowPlaying() {
     if (dragStartY.current === null) return;
     const dy = Math.max(0, prevY.current - dragStartY.current);
     dragStartY.current = null;
+    if (dragFrameRef.current != null) {
+      cancelAnimationFrame(dragFrameRef.current);
+      dragFrameRef.current = null;
+    }
 
     if (dy > DISMISS_DIST || velocityY.current > DISMISS_VEL) {
       closeNowPlaying();
     } else if (contentRef.current) {
       contentRef.current.style.transition = 'transform 0.35s cubic-bezier(0.32, 0.72, 0, 1)';
       contentRef.current.style.transform = 'translateY(0)';
+      window.setTimeout(() => {
+        if (contentRef.current) contentRef.current.style.willChange = '';
+      }, 360);
     }
   }, [closeNowPlaying]);
 
@@ -99,6 +134,7 @@ export function NowPlaying() {
   return (
     <motion.div
       className="absolute"
+      data-testid="music-now-playing"
       style={{
         top: 'calc(-1 * var(--app-safe-top, 0px))',
         left: 0,
@@ -111,19 +147,29 @@ export function NowPlaying() {
       exit={{ y: '100%' }}
       transition={{ type: 'spring', ...spring.smooth }}
     >
-      <div ref={contentRef} className="flex h-full flex-col" style={{ overflow: 'hidden' }}>
-        {/* Solid opaque background */}
-        <div className="absolute inset-0 bg-[#1c1c1e]" />
-
-        {/* Content */}
+      <div
+        ref={contentRef}
+        className="relative flex h-full flex-col overflow-hidden"
+        style={{ background: createMusicBackdrop(currentSong.title) }}
+      >
         <div
-          className="relative flex min-h-0 flex-1 flex-col items-center"
-          style={{ paddingTop: 'var(--app-safe-top, 0px)' }}
+          className="absolute inset-0"
+          style={{
+            background:
+              'linear-gradient(180deg, rgba(6,6,9,0.28) 0%, rgba(7,7,10,0.72) 48%, rgba(4,4,6,0.96) 100%)',
+          }}
+        />
+
+        <div
+          className="relative flex min-h-0 flex-1 flex-col"
+          style={{
+            paddingTop: 'var(--app-safe-top, 0px)',
+            paddingBottom: 'max(18px, var(--app-safe-bottom, 0px))',
+          }}
         >
-          {/* Drag handle — always swipeable */}
           <div
             className="flex items-center justify-center"
-            style={{ width: '100%', height: 36, touchAction: 'none', cursor: 'grab' }}
+            style={{ width: '100%', height: 42, touchAction: 'none', cursor: 'grab' }}
             onPointerDown={onDragStart}
             onPointerMove={onDragMove}
             onPointerUp={onDragEnd}
@@ -132,276 +178,284 @@ export function NowPlaying() {
           >
             <div
               style={{
-                width: 36,
+                width: 42,
                 height: 5,
                 borderRadius: 3,
-                backgroundColor: 'rgba(255, 255, 255, 0.3)',
+                backgroundColor: 'rgba(255, 255, 255, 0.34)',
               }}
             />
           </div>
 
-          {/* Album artwork / Lyrics toggle area */}
           <div
-            style={{
-              flex: 1, width: '100%', padding: '0 24px', minHeight: 0,
-              marginTop: showLyrics ? 0 : 20,
-              touchAction: showLyrics ? undefined : 'none',
-            }}
-            onPointerDown={showLyrics ? undefined : onDragStart}
-            onPointerMove={showLyrics ? undefined : onDragMove}
-            onPointerUp={showLyrics ? undefined : onDragEnd}
-            onPointerCancel={showLyrics ? undefined : onDragEnd}
+            className="flex min-h-0 flex-1 flex-col"
+            style={{ padding: '0 24px 0' }}
           >
-          <AnimatePresence mode="wait" initial={false}>
-            {showLyrics ? (
-              <motion.div
-                key="lyrics"
-                className="h-full w-full"
-                initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -20, scale: 0.95 }}
-                transition={{ duration: 0.4, ease: [0.32, 0.72, 0, 1] }}
-              >
-                <LyricsView />
-              </motion.div>
-            ) : (
-              <motion.div
-                key="artwork"
-                className="flex h-full items-center justify-center"
-                initial={{ opacity: 0, x: -30 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 30 }}
-                transition={{ duration: 0.25 }}
-              >
-                <motion.div
-                    animate={{ scale: isPlaying ? 1 : 0.85 }}
-                    transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+            <div
+              className="flex min-h-0 flex-1 items-center justify-center"
+              style={{
+                touchAction: showLyrics ? undefined : 'none',
+                padding: '8px 0 18px',
+              }}
+              onPointerDown={showLyrics ? undefined : onDragStart}
+              onPointerMove={showLyrics ? undefined : onDragMove}
+              onPointerUp={showLyrics ? undefined : onDragEnd}
+              onPointerCancel={showLyrics ? undefined : onDragEnd}
+            >
+              <AnimatePresence mode="wait" initial={false}>
+                {showLyrics ? (
+                  <motion.div
+                    key="lyrics"
+                    className="h-full w-full"
                     style={{
-                      width: '100%',
-                      maxWidth: 380,
-                      aspectRatio: '1',
-                      borderRadius: 16,
+                      minHeight: 260,
                       overflow: 'hidden',
-                      boxShadow: isPlaying ? '0 30px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255,255,255,0.05)' : '0 12px 30px rgba(0, 0, 0, 0.4)',
+                    }}
+                    initial={{ opacity: 0, y: 20, scale: 0.96 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -20, scale: 0.96 }}
+                    transition={{ duration: 0.28, ease: [0.32, 0.72, 0, 1] }}
+                  >
+                    <LyricsView />
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="artwork"
+                    initial={{ opacity: 0, y: 18, scale: 0.96 }}
+                    animate={{ opacity: 1, y: 0, scale: isPlaying ? 1 : 0.97 }}
+                    exit={{ opacity: 0, y: -18, scale: 0.96 }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+                    style={{
+                      width: 'min(76vw, 340px)',
+                      maxWidth: '100%',
+                      aspectRatio: '1',
+                      borderRadius: 20,
+                      overflow: 'hidden',
+                      boxShadow: '0 32px 72px rgba(0, 0, 0, 0.56), 0 0 0 0.5px rgba(255,255,255,0.12)',
                     }}
                   >
-                  <MusicArtwork
-                    src={currentSong.artworkUrl}
-                    alt={currentSong.title}
-                    iconSize={60}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    <MusicArtwork
+                      src={currentSong.artworkUrl}
+                      alt={currentSong.title}
+                      iconSize={62}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <div style={{ width: '100%' }}>
+              <div style={{ marginBottom: 18 }}>
+                <div
+                  style={{
+                    fontSize: 29,
+                    fontWeight: 820,
+                    color: MUSIC_LABEL,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    lineHeight: 1.12,
+                    letterSpacing: 0,
+                  }}
+                >
+                  {currentSong.title}
+                </div>
+                <div
+                  style={{
+                    fontSize: 19,
+                    fontWeight: 600,
+                    color: MUSIC_SECONDARY,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    marginTop: 4,
+                    lineHeight: 1.18,
+                  }}
+                >
+                  {currentSong.artist}
+                </div>
+              </div>
+
+              <ProgressBar
+                ratio={progressRatio}
+                elapsed={elapsed}
+                remaining={remaining}
+                duration={duration}
+                onSeek={handleSeek}
+              />
+
+              <div className="flex items-center justify-between" style={{ marginTop: 18 }}>
+                <TransportButton active={shuffle} onClick={toggleShuffle}>
+                  <Shuffle size={22} color={shuffle ? MUSIC_ACCENT : MUSIC_TERTIARY} />
+                </TransportButton>
+                <TransportButton onClick={skipPrev} size={54}>
+                  <SkipPrevIcon size={35} color={MUSIC_LABEL} />
+                </TransportButton>
+                <motion.button
+                  whileTap={{ scale: 0.9 }}
+                  className="flex items-center justify-center"
+                  style={{
+                    width: 70,
+                    height: 70,
+                    borderRadius: 35,
+                    backgroundColor: MUSIC_LABEL,
+                    boxShadow: '0 16px 36px rgba(0,0,0,0.34)',
+                  }}
+                  onClick={togglePlay}
+                  data-testid="music-now-play-pause"
+                >
+                  {isBuffering ? (
+                    <Loader2 size={36} color={MUSIC_BG} className="animate-spin" />
+                  ) : isPlaying ? (
+                    <PauseIcon size={34} color={MUSIC_BG} />
+                  ) : (
+                    <PlayIcon size={34} color={MUSIC_BG} />
+                  )}
+                </motion.button>
+                <TransportButton onClick={skipNext} size={54}>
+                  <SkipNextIcon size={35} color={MUSIC_LABEL} />
+                </TransportButton>
+                <TransportButton active={repeat !== 'off'} onClick={cycleRepeat}>
+                  {repeat === 'one' ? (
+                    <Repeat1 size={22} color={MUSIC_ACCENT} />
+                  ) : (
+                    <Repeat size={22} color={repeat !== 'off' ? MUSIC_ACCENT : MUSIC_TERTIARY} />
+                  )}
+                </TransportButton>
+              </div>
+
+              <div className="flex items-center gap-3" style={{ marginTop: 16 }}>
+                <Volume1 size={15} color={MUSIC_TERTIARY} />
+                <div
+                  style={{
+                    flex: 1,
+                    height: 5,
+                    borderRadius: 3,
+                    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '62%',
+                      height: '100%',
+                      borderRadius: 3,
+                      backgroundColor: MUSIC_LABEL,
+                    }}
                   />
-                </motion.div>
+                </div>
+                <Volume2 size={15} color={MUSIC_TERTIARY} />
+              </div>
+
+              <div
+                data-testid="music-now-actions"
+                className="flex items-center justify-between"
+                style={{ marginTop: 16, paddingInline: 10 }}
+              >
+                <ActionButton active={showLyrics} onClick={() => setShowLyrics((v) => !v)}>
+                  <MessageSquareText size={21} color={showLyrics ? MUSIC_LABEL : MUSIC_TERTIARY} />
+                </ActionButton>
+                <ActionButton onClick={() => setShowShareSheet(true)}>
+                  <Share2 size={21} color={MUSIC_TERTIARY} />
+                </ActionButton>
+                <ActionButton>
+                  <ListMusic size={21} color={MUSIC_TERTIARY} />
+                </ActionButton>
+              </div>
+            </div>
+          </div>
+
+          <AnimatePresence>
+            {failedSongName && (
+              <motion.div
+                className="absolute left-0 right-0 flex justify-center"
+                style={{ top: 60, zIndex: 60 }}
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+              >
+                <div
+                  style={{
+                    ...glassStyle,
+                    borderRadius: 14,
+                    padding: '10px 18px',
+                    fontSize: 14,
+                    color: MUSIC_LABEL,
+                    maxWidth: '82%',
+                    textAlign: 'center',
+                  }}
+                >
+                  「{failedSongName}」暂时无法播放，已跳过
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
 
-        {/* Song info + controls section */}
-        <div style={{ width: '100%', padding: '0 24px', paddingBottom: 24 }}>
-          {/* Song info */}
-          <div style={{ marginBottom: 20 }}>
-            <div
-              style={{
-                fontSize: 26,
-                fontWeight: 700,
-                color: '#fff',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                lineHeight: 1.2,
-              }}
-            >
-              {currentSong.title}
-            </div>
-            <div
-              style={{
-                fontSize: 20,
-                fontWeight: 500,
-                color: 'rgba(255, 255, 255, 0.65)',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                marginTop: 2,
-                lineHeight: 1.2,
-              }}
-            >
-              {currentSong.artist}
-            </div>
-          </div>
-
-          {/* Progress bar */}
-          <ProgressBar
-            ratio={progressRatio}
-            elapsed={elapsed}
-            remaining={remaining}
-            duration={duration}
-            onSeek={handleSeek}
-          />
-
-          {/* Playback controls */}
-          <div
-            className="flex items-center justify-between"
-            style={{ marginTop: 20, paddingInline: 4 }}
-          >
-            <motion.button
-              whileTap={{ scale: 0.8 }}
-              className="flex items-center justify-center"
-              style={{ width: 44, height: 44 }}
-              onClick={toggleShuffle}
-            >
-              <Shuffle
-                size={22}
-                color={shuffle ? '#fff' : 'rgba(255,255,255,0.4)'}
-              />
-            </motion.button>
-            <motion.button
-              whileTap={{ scale: 0.8 }}
-              className="flex items-center justify-center"
-              style={{ width: 56, height: 56 }}
-              onClick={skipPrev}
-            >
-              <SkipPrevIcon size={36} color="#fff" />
-            </motion.button>
-            <motion.button
-              whileTap={{ scale: 0.8 }}
-              className="flex items-center justify-center"
-              style={{ width: 72, height: 72 }}
-              onClick={togglePlay}
-            >
-              {isBuffering ? (
-                <Loader2 size={48} color="#fff" className="animate-spin" />
-              ) : isPlaying ? (
-                <PauseIcon size={44} color="#fff" />
-              ) : (
-                <PlayIcon size={44} color="#fff" />
-              )}
-            </motion.button>
-            <motion.button
-              whileTap={{ scale: 0.8 }}
-              className="flex items-center justify-center"
-              style={{ width: 56, height: 56 }}
-              onClick={skipNext}
-            >
-              <SkipNextIcon size={36} color="#fff" />
-            </motion.button>
-            <motion.button
-              whileTap={{ scale: 0.8 }}
-              className="flex items-center justify-center"
-              style={{ width: 44, height: 44 }}
-              onClick={cycleRepeat}
-            >
-              {repeat === 'one' ? (
-                <Repeat1 size={22} color="#fff" />
-              ) : (
-                <Repeat
-                  size={22}
-                  color={repeat !== 'off' ? '#fff' : 'rgba(255,255,255,0.4)'}
-                />
-              )}
-            </motion.button>
-          </div>
-
-          {/* Volume slider */}
-          <div className="flex items-center gap-3" style={{ marginTop: 16 }}>
-            <Volume1 size={14} color="rgba(255,255,255,0.5)" />
-            <div
-              style={{
-                flex: 1,
-                height: 6,
-                borderRadius: 3,
-                backgroundColor: 'rgba(255, 255, 255, 0.15)',
-                overflow: 'hidden',
-              }}
-            >
-              <div
-                style={{
-                  width: '60%',
-                  height: '100%',
-                  borderRadius: 3,
-                  backgroundColor: '#fff',
-                }}
-              />
-            </div>
-            <Volume2 size={14} color="rgba(255,255,255,0.5)" />
-          </div>
-
-          {/* Bottom action buttons */}
-          <div
-            className="flex items-center justify-between"
-            style={{
-              marginTop: 16,
-              paddingInline: 16,
-              color: 'rgba(255, 255, 255, 0.5)',
-            }}
-          >
-            <motion.button
-              whileTap={{ scale: 0.8 }}
-              className="flex items-center justify-center"
-              style={{ 
-                width: 44, 
-                height: 44, 
-                backgroundColor: showLyrics ? 'rgba(255,255,255,0.2)' : 'transparent',
-                borderRadius: '50%'
-              }}
-              onClick={() => setShowLyrics((v) => !v)}
-            >
-              <MessageSquareText size={20} color={showLyrics ? '#fff' : 'currentColor'} />
-            </motion.button>
-            <motion.button
-              whileTap={{ scale: 0.8 }}
-              className="flex items-center justify-center"
-              style={{ width: 44, height: 44 }}
-              onClick={() => setShowShareSheet(true)}
-            >
-              <Share2 size={20} color="currentColor" />
-            </motion.button>
-            <motion.button whileTap={{ scale: 0.8 }} className="flex items-center justify-center" style={{ width: 44, height: 44 }}>
-              <ListMusic size={20} color="currentColor" />
-            </motion.button>
-          </div>
-        </div>
-
-        {/* Failed song toast */}
         <AnimatePresence>
-          {failedSongName && (
-            <motion.div
-              className="absolute left-0 right-0 flex justify-center"
-              style={{ top: 60, zIndex: 60 }}
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-            >
-              <div
-                style={{
-                  backgroundColor: 'rgba(60, 60, 67, 0.9)',
-                  borderRadius: 10,
-                  padding: '10px 20px',
-                  fontSize: 14,
-                  color: '#fff',
-                  maxWidth: '80%',
-                  textAlign: 'center',
-                }}
-              >
-                「{failedSongName}」暂时无法播放，已跳过
-              </div>
-            </motion.div>
+          {showShareSheet && (
+            <MusicShareSheet onClose={() => setShowShareSheet(false)} />
           )}
         </AnimatePresence>
-      </div>{/* end content */}
-
-      {/* Share sheet */}
-      <AnimatePresence>
-        {showShareSheet && (
-          <MusicShareSheet onClose={() => setShowShareSheet(false)} />
-        )}
-      </AnimatePresence>
-      </div>{/* end contentRef */}
+      </div>
     </motion.div>
   );
 }
 
-/* ── Progress Bar ── */
+function TransportButton({
+  children,
+  onClick,
+  active = false,
+  size = 44,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  active?: boolean;
+  size?: number;
+}) {
+  return (
+    <motion.button
+      whileTap={{ scale: 0.86 }}
+      className="flex items-center justify-center"
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: active ? 'rgba(255, 59, 73, 0.14)' : 'transparent',
+      }}
+      onClick={onClick}
+    >
+      {children}
+    </motion.button>
+  );
+}
+
+function ActionButton({
+  children,
+  onClick,
+  active = false,
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  active?: boolean;
+}) {
+  return (
+    <motion.button
+      whileTap={{ scale: 0.86 }}
+      className="flex items-center justify-center"
+      style={{
+        width: 48,
+        height: 42,
+        borderRadius: 16,
+        backgroundColor: active ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.05)',
+        border: `0.5px solid ${MUSIC_SEPARATOR}`,
+      }}
+      onClick={onClick}
+    >
+      {children}
+    </motion.button>
+  );
+}
 
 function ProgressBar({
   ratio,
@@ -455,13 +509,12 @@ function ProgressBar({
   }, []);
 
   return (
-    <div>
-      {/* 44px tall touch target for easy scrubbing on mobile */}
+    <div data-testid="music-now-progress">
       <div
         ref={trackRef}
         className="relative"
         style={{
-          height: 44,
+          height: 34,
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
@@ -475,9 +528,9 @@ function ProgressBar({
         <div
           style={{
             width: '100%',
-            height: dragging ? 8 : 4,
+            height: dragging ? 7 : 4,
             borderRadius: 4,
-            backgroundColor: 'rgba(255, 255, 255, 0.25)',
+            backgroundColor: 'rgba(255, 255, 255, 0.18)',
             position: 'relative',
             transition: 'height 0.2s',
           }}
@@ -487,10 +540,9 @@ function ProgressBar({
               width: `${ratio * 100}%`,
               height: '100%',
               borderRadius: 4,
-              backgroundColor: dragging ? '#fff' : 'rgba(255, 255, 255, 0.85)',
+              backgroundColor: dragging ? MUSIC_LABEL : 'rgba(255, 255, 255, 0.9)',
             }}
           />
-          {/* Scrubber knob — hidden normally, visible when dragging */}
           <div
             style={{
               position: 'absolute',
@@ -500,16 +552,16 @@ function ProgressBar({
               width: dragging ? 18 : 0,
               height: dragging ? 18 : 0,
               borderRadius: '50%',
-              backgroundColor: '#fff',
+              backgroundColor: MUSIC_LABEL,
               transition: 'width 0.2s, height 0.2s',
               boxShadow: dragging ? '0 2px 8px rgba(0,0,0,0.3)' : 'none',
             }}
           />
         </div>
       </div>
-      <div className="flex justify-between" style={{ marginTop: -6 }}>
-        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>{elapsed}</span>
-        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>{remaining}</span>
+      <div className="flex justify-between" style={{ marginTop: -2 }}>
+        <span style={{ fontSize: 12, color: MUSIC_TERTIARY }}>{elapsed}</span>
+        <span style={{ fontSize: 12, color: MUSIC_TERTIARY }}>{remaining}</span>
       </div>
     </div>
   );
