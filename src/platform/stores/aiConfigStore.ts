@@ -72,6 +72,8 @@ export interface AIConfigState {
   // Actions — presets
   createEmptyPreset: (name: string) => string;
   createPresetFromCurrent: (name: string) => string;
+  renamePreset: (id: string, name: string) => void;
+  deletePreset: (id: string) => boolean;
   setActivePreset: (id: string) => void;
 
   // Actions — connection
@@ -192,6 +194,41 @@ export const useAIConfigStore = create<AIConfigState>()(
           modelListError: null,
           modelListLoading: false,
         });
+      },
+
+      renamePreset: (id, name) => {
+        const { presets } = get();
+        if (!presets.some((p) => p.id === id)) return;
+        const trimmed = name.trim();
+        const finalName = trimmed === '' ? `预设 ${presets.length}` : trimmed;
+        set({
+          presets: presets.map((p) => (p.id === id ? { ...p, name: finalName } : p)),
+        });
+      },
+
+      deletePreset: (id) => {
+        const { presets, activePresetId } = get();
+        if (presets.length <= 1) return false;
+        const idx = presets.findIndex((p) => p.id === id);
+        if (idx === -1) return false;
+        const next = presets.filter((p) => p.id !== id);
+        if (id === activePresetId) {
+          const fallback = next[idx] ?? next[idx - 1] ?? next[0]!;
+          set({
+            presets: next,
+            activePresetId: fallback.id,
+            provider: fallback.provider,
+            apiKey: fallback.apiKey,
+            apiEndpoint: fallback.apiEndpoint,
+            model: fallback.model,
+            fetchedModels: fallback.fetchedModels,
+            modelListError: null,
+            modelListLoading: false,
+          });
+        } else {
+          set({ presets: next });
+        }
+        return true;
       },
 
       // ── Connection actions ──

@@ -131,3 +131,61 @@ describe('createPresetFromCurrent', () => {
     expect(s.presets[1]!.name).toBe('预设 2');
   });
 });
+
+describe('renamePreset', () => {
+  beforeEach(resetStore);
+
+  it('updates name', () => {
+    const id = useAIConfigStore.getState().createEmptyPreset('A');
+    useAIConfigStore.getState().renamePreset(id, '新名字');
+    expect(useAIConfigStore.getState().presets[0]!.name).toBe('新名字');
+  });
+
+  it('falls back to "预设 N" for blank name', () => {
+    const id = useAIConfigStore.getState().createEmptyPreset('A');
+    useAIConfigStore.getState().renamePreset(id, '   ');
+    expect(useAIConfigStore.getState().presets[0]!.name).toBe('预设 1');
+  });
+
+  it('no-op for unknown id', () => {
+    useAIConfigStore.getState().createEmptyPreset('A');
+    expect(() => useAIConfigStore.getState().renamePreset('nope', 'X')).not.toThrow();
+    expect(useAIConfigStore.getState().presets[0]!.name).toBe('A');
+  });
+});
+
+describe('deletePreset', () => {
+  beforeEach(resetStore);
+
+  it('deletes a non-active preset', () => {
+    const aId = useAIConfigStore.getState().createEmptyPreset('A');
+    const bId = useAIConfigStore.getState().createEmptyPreset('B');
+    useAIConfigStore.getState().setActivePreset(aId);
+    expect(useAIConfigStore.getState().deletePreset(bId)).toBe(true);
+    expect(useAIConfigStore.getState().presets.map((p) => p.id)).toEqual([aId]);
+    expect(useAIConfigStore.getState().activePresetId).toBe(aId);
+  });
+
+  it('switches to next preset when deleting active', () => {
+    const aId = useAIConfigStore.getState().createEmptyPreset('A');
+    const bId = useAIConfigStore.getState().createEmptyPreset('B');
+    useAIConfigStore.getState().setActivePreset(aId);
+    useAIConfigStore.getState().deletePreset(aId);
+    expect(useAIConfigStore.getState().activePresetId).toBe(bId);
+  });
+
+  it('switches to previous preset when deleting active and no next exists', () => {
+    const aId = useAIConfigStore.getState().createEmptyPreset('A');
+    const bId = useAIConfigStore.getState().createEmptyPreset('B');
+    useAIConfigStore.getState().setActivePreset(bId);
+    useAIConfigStore.getState().deletePreset(bId);
+    expect(useAIConfigStore.getState().activePresetId).toBe(aId);
+  });
+
+  it('refuses to delete the last preset and returns false', () => {
+    const id = useAIConfigStore.getState().createEmptyPreset('A');
+    useAIConfigStore.getState().setActivePreset(id);
+    expect(useAIConfigStore.getState().deletePreset(id)).toBe(false);
+    expect(useAIConfigStore.getState().presets).toHaveLength(1);
+  });
+});
