@@ -22,6 +22,7 @@ import { HeartbeatSettingsPage } from './pages/HeartbeatSettingsPage';
 import { ModelSelectPage } from './pages/ModelSelectPage';
 import { DeveloperToolsPage } from './pages/DeveloperToolsPage';
 import { StoragePage } from './pages/StoragePage';
+import { DataBackupPage } from './pages/DataBackupPage';
 import { AppSettingsPage } from './pages/AppSettingsPage';
 import { AppDetailPage } from './pages/AppDetailPage';
 import { AppIconEditorPage } from './pages/AppIconEditorPage';
@@ -37,6 +38,7 @@ const PAGE_TITLES: Record<string, string> = {
   wallpaper: '壁纸',
   display: '显示与亮度',
   storage: '存储',
+  dataBackup: '数据导入导出',
   apps: 'App',
   appDetail: 'App',
   appIconEditor: '编辑图标',
@@ -76,6 +78,7 @@ const PAGE_COMPONENTS: Record<string, ComponentType<SettingsPageProps>> = {
   wallpaper: asPage(WallpaperPage),
   display: asPage(DisplayPage),
   storage: asPage(StoragePage),
+  dataBackup: asPage(DataBackupPage),
   apps: asPage(AppSettingsPage),
   appDetail: AppDetailPage,
   appIconEditor: AppIconEditorPage,

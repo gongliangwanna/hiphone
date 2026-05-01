@@ -6,6 +6,7 @@ export type SettingsPageId =
   | 'wallpaper'
   | 'display'
   | 'storage'
+  | 'dataBackup'
   | 'apps'
   | 'appDetail'
   | 'appIconEditor'

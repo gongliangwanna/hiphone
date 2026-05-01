@@ -8,6 +8,7 @@ import {
   Calendar,
   Folder,
   Trash2,
+  Database,
 } from 'lucide-react';
 import { ListSection, ListRow } from '@/system';
 import {
@@ -16,6 +17,7 @@ import {
   STORAGE_CATEGORIES,
   type StorageUsageResult,
 } from '@/platform/storage/calculateStorageUsage';
+import { useSettingsNavStore } from '../settingsNavStore';
 
 const ICON_MAP: Record<string, React.ComponentType<{ size?: number }>> = {
   MessageCircle,
@@ -163,6 +165,17 @@ export function StoragePage() {
               />
             );
           })}
+        </ListSection>
+
+        {/* ── Data Import / Export ── */}
+        <ListSection>
+          <ListRow
+            icon={<Database size={16} />}
+            iconColor="#007AFF"
+            title="数据导入导出"
+            onClick={() => useSettingsNavStore.getState().push('dataBackup')}
+            isLast
+          />
         </ListSection>
 
         {/* ── Delete All Data ── */}

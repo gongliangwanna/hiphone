@@ -1,5 +1,6 @@
 import { buildAgentSystemPrompt } from './builderAgentPrompt';
 import { getCapabilityTopics } from './builderTools';
+import { downloadBlob } from '@/platform/storage/downloadBlob';
 
 const DEFAULT_EXPORT_DRAFT_ID = 'ai-app-codex-draft';
 
@@ -103,23 +104,10 @@ export function buildAIWorkshopCodexKitMarkdown(
 export function triggerAIWorkshopCodexKitDownload(
   options: AIWorkshopCodexKitOptions = {},
 ): DownloadedAIWorkshopCodexKit {
-  if (typeof document === 'undefined' || typeof URL === 'undefined') {
-    throw new Error('download is only available in a browser environment');
-  }
-
   const generatedAt = options.generatedAt ?? new Date();
   const content = buildAIWorkshopCodexKitMarkdown({ ...options, generatedAt });
   const filename = getAIWorkshopCodexKitFilename(generatedAt);
   const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.style.display = 'none';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-
+  downloadBlob(blob, filename);
   return { filename, bytes: blob.size };
 }
