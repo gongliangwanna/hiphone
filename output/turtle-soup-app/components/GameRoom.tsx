@@ -30,7 +30,7 @@ export function GameRoom({ character, onBack }: Props) {
     : '开 · 第 · 一 · 题';
 
   return (
-    <div className="flex h-full min-h-screen flex-col" style={{ background: '#F1E4CC' }}>
+    <div className="flex h-full min-h-0 flex-col" style={{ background: '#F1E4CC' }}>
       <header className="sticky top-0 z-10 border-b border-[#1A0F0A]/20" style={{ background: '#F1E4CC' }}>
         <div className="flex items-center gap-2.5 px-3 py-2.5">
           <button

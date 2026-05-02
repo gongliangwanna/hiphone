@@ -102,11 +102,11 @@ export default function App() {
 
   return (
     <div
-      className="relative h-full min-h-screen"
+      className="relative h-full"
       style={{ background: '#F1E4CC', color: '#1A0F0A' }}
     >
       {!hydrated ? (
-        <div className="flex min-h-screen items-center justify-center">
+        <div className="flex h-full items-center justify-center">
           <div className="font-mono text-[12px] uppercase tracking-[0.2em] text-[#5C4937]">
             正在调阅卷宗 · loading
           </div>
