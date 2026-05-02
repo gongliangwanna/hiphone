@@ -1500,7 +1500,10 @@ function TypingDots({ avatarSrc, ringIndex }: { avatarSrc: string; ringIndex: nu
           <motion.span
             key={i}
             className="rounded-full"
-            style={{ width: 5, height: 5, backgroundColor: T.textMuted }}
+            // display: inline-block 必加 —— motion 的 y 关键帧会翻译成 CSS
+            // transform，而非 replaced 的 inline span 在严格浏览器（新版
+            // Android Chrome）上不参与 transform 渲染，导致点点不会跳动。
+            style={{ width: 5, height: 5, backgroundColor: T.textMuted, display: 'inline-block' }}
             animate={{ y: [0, -4, 0], opacity: [0.3, 0.8, 0.3] }}
             transition={{ duration: 1, repeat: Infinity, delay: i * 0.18, ease: 'easeInOut' }}
           />
