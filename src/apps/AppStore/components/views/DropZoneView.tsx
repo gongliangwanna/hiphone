@@ -36,13 +36,13 @@ export function DropZoneView({ onFile }: Props) {
         拖入或点击选择
       </div>
       <div className="text-[11px] text-[var(--color-secondaryLabel)] mt-1">
-        需包含 manifest.json + 入口 TSX
+        需包含 manifest.json + 入口 TSX · .zip / .pdf 等任意后缀
       </div>
       <input
         ref={inputRef}
         data-testid="upload-file-input"
         type="file"
-        accept=".zip,application/zip"
+        accept=".zip,.pdf,application/zip,application/pdf,application/octet-stream"
         className="hidden"
         onChange={(e) => {
           const f = e.target.files?.[0];

@@ -21,4 +21,23 @@ describe('DropZoneView', () => {
     fireEvent.drop(zone, { dataTransfer: { files: [file] } });
     expect(onFile).toHaveBeenCalledWith(file);
   });
+
+  // The installer parses content via JSZip, not by filename — so the file
+  // picker must accept zip-payload carriers with non-.zip extensions
+  // (.pdf is common on platforms that block .zip uploads).
+  it('accept attribute permits .pdf-renamed zip carriers', () => {
+    render(<DropZoneView onFile={vi.fn()} />);
+    const input = screen.getByTestId('upload-file-input') as HTMLInputElement;
+    expect(input.accept).toMatch(/\.pdf/);
+    expect(input.accept).toMatch(/\.zip/);
+  });
+
+  it('calls onFile when a .pdf-extension file is selected (carrier passthrough)', () => {
+    const onFile = vi.fn();
+    render(<DropZoneView onFile={onFile} />);
+    const input = screen.getByTestId('upload-file-input') as HTMLInputElement;
+    const file = new File(['x'], 'app.pdf', { type: 'application/pdf' });
+    fireEvent.change(input, { target: { files: [file] } });
+    expect(onFile).toHaveBeenCalledWith(file);
+  });
 });

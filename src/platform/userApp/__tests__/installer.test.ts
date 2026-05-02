@@ -71,6 +71,29 @@ describe('installer.install — single file', () => {
     expect(typeof entry?.component).toBe('function');
   });
 
+  it('installs a zip-payload regardless of file extension or MIME type', async () => {
+    // The installer parses content via JSZip — filename / extension / MIME
+    // are never inspected. This is the contract the App Store UI relies on
+    // when accepting non-.zip carriers (e.g. .pdf-renamed packages used to
+    // bypass platforms that block .zip uploads).
+    const zipBlob = await makeZip({
+      'manifest.json': JSON.stringify({
+        id: 'pdf-carrier', name: 'PDF Carrier', version: '1.0.0', entry: 'App.tsx',
+      }),
+      'App.tsx': helloTsx,
+    });
+    const buf = await zipBlob.arrayBuffer();
+    // Wrap the same bytes in a File with a .pdf name + application/pdf MIME.
+    const pdfFile = new File([buf], 'app.pdf', { type: 'application/pdf' });
+
+    const result = await install(pdfFile);
+
+    expect(result.id).toBe('pdf-carrier');
+    expect(useInstalledUserAppsStore.getState().apps.map((a) => a.id)).toEqual([
+      'pdf-carrier',
+    ]);
+  });
+
   it('rejects a zip missing manifest.json', async () => {
     const zip = await makeZip({ 'App.tsx': helloTsx });
     await expect(install(zip)).rejects.toBeInstanceOf(InstallError);
