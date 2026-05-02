@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { BookOpen, Clock3, LoaderCircle, Send, Sparkles } from 'lucide-react';
+import { BookOpen, Clock3, LoaderCircle, LogOut, Send } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { AppScreen, Material, NavBar } from '@/system';
 import { wasAppKilled, clearAppKilled } from '@/platform/stores/appRuntimeStore';
@@ -224,7 +224,7 @@ export function PresenceApp() {
           onBack={() => setView('home')}
           rightButtons={[
             {
-              icon: <span className="text-[15px] font-semibold">离开</span>,
+              icon: <LogOut size={20} strokeWidth={1.8} />,
               onClick: handleOpenLeave,
               testId: 'presence-leave-btn',
               ariaLabel: '离开场景',
@@ -312,7 +312,7 @@ export function PresenceApp() {
                     style={{
                       backgroundColor: 'rgba(255,255,255,0.74)',
                       border: '0.5px solid rgba(0,122,255,0.18)',
-                      boxShadow: '0 18px 42px rgba(0,122,255,0.11)',
+                      boxShadow: '0 10px 28px rgba(0,122,255,0.08)',
                     }}
                     data-testid="presence-restore-card"
                   >
@@ -353,9 +353,9 @@ export function PresenceApp() {
                       </motion.button>
                       <motion.button
                         type="button"
-                        className="h-9 flex-1 rounded-[14px] text-[14px] font-semibold"
+                        className="h-9 flex-1 rounded-[14px] text-[14px] font-medium"
                         style={{
-                          backgroundColor: 'rgba(118,118,128,0.12)',
+                          backgroundColor: 'transparent',
                           color: 'var(--color-secondaryLabel)',
                         }}
                         onClick={handleDiscard}
@@ -387,15 +387,9 @@ export function PresenceApp() {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/76 via-black/24 to-white/8" />
                 <div className="relative flex min-h-[218px] flex-col justify-between p-4 text-white">
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold text-white/74">
-                        <Sparkles size={13} strokeWidth={1.8} />
-                        即将进入
-                      </div>
-                      <h1 className="truncate text-[27px] font-semibold leading-tight">
-                        {selectedPreset?.title ?? previewBackdrop.title}
-                      </h1>
-                    </div>
+                    <h1 className="min-w-0 truncate text-[27px] font-semibold leading-tight">
+                      {selectedPreset?.title ?? previewBackdrop.title}
+                    </h1>
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/18">
                       <img
                         src={selectedCharacter?.avatar || '/resource/avatars/preset-01.jpg'}

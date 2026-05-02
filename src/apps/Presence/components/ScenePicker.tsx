@@ -17,21 +17,13 @@ export function ScenePicker({
 }: ScenePickerProps) {
   return (
     <section className="px-4" aria-labelledby="presence-scene-title">
-      <div className="mb-3 flex items-center justify-between">
-        <h2
-          id="presence-scene-title"
-          className="text-[13px] font-semibold tracking-[0.01em]"
-          style={{ color: 'var(--color-label)' }}
-        >
-          选择场景
-        </h2>
-        <span
-          className="text-[11px] font-medium"
-          style={{ color: 'var(--color-tertiaryLabel)' }}
-        >
-          可自定义
-        </span>
-      </div>
+      <h2
+        id="presence-scene-title"
+        className="mb-3 text-[11px] font-semibold tracking-[0.06em]"
+        style={{ color: 'var(--color-tertiaryLabel)' }}
+      >
+        选择场景
+      </h2>
 
       <motion.div
         className="overflow-hidden rounded-[22px]"
@@ -48,22 +40,12 @@ export function ScenePicker({
         <textarea
           value={sceneText}
           onChange={(event) => onSceneTextChange(event.target.value)}
-          placeholder="例如：雨夜的便利店门口，她撑着伞站在灯下等你。"
+          placeholder="雨夜的便利店门口，她撑着伞等你"
           maxLength={200}
           className="h-[112px] w-full resize-none bg-transparent px-4 py-3 text-[15px] leading-6 outline-none"
           style={{ color: 'var(--color-label)' }}
           data-testid="presence-scene-input"
         />
-        <div
-          className="flex items-center justify-between border-t px-4 py-2 text-[11px]"
-          style={{
-            borderColor: 'rgba(60,60,67,0.1)',
-            color: 'var(--color-tertiaryLabel)',
-          }}
-        >
-          <span>自定义场景会匹配一张预设背景</span>
-          <span>{sceneText.trim().length} 字</span>
-        </div>
       </motion.div>
 
       <div

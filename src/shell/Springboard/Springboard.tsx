@@ -35,8 +35,10 @@ export function Springboard({ sizeTier, viewportWidth }: SpringboardProps) {
   const openApp = useAppRuntimeStore((s) => s.openApp);
   const hideIconImages = usePerfDebugStore((s) => s.hideIconImages);
 
-  // Re-render when user apps change (subscription side-effect only)
-  useInstalledUserAppsStore((s) => s.apps);
+  // Subscribe to installed user apps. The reference changes on add/remove,
+  // which invalidates the `apps` memo below so newly-installed icons land
+  // on the grid without waiting for an unrelated layout change.
+  const installedUserApps = useInstalledUserAppsStore((s) => s.apps);
 
   // Layout store
   const appOrder = useSpringboardLayoutStore((s) => s.appOrder);
@@ -55,9 +57,7 @@ export function Springboard({ sizeTier, viewportWidth }: SpringboardProps) {
   const dockApps = useMemo(() => getDockAppsFromIds(dockIds), [dockIds]);
   const apps = useMemo(
     () => getAppsWithUserInstalled(dockIds),
-    // `apps` lookup also depends on the user-installed store, which we
-    // already subscribe to above — that subscription drives our re-render.
-    [dockIds],
+    [dockIds, installedUserApps],
   );
 
   // Resolve unified slot pages, then split into parallel app / widget views.

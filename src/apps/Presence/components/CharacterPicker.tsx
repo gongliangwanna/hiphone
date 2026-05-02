@@ -16,8 +16,8 @@ export function CharacterPicker({
     <section className="px-4" aria-labelledby="presence-character-title">
       <h2
         id="presence-character-title"
-        className="mb-3 text-[13px] font-semibold tracking-[0.01em]"
-        style={{ color: 'var(--color-label)' }}
+        className="mb-3 text-[11px] font-semibold tracking-[0.06em]"
+        style={{ color: 'var(--color-tertiaryLabel)' }}
       >
         选择角色
       </h2>
@@ -47,7 +47,7 @@ export function CharacterPicker({
                 key={character.id}
                 type="button"
                 onClick={() => onSelect(character.id)}
-                className="relative flex w-[82px] shrink-0 flex-col items-center gap-2 rounded-[20px] px-2 py-3 text-center"
+                className="relative flex w-[82px] shrink-0 flex-col items-center gap-2 rounded-[18px] px-2 py-3 text-center"
                 style={{
                   backgroundColor: active
                     ? 'rgba(255,255,255,0.88)'
@@ -67,7 +67,7 @@ export function CharacterPicker({
                 aria-pressed={active}
               >
                 <span
-                  className="absolute inset-0 rounded-[20px] opacity-70"
+                  className="absolute inset-0 rounded-[18px] opacity-70"
                   style={{
                     background: active
                       ? 'linear-gradient(180deg, rgba(0,122,255,0.14), rgba(255,255,255,0))'

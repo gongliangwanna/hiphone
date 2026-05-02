@@ -52,7 +52,7 @@ export function SceneHero({
         transition={{ delay: 0.05, duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
       >
         <div
-          className="flex items-end gap-3 rounded-[24px] p-3"
+          className="flex items-end gap-3 rounded-[22px] p-3"
           style={{
             backgroundColor: 'rgba(12,14,18,0.28)',
             border: '0.5px solid rgba(255,255,255,0.22)',
@@ -67,16 +67,9 @@ export function SceneHero({
             style={{ boxShadow: '0 0 0 2px rgba(255,255,255,0.78)' }}
           />
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <h1 className={compact ? 'truncate text-[18px] font-semibold' : 'truncate text-[22px] font-semibold'}>
-                {character?.name || '角色'}
-              </h1>
-              {!compact && (
-                <span className="rounded-full bg-white/18 px-2 py-0.5 text-[11px] font-semibold text-white/86">
-                  在场
-                </span>
-              )}
-            </div>
+            <h1 className={compact ? 'truncate text-[18px] font-semibold' : 'truncate text-[22px] font-semibold'}>
+              {character?.name || '角色'}
+            </h1>
             <p className={compact ? 'mt-1 line-clamp-2 text-[13px] leading-5 text-white/82' : 'mt-2 line-clamp-2 text-[14px] leading-6 text-white/86'}>
               {sceneText || backdrop.title}
             </p>

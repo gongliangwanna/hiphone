@@ -62,16 +62,15 @@ export function FragmentStream({
       {turns.map((turn, index) => {
         if (turn.role === 'user') {
           return (
-            <motion.div
+            <motion.p
               key={turn.id}
-              className="rounded-[20px] px-4 py-3 text-[15px] leading-6"
+              className="border-l-2 pl-3 text-[15px] leading-7"
               style={{
-                backgroundColor: 'rgba(0,122,255,0.1)',
-                border: '0.5px solid rgba(0,122,255,0.14)',
+                borderColor: 'rgba(0,122,255,0.34)',
                 color: 'var(--color-label)',
               }}
-              initial={{ opacity: 0, y: 10, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
               transition={{
                 delay: Math.min(index * 0.035, 0.18),
                 duration: 0.28,
@@ -79,16 +78,15 @@ export function FragmentStream({
               }}
               data-testid="presence-user-turn"
             >
-              <span className="font-semibold">你：</span>
               {turn.content}
-            </motion.div>
+            </motion.p>
           );
         }
 
         return (
           <motion.article
             key={turn.id}
-            className="space-y-2 rounded-[24px] px-4 py-4"
+            className="space-y-2 rounded-[22px] px-4 py-4"
             style={{
               backgroundColor: 'rgba(255,255,255,0.72)',
               border: '0.5px solid rgba(60,60,67,0.12)',

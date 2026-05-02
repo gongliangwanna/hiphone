@@ -139,6 +139,27 @@ describe('Springboard', () => {
     expect(dock).toHaveStyle({ paddingBottom: '10px' });
   });
 
+  it('renders newly-installed user apps without an unrelated layout change', () => {
+    render(<Springboard sizeTier="regular" viewportWidth={390} />);
+
+    expect(screen.queryByTestId('app-icon-test-live-install')).toBeNull();
+
+    act(() => {
+      useInstalledUserAppsStore.getState().add({
+        id: 'test-live-install',
+        name: '直装',
+        iconDataUrl: null,
+        page: 1,
+        perspectiveAware: false,
+        version: '1.0.0',
+        installedAt: 1_700_000_000_000,
+        sizeBytes: 0,
+      });
+    });
+
+    expect(screen.getByTestId('app-icon-test-live-install')).toBeInTheDocument();
+  });
+
   it('commits to the next page after a slow drag crosses distance threshold', () => {
     seedUserApps(30);
     render(<Springboard sizeTier="regular" viewportWidth={390} />);
