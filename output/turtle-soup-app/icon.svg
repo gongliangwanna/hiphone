@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <rect width="128" height="128" rx="28" fill="#F1E4CC"/>
+
+  <line x1="14" y1="22" x2="114" y2="22" stroke="#1A0F0A" stroke-width="0.6" opacity="0.18"/>
+  <line x1="14" y1="106" x2="114" y2="106" stroke="#1A0F0A" stroke-width="0.6" opacity="0.18"/>
+
+  <path d="M104 0 L128 0 L128 24 Z" fill="#D8C29E"/>
+  <path d="M104 0 L128 24 L104 24 Z" fill="#EADBC0" opacity="0.85"/>
+
+  <g transform="translate(64 64) rotate(-9)">
+    <circle r="34" fill="#B8362E"/>
+    <circle r="34" fill="none" stroke="#6E1F1A" stroke-width="2.2" opacity="0.55"/>
+    <circle r="27" fill="none" stroke="#F1E4CC" stroke-width="0.9" opacity="0.65"/>
+    <text x="0" y="2" text-anchor="middle" dominant-baseline="central"
+          font-family="'STSong','Songti SC','SimSun',ui-serif,serif"
+          font-size="34" font-weight="700" fill="#F1E4CC">謎</text>
+  </g>
+
+  <circle cx="34" cy="98" r="1.4" fill="#1A0F0A" opacity="0.4"/>
+  <circle cx="38" cy="100" r="0.7" fill="#1A0F0A" opacity="0.3"/>
+
+  <text x="14" y="118" font-family="ui-monospace,'SF Mono',Menlo,monospace"
+        font-size="6.5" fill="#1A0F0A" opacity="0.55" letter-spacing="1.2">DOSSIER · 海龟汤馆 · №001</text>
+</svg>
