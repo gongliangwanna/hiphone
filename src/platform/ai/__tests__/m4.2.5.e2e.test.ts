@@ -251,14 +251,21 @@ describe('M4.2.5 E2E — unified {type, param} across apps', () => {
     expect(reply.items).toEqual([{ type: 'text', param: 'sorry, recovered' }]);
     expect(toastSpy).not.toHaveBeenCalled(); // succeeded on 3rd, no toast
 
+    // M4.x bugfix: parse-error retries no longer pollute long-term memory.
+    // Failure raws + correction notices are transient (retryNudges) — only
+    // the user input + the FINAL successful rendered reply are persisted.
     const mem = useCharacterMemory.getState().getAll('char-001');
-    // [0] switch marker, [1] user, [2] bad1 assistant, [3] system err not-json,
-    // [4] bad2 assistant, [5] system err unknown-type, [6] final good rendered
-    expect(mem).toHaveLength(7);
-    expect(mem[3]!.content).toMatch(/不是合法 JSON/);
-    expect(mem[5]!.content).toMatch(/未注册的 type/);
-    expect(mem[5]!.content).toMatch(/unknown_tool/);
-    expect(mem[6]!.content).toBe('sorry, recovered');
+    // [0] switch marker, [1] user 'hi', [2] final assistant 'sorry, recovered'
+    expect(mem).toHaveLength(3);
+    expect(mem[1]!.role).toBe('user');
+    expect(mem[1]!.content).toBe('hi');
+    expect(mem[2]!.role).toBe('assistant');
+    expect(mem[2]!.content).toBe('sorry, recovered');
+    // No bad raws, no parse-error system entries, no exhaustion summary.
+    expect(mem.find((e) => e.content === 'not valid json at all')).toBeUndefined();
+    expect(
+      mem.find((e) => e.role === 'system' && e.content.includes('[格式错误]')),
+    ).toBeUndefined();
   });
 
   it('parse exhaustion in Auction → platform toast fires (no onParseFailure set)', async () => {
@@ -275,10 +282,19 @@ describe('M4.2.5 E2E — unified {type, param} across apps', () => {
     expect(toastSpy).toHaveBeenCalledTimes(1);
     expect(toastSpy).toHaveBeenCalledWith('AI 回复格式错误');
 
-    // Memory has 3 failed attempts + final system summary
+    // M4.x bugfix: exhaustion no longer commits failure raws or the
+    // "已放弃重试" summary to memory. Only the user input + auto switch
+    // marker remain — the toast surfaces failure UX without polluting the
+    // chat thread.
     const mem = useCharacterMemory.getState().getAll('char-001');
-    // [0] switch marker, [1] user, 3×(assistant+system err) = 6, [8] final system summary
-    expect(mem).toHaveLength(9);
-    expect(mem[mem.length - 1]!.content).toMatch(/已放弃重试/);
+    // [0] switch marker, [1] user '开拍'
+    expect(mem).toHaveLength(2);
+    expect(mem[1]!.role).toBe('user');
+    expect(mem[1]!.content).toBe('开拍');
+    expect(mem.find((e) => e.content === 'garbage')).toBeUndefined();
+    expect(mem.find((e) => e.content.includes('已放弃重试'))).toBeUndefined();
+    expect(
+      mem.find((e) => e.role === 'system' && e.content.includes('[格式错误]')),
+    ).toBeUndefined();
   });
 });

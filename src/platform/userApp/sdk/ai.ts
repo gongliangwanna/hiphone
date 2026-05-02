@@ -390,7 +390,22 @@ export function chatWithCharacter(
     }
   }
 
-  async function callLLM(controller: AbortController): Promise<string> {
+  /**
+   * Transient retry context: the bad raws + corrective system messages
+   * accumulated within a single send() call. Threaded into the LLM prompt
+   * so it can self-correct, but NEVER committed to the session buffer or
+   * memoryStore. Discarded once the send() call resolves (success or
+   * exhaustion).
+   */
+  interface RetryNudge {
+    badRaw: string;
+    errMsg: string;
+  }
+
+  async function callLLM(
+    controller: AbortController,
+    retryNudges: readonly RetryNudge[] = [],
+  ): Promise<string> {
     const provider = requireProvider();
 
     const persona = usePersonaStore.getState().getActivePersona();
@@ -430,7 +445,33 @@ export function chatWithCharacter(
       });
     }
 
-    const memoryEntries = [...baseEntries, ...overlay];
+    // Transient retry nudges — visible to the LLM for self-correction within
+    // this send() call only. NOT in buffer / memoryStore.
+    const retryEntries: MemoryEntry[] = [];
+    for (let i = 0; i < retryNudges.length; i++) {
+      const n = retryNudges[i]!;
+      const baseTs = Date.now() + i * 2;
+      retryEntries.push({
+        id: `retry-${i}-bad`,
+        characterId,
+        role: 'assistant',
+        speakerId: characterId,
+        content: n.badRaw,
+        source,
+        createdAt: baseTs,
+      });
+      retryEntries.push({
+        id: `retry-${i}-err`,
+        characterId,
+        role: 'system',
+        speakerId: 'system',
+        content: n.errMsg,
+        source: 'system',
+        createdAt: baseTs + 1,
+      });
+    }
+
+    const memoryEntries = [...baseEntries, ...overlay, ...retryEntries];
 
     const { messages } = promptAssemblyMod.assemblePrompt({
       character: {
@@ -494,17 +535,26 @@ export function chatWithCharacter(
   ): Promise<ChatReply> {
     const knownTypes = new Set(frozenTools.map((t) => t.type));
     const knownTypesArr = [...knownTypes];
+
+    // Transient retry context — accumulates bad raws + corrective messages
+    // ONLY for the duration of this send() call. Threaded into callLLM so
+    // the LLM can self-correct, but NEVER written to the session buffer or
+    // memoryStore. This prevents parse-error pollution in long-term memory
+    // and in user-visible chat threads (the failed raw never escapes; only
+    // the final successful render is committed).
+    const retryNudges: RetryNudge[] = [];
     let lastRaw = '';
 
     for (let attempt = 1; attempt <= 3; attempt++) {
-      const raw = await callLLM(controller);
+      const raw = await callLLM(controller, retryNudges);
       if (controller.signal.aborted) throw new AIAbortedError();
       lastRaw = raw;
 
       const { items, error } = parseReply(raw, knownTypes);
 
       if (error === null) {
-        // Success path — build reply, render once, mirror success.
+        // Success — commit ONLY the final rendered reply. Retry nudges are
+        // discarded with this function's stack frame.
         const renderer = capturedAppId
           ? getReplyRenderer(capturedAppId)
           : getReplyRenderer('');
@@ -519,36 +569,21 @@ export function chatWithCharacter(
         return { raw, rendered, items };
       }
 
-      // Failure path — ALWAYS persist to memoryStore (mirror-independent).
-      // Otherwise the retry sees an identical prompt and repeats the same
-      // mistake.
-      useCharacterMemory.getState().append(characterId, {
-        role: 'assistant',
-        speakerId: characterId,
-        content: raw,
-        source,
+      // Failure — accumulate transient nudge for next retry. NO buffer push,
+      // NO memoryStore write. The nudge never leaves this function.
+      retryNudges.push({
+        badRaw: raw,
+        errMsg: buildParseErrorMessage(error, knownTypesArr),
       });
-      useCharacterMemory.getState().append(characterId, {
-        role: 'system',
-        speakerId: 'system',
-        content: buildParseErrorMessage(error, knownTypesArr),
-        source: 'system',
-      });
-      // Loop — next callLLM will pick up the fresh memoryStore state.
     }
 
-    // Exhausted all 3 attempts — give up.
-    useCharacterMemory.getState().append(characterId, {
-      role: 'system',
-      speakerId: 'system',
-      source: 'system',
-      content: '[格式错误] AI 3 次回复格式均不合法,已放弃重试',
-    });
-
+    // Exhausted 3 attempts. Do NOT commit failure context to permanent state.
+    // Surface only via onParseFailure callback or the default toast — let the
+    // caller decide UX. The user's previous turn (already committed by send()
+    // before runWithRetries) stays; nothing about the failure persists.
     if (options.onParseFailure) {
       options.onParseFailure({ raw: lastRaw, attempts: 3 });
     } else {
-      // Default platform UX — toast.
       showPlatformToast('AI 回复格式错误');
     }
 

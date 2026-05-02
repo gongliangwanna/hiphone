@@ -479,8 +479,7 @@ describe('chatWithCharacter — parse-error retry (M4.2.5 S2)', () => {
     vi.restoreAllMocks();
   });
 
-  it('retries up to 3 times on parse failure, succeeds on 3rd', async () => {
-    // First two responses invalid, third valid
+  it('retries up to 3 times on parse failure, succeeds on 3rd, commits ONLY the final reply', async () => {
     vi.spyOn(chatCompleteMod, 'chatComplete')
       .mockResolvedValueOnce('not json at all')
       .mockResolvedValueOnce('[{"bad":"shape"}]')
@@ -494,32 +493,57 @@ describe('chatWithCharacter — parse-error retry (M4.2.5 S2)', () => {
     expect(reply.raw).toBe('[{"type":"text","param":"finally ok"}]');
     expect(reply.items).toEqual([{ type: 'text', param: 'finally ok' }]);
 
+    // M4.x bugfix: failure raws + parse error notices are TRANSIENT (only
+    // visible to the LLM via retryNudges within this send call). They must
+    // NOT pollute long-term memory or the user-visible chat thread.
     const mem = useCharacterMemory.getState().getAll('char-001');
-    // Expect in memory:
-    //   [0] switch marker (from S2 M4.2)
-    //   [1] user 'hi'
-    //   [2] assistant 'not json at all' (raw of attempt 1)
-    //   [3] system [格式错误] not-json
-    //   [4] assistant '[{"bad":"shape"}]' (raw of attempt 2)
-    //   [5] system [格式错误] wrong-shape
-    //   [6] assistant 'finally ok' (rendered of attempt 3)
-    expect(mem).toHaveLength(7);
+    // [0] switch marker, [1] user 'hi', [2] final assistant 'finally ok'
+    expect(mem).toHaveLength(3);
+    expect(mem.find((e) => e.content === 'not json at all')).toBeUndefined();
+    expect(mem.find((e) => e.content === '[{"bad":"shape"}]')).toBeUndefined();
+    expect(
+      mem.find((e) => e.role === 'system' && e.content.includes('[格式错误]')),
+    ).toBeUndefined();
+    expect(mem[1]!.role).toBe('user');
+    expect(mem[1]!.content).toBe('hi');
     expect(mem[2]!.role).toBe('assistant');
-    expect(mem[2]!.content).toBe('not json at all');
-    expect(mem[3]!.role).toBe('system');
-    expect(mem[3]!.content).toMatch(/不是合法 JSON/);
-    expect(mem[4]!.role).toBe('assistant');
-    expect(mem[4]!.content).toBe('[{"bad":"shape"}]');
-    expect(mem[5]!.role).toBe('system');
-    expect(mem[5]!.content).toMatch(/不符合 \{type, param\} 结构/);
-    expect(mem[6]!.role).toBe('assistant');
-    expect(mem[6]!.content).toBe('finally ok');
+    expect(mem[2]!.content).toBe('finally ok');
   });
 
-  it('3 consecutive failures → returns empty-items ChatReply + default toast', async () => {
-    const toastSpy = vi.spyOn(toastMod, 'show').mockImplementation(() => {});
+  it('retry threads transient nudges into the LLM prompt for self-correction', async () => {
+    // Even though failures are not persisted, the LLM on attempt 2/3 must
+    // see attempt 1's bad raw + the corrective system message — otherwise it
+    // can't self-correct. This is delivered via callLLM's transient
+    // retryNudges parameter, not via the session buffer or memoryStore.
+    const promptSpy = vi.spyOn(promptAssemblyMod, 'assemblePrompt');
     vi.spyOn(chatCompleteMod, 'chatComplete')
-      .mockResolvedValue('total garbage non json');
+      .mockResolvedValueOnce('not json')
+      .mockResolvedValueOnce('[{"type":"text","param":"corrected"}]');
+
+    await withUserAppContext('app-test', async () => {
+      const s = chatWithCharacter('char-001', { persistent: true });
+      return s.send('hi');
+    });
+
+    expect(promptSpy).toHaveBeenCalledTimes(2);
+    const secondArgs = promptSpy.mock.calls[1]![0] as {
+      memoryEntries: ReadonlyArray<{ role: string; content: string }>;
+    };
+    expect(
+      secondArgs.memoryEntries.some(
+        (e) => e.role === 'assistant' && e.content === 'not json',
+      ),
+    ).toBe(true);
+    expect(
+      secondArgs.memoryEntries.some(
+        (e) => e.role === 'system' && e.content.includes('[格式错误]'),
+      ),
+    ).toBe(true);
+  });
+
+  it('3 consecutive failures → empty-items ChatReply + toast, NO failure pollution in memory', async () => {
+    const toastSpy = vi.spyOn(toastMod, 'show').mockImplementation(() => {});
+    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue('total garbage non json');
 
     const reply = await withUserAppContext('app-test', async () => {
       const s = chatWithCharacter('char-001', { persistent: true });
@@ -529,23 +553,33 @@ describe('chatWithCharacter — parse-error retry (M4.2.5 S2)', () => {
     expect(reply.items).toEqual([]);
     expect(reply.rendered).toBe('[生成失败]');
 
-    // Memory has 3 rounds of (bad assistant + system error) + final system summary
+    // M4.x bugfix: exhaustion no longer commits the bad raws or the
+    // "已放弃重试" summary. Only the user's input and the auto switch marker
+    // remain in memory.
     const mem = useCharacterMemory.getState().getAll('char-001');
-    // [0] switch marker, [1] user, then 3 × (assistant + system) = 6, then final system summary
-    expect(mem).toHaveLength(9);
-    expect(mem[mem.length - 1]!.role).toBe('system');
-    expect(mem[mem.length - 1]!.content).toMatch(/已放弃重试/);
+    expect(mem).toHaveLength(2);
+    expect(mem[1]!.role).toBe('user');
+    expect(mem[1]!.content).toBe('please');
+    expect(
+      mem.find((e) => e.content === 'total garbage non json'),
+    ).toBeUndefined();
+    expect(
+      mem.find((e) => e.content.includes('已放弃重试')),
+    ).toBeUndefined();
+    expect(
+      mem.find((e) => e.content.includes('[格式错误]')),
+    ).toBeUndefined();
 
-    // Default toast fired once with the M4.2.5 message.
+    // Default toast still fires for caller-visible feedback.
     expect(toastSpy).toHaveBeenCalledWith('AI 回复格式错误');
   });
 
-  it('unknown-type error gets a message listing the valid types', async () => {
+  it('unknown-type error: corrective nudge reaches the retry prompt but never memory', async () => {
+    const promptSpy = vi.spyOn(promptAssemblyMod, 'assemblePrompt');
     vi.spyOn(chatCompleteMod, 'chatComplete')
       .mockResolvedValueOnce('[{"type":"order_pizza","param":{}}]')
       .mockResolvedValueOnce('[{"type":"text","param":"sorry"}]');
 
-    // Register two tools so knownTypes has content
     registerTools('app-test', [
       { type: 'text', description: '', param: 'string' },
       { type: 'sticker', description: '', param: '{}' },
@@ -556,13 +590,22 @@ describe('chatWithCharacter — parse-error retry (M4.2.5 S2)', () => {
       await s.send('hi');
     });
 
-    const mem = useCharacterMemory.getState().getAll('char-001');
-    const systemErr = mem.find(
+    // The retry's corrective system message lists the valid types — visible
+    // to the LLM via retryNudges, NOT via memoryStore.
+    const secondArgs = promptSpy.mock.calls[1]![0] as {
+      memoryEntries: ReadonlyArray<{ role: string; content: string }>;
+    };
+    const nudge = secondArgs.memoryEntries.find(
       (e) => e.role === 'system' && e.content.includes('未注册的 type'),
     );
-    expect(systemErr).toBeDefined();
-    expect(systemErr!.content).toMatch(/order_pizza/);
-    expect(systemErr!.content).toMatch(/text, sticker/); // knownTypes list
+    expect(nudge).toBeDefined();
+    expect(nudge!.content).toMatch(/order_pizza/);
+    expect(nudge!.content).toMatch(/text, sticker/);
+
+    const mem = useCharacterMemory.getState().getAll('char-001');
+    expect(
+      mem.find((e) => e.role === 'system' && e.content.includes('未注册的 type')),
+    ).toBeUndefined();
   });
 
   it('onParseFailure callback suppresses default toast', async () => {
@@ -585,28 +628,103 @@ describe('chatWithCharacter — parse-error retry (M4.2.5 S2)', () => {
     expect(toastSpy).not.toHaveBeenCalled();
   });
 
-  it('failed attempts persist to memoryStore regardless of mirror flag', async () => {
+  it('mirror:false suppresses ALL memoryStore writes including parse failures', async () => {
+    // Bug fix: previously the retry path wrote bad raws + system errors to
+    // memoryStore even with mirror:false, leaking transient failures into
+    // long-term memory. mirror:false must mean "this entire send() is
+    // invisible to long-term memory — successes AND failures alike".
     vi.spyOn(chatCompleteMod, 'chatComplete')
       .mockResolvedValueOnce('bad1')
       .mockResolvedValueOnce('[{"type":"text","param":"ok"}]');
 
-    await withUserAppContext('app-test', async () => {
+    const reply = await withUserAppContext('app-test', async () => {
       const s = chatWithCharacter('char-001', { persistent: true });
-      // mirror:false → success path would NOT mirror, but failure must still persist
-      await s.send('hi', { mirror: false });
+      return s.send('hi', { mirror: false });
+    });
+
+    // Retry still self-corrected — final reply is the success raw.
+    expect(reply.raw).toBe('[{"type":"text","param":"ok"}]');
+
+    const mem = useCharacterMemory.getState().getAll('char-001');
+    // No bad raw, no system error, no success rendered, no user input.
+    expect(mem.find((e) => e.content === 'bad1')).toBeUndefined();
+    expect(
+      mem.find((e) => e.role === 'system' && e.content.includes('[格式错误]')),
+    ).toBeUndefined();
+    expect(mem.find((e) => e.content === 'hi')).toBeUndefined();
+    // Only the switch marker (system event from session creation) should remain.
+    const nonSystemEvents = mem.filter((e) => e.source !== 'system');
+    expect(nonSystemEvents).toHaveLength(0);
+  });
+
+  it('persistent=false: parse failures do NOT pollute memoryStore', async () => {
+    // Bug fix: persistent=false sessions should be fully isolated from long-
+    // term memory. Previously the retry path wrote failure entries to memory
+    // even when persistent=false (which doesn't even help retry, since
+    // persistent=false reads from a frozen snapshot).
+    vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue('total garbage');
+
+    // Seed prior memory so we can detect any leakage by content.
+    useCharacterMemory.getState().append('char-001', {
+      role: 'user',
+      speakerId: 'me',
+      content: 'pre-existing',
+      source: 'xingyu',
+    });
+
+    await withUserAppContext('app-test', async () => {
+      const s = chatWithCharacter('char-001', { persistent: false });
+      await s.send('hello');
     });
 
     const mem = useCharacterMemory.getState().getAll('char-001');
-    // Expect: [0] switch marker, [1] bad assistant, [2] system err
-    // NO user (mirror:false skipped the user append), NO success assistant (mirror:false)
-    const failureRaws = mem.filter(
-      (e) => e.role === 'assistant' && e.content === 'bad1',
-    );
-    expect(failureRaws).toHaveLength(1);
-    const systemErrs = mem.filter(
-      (e) => e.role === 'system' && e.content.includes('[格式错误]'),
-    );
-    expect(systemErrs).toHaveLength(1);
+    // No user input, no failed raws, no system parse errors, no exhaustion
+    // summary. The auto app-switch marker (source: 'system') is unrelated to
+    // this bug and may be present.
+    expect(mem.find((e) => e.content === 'hello')).toBeUndefined();
+    expect(mem.find((e) => e.content === 'total garbage')).toBeUndefined();
+    expect(
+      mem.find((e) => e.content.includes('[格式错误]')),
+    ).toBeUndefined();
+    expect(
+      mem.find((e) => e.content.includes('已放弃重试')),
+    ).toBeUndefined();
+  });
+
+  it('persistent=false: retry self-corrects via transient nudges (no buffer/memory pollution)', async () => {
+    // For persistent=false sessions the retry must still see attempt 1's bad
+    // raw + corrective system message so it can self-correct on attempt 2 —
+    // delivered via callLLM's transient retryNudges, not via session buffer
+    // or memoryStore (both stay clean).
+    const promptSpy = vi.spyOn(promptAssemblyMod, 'assemblePrompt');
+    vi.spyOn(chatCompleteMod, 'chatComplete')
+      .mockResolvedValueOnce('not json')
+      .mockResolvedValueOnce('[{"type":"text","param":"ok"}]');
+
+    const reply = await withUserAppContext('app-test', async () => {
+      const s = chatWithCharacter('char-001', { persistent: false });
+      return s.send('hi');
+    });
+
+    expect(reply.raw).toBe('[{"type":"text","param":"ok"}]');
+
+    // Second assemblePrompt call should have seen the bad raw + system error
+    // in its memoryEntries (via the buffer overlay), so the LLM had context
+    // to self-correct.
+    expect(promptSpy).toHaveBeenCalledTimes(2);
+    const secondCallArgs = promptSpy.mock.calls[1]![0] as {
+      memoryEntries: ReadonlyArray<{ role: string; content: string }>;
+    };
+    expect(
+      secondCallArgs.memoryEntries.some(
+        (e) => e.role === 'assistant' && e.content === 'not json',
+      ),
+    ).toBe(true);
+    expect(
+      secondCallArgs.memoryEntries.some(
+        (e) => e.role === 'system' && e.content.includes('[格式错误]'),
+      ),
+    ).toBe(true);
   });
 
   it('replyToLast also respects the retry loop + onParseFailure', async () => {
