@@ -7,12 +7,21 @@ import { loadInstalledApps } from './platform/userApp/installer';
 import { mountFakeUserAppIfDev } from './platform/userApp/devIcon';
 import { installDevApi } from './platform/userApp/devInstall';
 import { mountBuiltinUserApps } from './platform/userApp/builtinUserApps';
+import { AgeGate } from './system/AgeGate';
 
 // Register all builtin apps into the Registry at module load.
 // Safe to run at module scope: registerBuiltins is idempotent.
 registerBuiltins();
 
 export function App() {
+  return (
+    <AgeGate>
+      <PhoneApp />
+    </AgeGate>
+  );
+}
+
+function PhoneApp() {
   useEffect(() => {
     startHeartbeatScheduler();
     // Rebuild installedUserAppsStore + appRegistry from IDB on every startup.
