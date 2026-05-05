@@ -1,0 +1,601 @@
+<!doctype html><html><head><meta charset="utf-8"><title>cream-sticker-diag-v3-final</title><style>body{font-family:monospace;padding:20px;background:#f4f4f7}iframe{display:block;width:260px;height:420px;border:1px solid #888;margin:14px 0;background:white}.case{display:grid;grid-template-columns:80px 280px 1fr;gap:12px;align-items:start}pre{white-space:pre-wrap;background:white;padding:12px;border-radius:8px}</style></head><body><h1>cream sticker diag v3 final</h1><p>Expected: childCount=1; short rect height should be close to content height + padding, not 250px.</p><pre id="out">pending</pre><div class="case"><strong>other</strong><iframe id="other" sandbox="allow-scripts" srcdoc="<!doctype html><html><head><meta charset=&quot;utf-8&quot;><style>html,
+body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, &quot;SF Pro Text&quot;, &quot;PingFang SC&quot;, sans-serif;
+}
+
+body {
+  box-sizing: border-box;
+  padding: 5px 6px 8px;
+  text-align: left;
+}
+
+body.is-mine {
+  text-align: right;
+}
+
+body.is-other {
+  text-align: left;
+}
+
+.bubble {
+  --ink: #553a43;
+  --rim: rgba(222, 132, 165, 0.34);
+  --tail-a: #ffe7f0;
+  --tail-b: #ffc8dc;
+  --shadow: rgba(128, 68, 92, 0.13);
+  position: relative;
+  display: inline-block;
+  box-sizing: border-box;
+  min-width: 44px;
+  max-width: calc(100% - 10px);
+  min-height: 34px;
+  padding: 10px 13px 11px;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.48;
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+  vertical-align: top;
+  background:
+    radial-gradient(circle at 16px 12px, rgba(255,255,255,0.92) 0 5px, transparent 6px),
+    radial-gradient(circle at calc(100% - 18px) 14px, rgba(255,192,215,0.36) 0 4px, transparent 5px),
+    radial-gradient(circle at 80% 86%, rgba(255,143,184,0.2), transparent 30%),
+    linear-gradient(180deg, #fffaf0 0%, #ffeaf2 62%, #ffd3e4 100%),
+    url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MiIgaGVpZ2h0PSI3MiIgdmlld0JveD0iMCAwIDcyIDcyIj4KICA8cmVjdCB3aWR0aD0iNzIiIGhlaWdodD0iNzIiIGZpbGw9IiNmZmY4ZWEiLz4KICA8Y2lyY2xlIGN4PSI5IiBjeT0iMTMiIHI9IjEuMyIgZmlsbD0iI2YzYzhkNCIgb3BhY2l0eT0iLjM0Ii8+CiAgPGNpcmNsZSBjeD0iMzEiIGN5PSI4IiByPSIuOSIgZmlsbD0iI2VlYzRhNSIgb3BhY2l0eT0iLjI2Ii8+CiAgPGNpcmNsZSBjeD0iNjIiIGN5PSIxOCIgcj0iMS4xIiBmaWxsPSIjZjFiOWM5IiBvcGFjaXR5PSIuMjYiLz4KICA8Y2lyY2xlIGN4PSIxOSIgY3k9IjM5IiByPSIxIiBmaWxsPSIjZGZjNmZmIiBvcGFjaXR5PSIuMjUiLz4KICA8Y2lyY2xlIGN4PSI0OCIgY3k9IjM1IiByPSIxLjIiIGZpbGw9IiNmNGM3YWIiIG9wYWNpdHk9Ii4yNCIvPgogIDxjaXJjbGUgY3g9IjYzIiBjeT0iNTYiIHI9Ii45IiBmaWxsPSIjZDljZWY5IiBvcGFjaXR5PSIuMjgiLz4KICA8cGF0aCBkPSJNMCAyMmMxMyA0IDI1LTQgMzkgMCAxMSAzIDIwIDEgMzMtMnYyYy0xMyAzLTIyIDUtMzMgMi0xNC00LTI2IDQtMzkgMHoiIGZpbGw9IiNlOWM5ZDQiIG9wYWNpdHk9Ii4xMiIvPgogIDxwYXRoIGQ9Ik0wIDU1YzEyLTMgMjUgMiAzNy0xIDE0LTQgMjMtMyAzNSAxdjJjLTEyLTQtMjEtNS0zNS0xLTEyIDMtMjUtMi0zNyAxeiIgZmlsbD0iI2Q3YzhmNSIgb3BhY2l0eT0iLjEzIi8+CiAgPHBhdGggZD0iTTE0IDB2NzJNMzcgMHY3Mk02MCAwdjcyIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iLjciIG9wYWNpdHk9Ii4yOCIvPgo8L3N2Zz4K&quot;);
+  background-size: auto, auto, auto, auto, 72px 72px;
+  border: 1px solid var(--rim);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.82),
+    0 4px 12px var(--shadow);
+}
+
+.bubble.mine {
+  border-radius: 21px 9px 21px 21px;
+}
+
+.bubble.other {
+  --ink: #4d4a64;
+  --rim: rgba(123, 151, 213, 0.26);
+  --tail-a: #eef4ff;
+  --tail-b: #dfe8ff;
+  --shadow: rgba(83, 94, 140, 0.11);
+  border-radius: 9px 21px 21px 21px;
+  background:
+    radial-gradient(circle at 17px 12px, rgba(255,255,255,0.94) 0 5px, transparent 6px),
+    radial-gradient(circle at calc(100% - 18px) 14px, rgba(182,202,255,0.42) 0 4px, transparent 5px),
+    radial-gradient(circle at 84% 84%, rgba(196,205,255,0.2), transparent 30%),
+    linear-gradient(180deg, #fffefa 0%, #f0f4ff 64%, #e6edff 100%),
+    url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MiIgaGVpZ2h0PSI3MiIgdmlld0JveD0iMCAwIDcyIDcyIj4KICA8cmVjdCB3aWR0aD0iNzIiIGhlaWdodD0iNzIiIGZpbGw9IiNmZmY4ZWEiLz4KICA8Y2lyY2xlIGN4PSI5IiBjeT0iMTMiIHI9IjEuMyIgZmlsbD0iI2YzYzhkNCIgb3BhY2l0eT0iLjM0Ii8+CiAgPGNpcmNsZSBjeD0iMzEiIGN5PSI4IiByPSIuOSIgZmlsbD0iI2VlYzRhNSIgb3BhY2l0eT0iLjI2Ii8+CiAgPGNpcmNsZSBjeD0iNjIiIGN5PSIxOCIgcj0iMS4xIiBmaWxsPSIjZjFiOWM5IiBvcGFjaXR5PSIuMjYiLz4KICA8Y2lyY2xlIGN4PSIxOSIgY3k9IjM5IiByPSIxIiBmaWxsPSIjZGZjNmZmIiBvcGFjaXR5PSIuMjUiLz4KICA8Y2lyY2xlIGN4PSI0OCIgY3k9IjM1IiByPSIxLjIiIGZpbGw9IiNmNGM3YWIiIG9wYWNpdHk9Ii4yNCIvPgogIDxjaXJjbGUgY3g9IjYzIiBjeT0iNTYiIHI9Ii45IiBmaWxsPSIjZDljZWY5IiBvcGFjaXR5PSIuMjgiLz4KICA8cGF0aCBkPSJNMCAyMmMxMyA0IDI1LTQgMzkgMCAxMSAzIDIwIDEgMzMtMnYyYy0xMyAzLTIyIDUtMzMgMi0xNC00LTI2IDQtMzkgMHoiIGZpbGw9IiNlOWM5ZDQiIG9wYWNpdHk9Ii4xMiIvPgogIDxwYXRoIGQ9Ik0wIDU1YzEyLTMgMjUgMiAzNy0xIDE0LTQgMjMtMyAzNSAxdjJjLTEyLTQtMjEtNS0zNS0xLTEyIDMtMjUtMi0zNyAxeiIgZmlsbD0iI2Q3YzhmNSIgb3BhY2l0eT0iLjEzIi8+CiAgPHBhdGggZD0iTTE0IDB2NzJNMzcgMHY3Mk02MCAwdjcyIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iLjciIG9wYWNpdHk9Ii4yOCIvPgo8L3N2Zz4K&quot;);
+  background-size: auto, auto, auto, auto, 72px 72px;
+}
+
+.bubble::before,
+.bubble::after {
+  content: &quot;&quot;;
+  position: absolute;
+  pointer-events: none;
+}
+
+.bubble::before {
+  width: 13px;
+  height: 13px;
+  bottom: 6px;
+  background: linear-gradient(135deg, var(--tail-a), var(--tail-b));
+  border: 1px solid var(--rim);
+  box-shadow: 0 3px 8px var(--shadow);
+  z-index: -1;
+}
+
+.bubble.mine::before {
+  right: -4px;
+  border-radius: 0 10px 12px 10px;
+  transform: rotate(-18deg) skewX(-12deg);
+}
+
+.bubble.other::before {
+  left: -4px;
+  border-radius: 10px 0 10px 12px;
+  transform: rotate(18deg) skewX(12deg);
+}
+
+.bubble::after {
+  inset: 4px;
+  border-radius: inherit;
+  border: 1px dashed rgba(129, 78, 103, 0.1);
+  z-index: 0;
+}
+
+.bubble.long::after,
+.bubble.tall::after {
+  border-style: solid;
+  border-color: rgba(255,255,255,0.34);
+}
+
+.bubble.short {
+  padding-top: 12px;
+  padding-bottom: 13px;
+}
+
+.bubble.short.mine .content {
+  padding-left: 18px;
+}
+
+.bubble.short.other .content {
+  padding-right: 18px;
+}
+
+.bubble.short.mine {
+  background:
+    linear-gradient(135deg, rgba(255,230,143,0.62) 0 16px, transparent 17px) right 15px top -2px / 56px 17px no-repeat,
+    radial-gradient(circle at 17px 13px, rgba(255,244,172,0.92) 0 13px, transparent 14px),
+    radial-gradient(circle at 16px 12px, rgba(255,255,255,0.9) 0 5px, transparent 6px),
+    radial-gradient(circle at calc(100% - 18px) 14px, rgba(255,192,215,0.38) 0 4px, transparent 5px),
+    linear-gradient(180deg, #fffaf0 0%, #ffeaf2 62%, #ffd3e4 100%),
+    url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MiIgaGVpZ2h0PSI3MiIgdmlld0JveD0iMCAwIDcyIDcyIj4KICA8cmVjdCB3aWR0aD0iNzIiIGhlaWdodD0iNzIiIGZpbGw9IiNmZmY4ZWEiLz4KICA8Y2lyY2xlIGN4PSI5IiBjeT0iMTMiIHI9IjEuMyIgZmlsbD0iI2YzYzhkNCIgb3BhY2l0eT0iLjM0Ii8+CiAgPGNpcmNsZSBjeD0iMzEiIGN5PSI4IiByPSIuOSIgZmlsbD0iI2VlYzRhNSIgb3BhY2l0eT0iLjI2Ii8+CiAgPGNpcmNsZSBjeD0iNjIiIGN5PSIxOCIgcj0iMS4xIiBmaWxsPSIjZjFiOWM5IiBvcGFjaXR5PSIuMjYiLz4KICA8Y2lyY2xlIGN4PSIxOSIgY3k9IjM5IiByPSIxIiBmaWxsPSIjZGZjNmZmIiBvcGFjaXR5PSIuMjUiLz4KICA8Y2lyY2xlIGN4PSI0OCIgY3k9IjM1IiByPSIxLjIiIGZpbGw9IiNmNGM3YWIiIG9wYWNpdHk9Ii4yNCIvPgogIDxjaXJjbGUgY3g9IjYzIiBjeT0iNTYiIHI9Ii45IiBmaWxsPSIjZDljZWY5IiBvcGFjaXR5PSIuMjgiLz4KICA8cGF0aCBkPSJNMCAyMmMxMyA0IDI1LTQgMzkgMCAxMSAzIDIwIDEgMzMtMnYyYy0xMyAzLTIyIDUtMzMgMi0xNC00LTI2IDQtMzkgMHoiIGZpbGw9IiNlOWM5ZDQiIG9wYWNpdHk9Ii4xMiIvPgogIDxwYXRoIGQ9Ik0wIDU1YzEyLTMgMjUgMiAzNy0xIDE0LTQgMjMtMyAzNSAxdjJjLTEyLTQtMjEtNS0zNS0xLTEyIDMtMjUtMi0zNyAxeiIgZmlsbD0iI2Q3YzhmNSIgb3BhY2l0eT0iLjEzIi8+CiAgPHBhdGggZD0iTTE0IDB2NzJNMzcgMHY3Mk02MCAwdjcyIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iLjciIG9wYWNpdHk9Ii4yOCIvPgo8L3N2Zz4K&quot;);
+}
+
+.bubble.short.other {
+  background:
+    linear-gradient(135deg, rgba(190,238,250,0.62) 0 16px, transparent 17px) left 15px top -2px / 56px 17px no-repeat,
+    radial-gradient(circle at calc(100% - 17px) 13px, rgba(212,247,255,0.94) 0 13px, transparent 14px),
+    radial-gradient(circle at 17px 12px, rgba(255,255,255,0.94) 0 5px, transparent 6px),
+    radial-gradient(circle at calc(100% - 18px) 14px, rgba(182,202,255,0.42) 0 4px, transparent 5px),
+    linear-gradient(180deg, #fffefa 0%, #f0f4ff 64%, #e6edff 100%),
+    url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MiIgaGVpZ2h0PSI3MiIgdmlld0JveD0iMCAwIDcyIDcyIj4KICA8cmVjdCB3aWR0aD0iNzIiIGhlaWdodD0iNzIiIGZpbGw9IiNmZmY4ZWEiLz4KICA8Y2lyY2xlIGN4PSI5IiBjeT0iMTMiIHI9IjEuMyIgZmlsbD0iI2YzYzhkNCIgb3BhY2l0eT0iLjM0Ii8+CiAgPGNpcmNsZSBjeD0iMzEiIGN5PSI4IiByPSIuOSIgZmlsbD0iI2VlYzRhNSIgb3BhY2l0eT0iLjI2Ii8+CiAgPGNpcmNsZSBjeD0iNjIiIGN5PSIxOCIgcj0iMS4xIiBmaWxsPSIjZjFiOWM5IiBvcGFjaXR5PSIuMjYiLz4KICA8Y2lyY2xlIGN4PSIxOSIgY3k9IjM5IiByPSIxIiBmaWxsPSIjZGZjNmZmIiBvcGFjaXR5PSIuMjUiLz4KICA8Y2lyY2xlIGN4PSI0OCIgY3k9IjM1IiByPSIxLjIiIGZpbGw9IiNmNGM3YWIiIG9wYWNpdHk9Ii4yNCIvPgogIDxjaXJjbGUgY3g9IjYzIiBjeT0iNTYiIHI9Ii45IiBmaWxsPSIjZDljZWY5IiBvcGFjaXR5PSIuMjgiLz4KICA8cGF0aCBkPSJNMCAyMmMxMyA0IDI1LTQgMzkgMCAxMSAzIDIwIDEgMzMtMnYyYy0xMyAzLTIyIDUtMzMgMi0xNC00LTI2IDQtMzkgMHoiIGZpbGw9IiNlOWM5ZDQiIG9wYWNpdHk9Ii4xMiIvPgogIDxwYXRoIGQ9Ik0wIDU1YzEyLTMgMjUgMiAzNy0xIDE0LTQgMjMtMyAzNSAxdjJjLTEyLTQtMjEtNS0zNS0xLTEyIDMtMjUtMi0zNyAxeiIgZmlsbD0iI2Q3YzhmNSIgb3BhY2l0eT0iLjEzIi8+CiAgPHBhdGggZD0iTTE0IDB2NzJNMzcgMHY3Mk02MCAwdjcyIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iLjciIG9wYWNpdHk9Ii4yOCIvPgo8L3N2Zz4K&quot;);
+}
+
+.bubble.medium {
+  padding: 10px 13px 11px;
+}
+
+.bubble.long,
+.bubble.tall {
+  padding: 10px 13px 11px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.78),
+    0 3px 9px rgba(128, 68, 92, 0.09);
+}
+
+.content {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  min-height: 22px;
+}
+</style></head><body><div id=&quot;bubble&quot; class=&quot;bubble mine&quot;>
+  <div id=&quot;content&quot; class=&quot;content&quot;></div>
+</div>
+<script>window.renderBubble = function renderBubble(ctx) {
+  const root = document.getElementById('bubble');
+  const content = document.getElementById('content');
+  if (!root || !content) return;
+
+  const text = String(ctx.text || '');
+  const isMine = Boolean(ctx.isMine);
+  const lengthClass = text.length > 120
+    ? 'tall'
+    : text.length > 56
+      ? 'long'
+      : text.length > 18
+        ? 'medium'
+        : 'short';
+
+  document.body.className = isMine ? 'is-mine' : 'is-other';
+  root.className = `bubble ${isMine ? 'mine' : 'other'} ${lengthClass}`;
+  content.textContent = text;
+};
+
+window.measureBubble = function measureBubble() {
+  const root = document.getElementById('bubble');
+  if (!root) return 0;
+  const rect = root.getBoundingClientRect();
+  const bodyStyle = window.getComputedStyle(document.body);
+  const paddingBottom = parseFloat(bodyStyle.paddingBottom || '0') || 0;
+  return Math.ceil(rect.bottom + paddingBottom);
+};
+</script><script>window.renderBubble({ text: &quot;这是对方消息，保持可读性和头像方向。&quot;, isMine: false, assets: {} }); setTimeout(() => { const b = document.getElementById('bubble'); const c = document.getElementById('content'); const br = b.getBoundingClientRect(); const cr = c.getBoundingClientRect(); const bs = getComputedStyle(document.body); const cs = getComputedStyle(b); parent.postMessage({ type: 'diag-v3-final', version: 'single-content-node', className: b.className, bodyClass: document.body.className, rect: { w: br.width, h: br.height, t: br.top, b: br.bottom }, contentRect: { w: cr.width, h: cr.height, t: cr.top, b: cr.bottom }, measured: typeof window.measureBubble === 'function' ? window.measureBubble() : null, computed: { display: cs.display, width: cs.width, height: cs.height, maxWidth: cs.maxWidth, position: cs.position, padding: cs.padding }, bodyStyle: { display: bs.display, textAlign: bs.textAlign }, textLength: c.textContent.length, childCount: b.children.length }, '*'); }, 120);</script></body></html>"></iframe></div><div class="case"><strong>mine</strong><iframe id="mine" sandbox="allow-scripts" srcdoc="<!doctype html><html><head><meta charset=&quot;utf-8&quot;><style>html,
+body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, &quot;SF Pro Text&quot;, &quot;PingFang SC&quot;, sans-serif;
+}
+
+body {
+  box-sizing: border-box;
+  padding: 5px 6px 8px;
+  text-align: left;
+}
+
+body.is-mine {
+  text-align: right;
+}
+
+body.is-other {
+  text-align: left;
+}
+
+.bubble {
+  --ink: #553a43;
+  --rim: rgba(222, 132, 165, 0.34);
+  --tail-a: #ffe7f0;
+  --tail-b: #ffc8dc;
+  --shadow: rgba(128, 68, 92, 0.13);
+  position: relative;
+  display: inline-block;
+  box-sizing: border-box;
+  min-width: 44px;
+  max-width: calc(100% - 10px);
+  min-height: 34px;
+  padding: 10px 13px 11px;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.48;
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+  vertical-align: top;
+  background:
+    radial-gradient(circle at 16px 12px, rgba(255,255,255,0.92) 0 5px, transparent 6px),
+    radial-gradient(circle at calc(100% - 18px) 14px, rgba(255,192,215,0.36) 0 4px, transparent 5px),
+    radial-gradient(circle at 80% 86%, rgba(255,143,184,0.2), transparent 30%),
+    linear-gradient(180deg, #fffaf0 0%, #ffeaf2 62%, #ffd3e4 100%),
+    url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MiIgaGVpZ2h0PSI3MiIgdmlld0JveD0iMCAwIDcyIDcyIj4KICA8cmVjdCB3aWR0aD0iNzIiIGhlaWdodD0iNzIiIGZpbGw9IiNmZmY4ZWEiLz4KICA8Y2lyY2xlIGN4PSI5IiBjeT0iMTMiIHI9IjEuMyIgZmlsbD0iI2YzYzhkNCIgb3BhY2l0eT0iLjM0Ii8+CiAgPGNpcmNsZSBjeD0iMzEiIGN5PSI4IiByPSIuOSIgZmlsbD0iI2VlYzRhNSIgb3BhY2l0eT0iLjI2Ii8+CiAgPGNpcmNsZSBjeD0iNjIiIGN5PSIxOCIgcj0iMS4xIiBmaWxsPSIjZjFiOWM5IiBvcGFjaXR5PSIuMjYiLz4KICA8Y2lyY2xlIGN4PSIxOSIgY3k9IjM5IiByPSIxIiBmaWxsPSIjZGZjNmZmIiBvcGFjaXR5PSIuMjUiLz4KICA8Y2lyY2xlIGN4PSI0OCIgY3k9IjM1IiByPSIxLjIiIGZpbGw9IiNmNGM3YWIiIG9wYWNpdHk9Ii4yNCIvPgogIDxjaXJjbGUgY3g9IjYzIiBjeT0iNTYiIHI9Ii45IiBmaWxsPSIjZDljZWY5IiBvcGFjaXR5PSIuMjgiLz4KICA8cGF0aCBkPSJNMCAyMmMxMyA0IDI1LTQgMzkgMCAxMSAzIDIwIDEgMzMtMnYyYy0xMyAzLTIyIDUtMzMgMi0xNC00LTI2IDQtMzkgMHoiIGZpbGw9IiNlOWM5ZDQiIG9wYWNpdHk9Ii4xMiIvPgogIDxwYXRoIGQ9Ik0wIDU1YzEyLTMgMjUgMiAzNy0xIDE0LTQgMjMtMyAzNSAxdjJjLTEyLTQtMjEtNS0zNS0xLTEyIDMtMjUtMi0zNyAxeiIgZmlsbD0iI2Q3YzhmNSIgb3BhY2l0eT0iLjEzIi8+CiAgPHBhdGggZD0iTTE0IDB2NzJNMzcgMHY3Mk02MCAwdjcyIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iLjciIG9wYWNpdHk9Ii4yOCIvPgo8L3N2Zz4K&quot;);
+  background-size: auto, auto, auto, auto, 72px 72px;
+  border: 1px solid var(--rim);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.82),
+    0 4px 12px var(--shadow);
+}
+
+.bubble.mine {
+  border-radius: 21px 9px 21px 21px;
+}
+
+.bubble.other {
+  --ink: #4d4a64;
+  --rim: rgba(123, 151, 213, 0.26);
+  --tail-a: #eef4ff;
+  --tail-b: #dfe8ff;
+  --shadow: rgba(83, 94, 140, 0.11);
+  border-radius: 9px 21px 21px 21px;
+  background:
+    radial-gradient(circle at 17px 12px, rgba(255,255,255,0.94) 0 5px, transparent 6px),
+    radial-gradient(circle at calc(100% - 18px) 14px, rgba(182,202,255,0.42) 0 4px, transparent 5px),
+    radial-gradient(circle at 84% 84%, rgba(196,205,255,0.2), transparent 30%),
+    linear-gradient(180deg, #fffefa 0%, #f0f4ff 64%, #e6edff 100%),
+    url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MiIgaGVpZ2h0PSI3MiIgdmlld0JveD0iMCAwIDcyIDcyIj4KICA8cmVjdCB3aWR0aD0iNzIiIGhlaWdodD0iNzIiIGZpbGw9IiNmZmY4ZWEiLz4KICA8Y2lyY2xlIGN4PSI5IiBjeT0iMTMiIHI9IjEuMyIgZmlsbD0iI2YzYzhkNCIgb3BhY2l0eT0iLjM0Ii8+CiAgPGNpcmNsZSBjeD0iMzEiIGN5PSI4IiByPSIuOSIgZmlsbD0iI2VlYzRhNSIgb3BhY2l0eT0iLjI2Ii8+CiAgPGNpcmNsZSBjeD0iNjIiIGN5PSIxOCIgcj0iMS4xIiBmaWxsPSIjZjFiOWM5IiBvcGFjaXR5PSIuMjYiLz4KICA8Y2lyY2xlIGN4PSIxOSIgY3k9IjM5IiByPSIxIiBmaWxsPSIjZGZjNmZmIiBvcGFjaXR5PSIuMjUiLz4KICA8Y2lyY2xlIGN4PSI0OCIgY3k9IjM1IiByPSIxLjIiIGZpbGw9IiNmNGM3YWIiIG9wYWNpdHk9Ii4yNCIvPgogIDxjaXJjbGUgY3g9IjYzIiBjeT0iNTYiIHI9Ii45IiBmaWxsPSIjZDljZWY5IiBvcGFjaXR5PSIuMjgiLz4KICA8cGF0aCBkPSJNMCAyMmMxMyA0IDI1LTQgMzkgMCAxMSAzIDIwIDEgMzMtMnYyYy0xMyAzLTIyIDUtMzMgMi0xNC00LTI2IDQtMzkgMHoiIGZpbGw9IiNlOWM5ZDQiIG9wYWNpdHk9Ii4xMiIvPgogIDxwYXRoIGQ9Ik0wIDU1YzEyLTMgMjUgMiAzNy0xIDE0LTQgMjMtMyAzNSAxdjJjLTEyLTQtMjEtNS0zNS0xLTEyIDMtMjUtMi0zNyAxeiIgZmlsbD0iI2Q3YzhmNSIgb3BhY2l0eT0iLjEzIi8+CiAgPHBhdGggZD0iTTE0IDB2NzJNMzcgMHY3Mk02MCAwdjcyIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iLjciIG9wYWNpdHk9Ii4yOCIvPgo8L3N2Zz4K&quot;);
+  background-size: auto, auto, auto, auto, 72px 72px;
+}
+
+.bubble::before,
+.bubble::after {
+  content: &quot;&quot;;
+  position: absolute;
+  pointer-events: none;
+}
+
+.bubble::before {
+  width: 13px;
+  height: 13px;
+  bottom: 6px;
+  background: linear-gradient(135deg, var(--tail-a), var(--tail-b));
+  border: 1px solid var(--rim);
+  box-shadow: 0 3px 8px var(--shadow);
+  z-index: -1;
+}
+
+.bubble.mine::before {
+  right: -4px;
+  border-radius: 0 10px 12px 10px;
+  transform: rotate(-18deg) skewX(-12deg);
+}
+
+.bubble.other::before {
+  left: -4px;
+  border-radius: 10px 0 10px 12px;
+  transform: rotate(18deg) skewX(12deg);
+}
+
+.bubble::after {
+  inset: 4px;
+  border-radius: inherit;
+  border: 1px dashed rgba(129, 78, 103, 0.1);
+  z-index: 0;
+}
+
+.bubble.long::after,
+.bubble.tall::after {
+  border-style: solid;
+  border-color: rgba(255,255,255,0.34);
+}
+
+.bubble.short {
+  padding-top: 12px;
+  padding-bottom: 13px;
+}
+
+.bubble.short.mine .content {
+  padding-left: 18px;
+}
+
+.bubble.short.other .content {
+  padding-right: 18px;
+}
+
+.bubble.short.mine {
+  background:
+    linear-gradient(135deg, rgba(255,230,143,0.62) 0 16px, transparent 17px) right 15px top -2px / 56px 17px no-repeat,
+    radial-gradient(circle at 17px 13px, rgba(255,244,172,0.92) 0 13px, transparent 14px),
+    radial-gradient(circle at 16px 12px, rgba(255,255,255,0.9) 0 5px, transparent 6px),
+    radial-gradient(circle at calc(100% - 18px) 14px, rgba(255,192,215,0.38) 0 4px, transparent 5px),
+    linear-gradient(180deg, #fffaf0 0%, #ffeaf2 62%, #ffd3e4 100%),
+    url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MiIgaGVpZ2h0PSI3MiIgdmlld0JveD0iMCAwIDcyIDcyIj4KICA8cmVjdCB3aWR0aD0iNzIiIGhlaWdodD0iNzIiIGZpbGw9IiNmZmY4ZWEiLz4KICA8Y2lyY2xlIGN4PSI5IiBjeT0iMTMiIHI9IjEuMyIgZmlsbD0iI2YzYzhkNCIgb3BhY2l0eT0iLjM0Ii8+CiAgPGNpcmNsZSBjeD0iMzEiIGN5PSI4IiByPSIuOSIgZmlsbD0iI2VlYzRhNSIgb3BhY2l0eT0iLjI2Ii8+CiAgPGNpcmNsZSBjeD0iNjIiIGN5PSIxOCIgcj0iMS4xIiBmaWxsPSIjZjFiOWM5IiBvcGFjaXR5PSIuMjYiLz4KICA8Y2lyY2xlIGN4PSIxOSIgY3k9IjM5IiByPSIxIiBmaWxsPSIjZGZjNmZmIiBvcGFjaXR5PSIuMjUiLz4KICA8Y2lyY2xlIGN4PSI0OCIgY3k9IjM1IiByPSIxLjIiIGZpbGw9IiNmNGM3YWIiIG9wYWNpdHk9Ii4yNCIvPgogIDxjaXJjbGUgY3g9IjYzIiBjeT0iNTYiIHI9Ii45IiBmaWxsPSIjZDljZWY5IiBvcGFjaXR5PSIuMjgiLz4KICA8cGF0aCBkPSJNMCAyMmMxMyA0IDI1LTQgMzkgMCAxMSAzIDIwIDEgMzMtMnYyYy0xMyAzLTIyIDUtMzMgMi0xNC00LTI2IDQtMzkgMHoiIGZpbGw9IiNlOWM5ZDQiIG9wYWNpdHk9Ii4xMiIvPgogIDxwYXRoIGQ9Ik0wIDU1YzEyLTMgMjUgMiAzNy0xIDE0LTQgMjMtMyAzNSAxdjJjLTEyLTQtMjEtNS0zNS0xLTEyIDMtMjUtMi0zNyAxeiIgZmlsbD0iI2Q3YzhmNSIgb3BhY2l0eT0iLjEzIi8+CiAgPHBhdGggZD0iTTE0IDB2NzJNMzcgMHY3Mk02MCAwdjcyIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iLjciIG9wYWNpdHk9Ii4yOCIvPgo8L3N2Zz4K&quot;);
+}
+
+.bubble.short.other {
+  background:
+    linear-gradient(135deg, rgba(190,238,250,0.62) 0 16px, transparent 17px) left 15px top -2px / 56px 17px no-repeat,
+    radial-gradient(circle at calc(100% - 17px) 13px, rgba(212,247,255,0.94) 0 13px, transparent 14px),
+    radial-gradient(circle at 17px 12px, rgba(255,255,255,0.94) 0 5px, transparent 6px),
+    radial-gradient(circle at calc(100% - 18px) 14px, rgba(182,202,255,0.42) 0 4px, transparent 5px),
+    linear-gradient(180deg, #fffefa 0%, #f0f4ff 64%, #e6edff 100%),
+    url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MiIgaGVpZ2h0PSI3MiIgdmlld0JveD0iMCAwIDcyIDcyIj4KICA8cmVjdCB3aWR0aD0iNzIiIGhlaWdodD0iNzIiIGZpbGw9IiNmZmY4ZWEiLz4KICA8Y2lyY2xlIGN4PSI5IiBjeT0iMTMiIHI9IjEuMyIgZmlsbD0iI2YzYzhkNCIgb3BhY2l0eT0iLjM0Ii8+CiAgPGNpcmNsZSBjeD0iMzEiIGN5PSI4IiByPSIuOSIgZmlsbD0iI2VlYzRhNSIgb3BhY2l0eT0iLjI2Ii8+CiAgPGNpcmNsZSBjeD0iNjIiIGN5PSIxOCIgcj0iMS4xIiBmaWxsPSIjZjFiOWM5IiBvcGFjaXR5PSIuMjYiLz4KICA8Y2lyY2xlIGN4PSIxOSIgY3k9IjM5IiByPSIxIiBmaWxsPSIjZGZjNmZmIiBvcGFjaXR5PSIuMjUiLz4KICA8Y2lyY2xlIGN4PSI0OCIgY3k9IjM1IiByPSIxLjIiIGZpbGw9IiNmNGM3YWIiIG9wYWNpdHk9Ii4yNCIvPgogIDxjaXJjbGUgY3g9IjYzIiBjeT0iNTYiIHI9Ii45IiBmaWxsPSIjZDljZWY5IiBvcGFjaXR5PSIuMjgiLz4KICA8cGF0aCBkPSJNMCAyMmMxMyA0IDI1LTQgMzkgMCAxMSAzIDIwIDEgMzMtMnYyYy0xMyAzLTIyIDUtMzMgMi0xNC00LTI2IDQtMzkgMHoiIGZpbGw9IiNlOWM5ZDQiIG9wYWNpdHk9Ii4xMiIvPgogIDxwYXRoIGQ9Ik0wIDU1YzEyLTMgMjUgMiAzNy0xIDE0LTQgMjMtMyAzNSAxdjJjLTEyLTQtMjEtNS0zNS0xLTEyIDMtMjUtMi0zNyAxeiIgZmlsbD0iI2Q3YzhmNSIgb3BhY2l0eT0iLjEzIi8+CiAgPHBhdGggZD0iTTE0IDB2NzJNMzcgMHY3Mk02MCAwdjcyIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iLjciIG9wYWNpdHk9Ii4yOCIvPgo8L3N2Zz4K&quot;);
+}
+
+.bubble.medium {
+  padding: 10px 13px 11px;
+}
+
+.bubble.long,
+.bubble.tall {
+  padding: 10px 13px 11px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.78),
+    0 3px 9px rgba(128, 68, 92, 0.09);
+}
+
+.content {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  min-height: 22px;
+}
+</style></head><body><div id=&quot;bubble&quot; class=&quot;bubble mine&quot;>
+  <div id=&quot;content&quot; class=&quot;content&quot;></div>
+</div>
+<script>window.renderBubble = function renderBubble(ctx) {
+  const root = document.getElementById('bubble');
+  const content = document.getElementById('content');
+  if (!root || !content) return;
+
+  const text = String(ctx.text || '');
+  const isMine = Boolean(ctx.isMine);
+  const lengthClass = text.length > 120
+    ? 'tall'
+    : text.length > 56
+      ? 'long'
+      : text.length > 18
+        ? 'medium'
+        : 'short';
+
+  document.body.className = isMine ? 'is-mine' : 'is-other';
+  root.className = `bubble ${isMine ? 'mine' : 'other'} ${lengthClass}`;
+  content.textContent = text;
+};
+
+window.measureBubble = function measureBubble() {
+  const root = document.getElementById('bubble');
+  if (!root) return 0;
+  const rect = root.getBoundingClientRect();
+  const bodyStyle = window.getComputedStyle(document.body);
+  const paddingBottom = parseFloat(bodyStyle.paddingBottom || '0') || 0;
+  return Math.ceil(rect.bottom + paddingBottom);
+};
+</script><script>window.renderBubble({ text: &quot;这是我的消息，气泡可以使用 CSS 和本地图片重绘。&quot;, isMine: true, assets: {} }); setTimeout(() => { const b = document.getElementById('bubble'); const c = document.getElementById('content'); const br = b.getBoundingClientRect(); const cr = c.getBoundingClientRect(); const bs = getComputedStyle(document.body); const cs = getComputedStyle(b); parent.postMessage({ type: 'diag-v3-final', version: 'single-content-node', className: b.className, bodyClass: document.body.className, rect: { w: br.width, h: br.height, t: br.top, b: br.bottom }, contentRect: { w: cr.width, h: cr.height, t: cr.top, b: cr.bottom }, measured: typeof window.measureBubble === 'function' ? window.measureBubble() : null, computed: { display: cs.display, width: cs.width, height: cs.height, maxWidth: cs.maxWidth, position: cs.position, padding: cs.padding }, bodyStyle: { display: bs.display, textAlign: bs.textAlign }, textLength: c.textContent.length, childCount: b.children.length }, '*'); }, 120);</script></body></html>"></iframe></div><div class="case"><strong>long</strong><iframe id="long" sandbox="allow-scripts" srcdoc="<!doctype html><html><head><meta charset=&quot;utf-8&quot;><style>html,
+body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, &quot;SF Pro Text&quot;, &quot;PingFang SC&quot;, sans-serif;
+}
+
+body {
+  box-sizing: border-box;
+  padding: 5px 6px 8px;
+  text-align: left;
+}
+
+body.is-mine {
+  text-align: right;
+}
+
+body.is-other {
+  text-align: left;
+}
+
+.bubble {
+  --ink: #553a43;
+  --rim: rgba(222, 132, 165, 0.34);
+  --tail-a: #ffe7f0;
+  --tail-b: #ffc8dc;
+  --shadow: rgba(128, 68, 92, 0.13);
+  position: relative;
+  display: inline-block;
+  box-sizing: border-box;
+  min-width: 44px;
+  max-width: calc(100% - 10px);
+  min-height: 34px;
+  padding: 10px 13px 11px;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.48;
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+  vertical-align: top;
+  background:
+    radial-gradient(circle at 16px 12px, rgba(255,255,255,0.92) 0 5px, transparent 6px),
+    radial-gradient(circle at calc(100% - 18px) 14px, rgba(255,192,215,0.36) 0 4px, transparent 5px),
+    radial-gradient(circle at 80% 86%, rgba(255,143,184,0.2), transparent 30%),
+    linear-gradient(180deg, #fffaf0 0%, #ffeaf2 62%, #ffd3e4 100%),
+    url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MiIgaGVpZ2h0PSI3MiIgdmlld0JveD0iMCAwIDcyIDcyIj4KICA8cmVjdCB3aWR0aD0iNzIiIGhlaWdodD0iNzIiIGZpbGw9IiNmZmY4ZWEiLz4KICA8Y2lyY2xlIGN4PSI5IiBjeT0iMTMiIHI9IjEuMyIgZmlsbD0iI2YzYzhkNCIgb3BhY2l0eT0iLjM0Ii8+CiAgPGNpcmNsZSBjeD0iMzEiIGN5PSI4IiByPSIuOSIgZmlsbD0iI2VlYzRhNSIgb3BhY2l0eT0iLjI2Ii8+CiAgPGNpcmNsZSBjeD0iNjIiIGN5PSIxOCIgcj0iMS4xIiBmaWxsPSIjZjFiOWM5IiBvcGFjaXR5PSIuMjYiLz4KICA8Y2lyY2xlIGN4PSIxOSIgY3k9IjM5IiByPSIxIiBmaWxsPSIjZGZjNmZmIiBvcGFjaXR5PSIuMjUiLz4KICA8Y2lyY2xlIGN4PSI0OCIgY3k9IjM1IiByPSIxLjIiIGZpbGw9IiNmNGM3YWIiIG9wYWNpdHk9Ii4yNCIvPgogIDxjaXJjbGUgY3g9IjYzIiBjeT0iNTYiIHI9Ii45IiBmaWxsPSIjZDljZWY5IiBvcGFjaXR5PSIuMjgiLz4KICA8cGF0aCBkPSJNMCAyMmMxMyA0IDI1LTQgMzkgMCAxMSAzIDIwIDEgMzMtMnYyYy0xMyAzLTIyIDUtMzMgMi0xNC00LTI2IDQtMzkgMHoiIGZpbGw9IiNlOWM5ZDQiIG9wYWNpdHk9Ii4xMiIvPgogIDxwYXRoIGQ9Ik0wIDU1YzEyLTMgMjUgMiAzNy0xIDE0LTQgMjMtMyAzNSAxdjJjLTEyLTQtMjEtNS0zNS0xLTEyIDMtMjUtMi0zNyAxeiIgZmlsbD0iI2Q3YzhmNSIgb3BhY2l0eT0iLjEzIi8+CiAgPHBhdGggZD0iTTE0IDB2NzJNMzcgMHY3Mk02MCAwdjcyIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iLjciIG9wYWNpdHk9Ii4yOCIvPgo8L3N2Zz4K&quot;);
+  background-size: auto, auto, auto, auto, 72px 72px;
+  border: 1px solid var(--rim);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.82),
+    0 4px 12px var(--shadow);
+}
+
+.bubble.mine {
+  border-radius: 21px 9px 21px 21px;
+}
+
+.bubble.other {
+  --ink: #4d4a64;
+  --rim: rgba(123, 151, 213, 0.26);
+  --tail-a: #eef4ff;
+  --tail-b: #dfe8ff;
+  --shadow: rgba(83, 94, 140, 0.11);
+  border-radius: 9px 21px 21px 21px;
+  background:
+    radial-gradient(circle at 17px 12px, rgba(255,255,255,0.94) 0 5px, transparent 6px),
+    radial-gradient(circle at calc(100% - 18px) 14px, rgba(182,202,255,0.42) 0 4px, transparent 5px),
+    radial-gradient(circle at 84% 84%, rgba(196,205,255,0.2), transparent 30%),
+    linear-gradient(180deg, #fffefa 0%, #f0f4ff 64%, #e6edff 100%),
+    url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MiIgaGVpZ2h0PSI3MiIgdmlld0JveD0iMCAwIDcyIDcyIj4KICA8cmVjdCB3aWR0aD0iNzIiIGhlaWdodD0iNzIiIGZpbGw9IiNmZmY4ZWEiLz4KICA8Y2lyY2xlIGN4PSI5IiBjeT0iMTMiIHI9IjEuMyIgZmlsbD0iI2YzYzhkNCIgb3BhY2l0eT0iLjM0Ii8+CiAgPGNpcmNsZSBjeD0iMzEiIGN5PSI4IiByPSIuOSIgZmlsbD0iI2VlYzRhNSIgb3BhY2l0eT0iLjI2Ii8+CiAgPGNpcmNsZSBjeD0iNjIiIGN5PSIxOCIgcj0iMS4xIiBmaWxsPSIjZjFiOWM5IiBvcGFjaXR5PSIuMjYiLz4KICA8Y2lyY2xlIGN4PSIxOSIgY3k9IjM5IiByPSIxIiBmaWxsPSIjZGZjNmZmIiBvcGFjaXR5PSIuMjUiLz4KICA8Y2lyY2xlIGN4PSI0OCIgY3k9IjM1IiByPSIxLjIiIGZpbGw9IiNmNGM3YWIiIG9wYWNpdHk9Ii4yNCIvPgogIDxjaXJjbGUgY3g9IjYzIiBjeT0iNTYiIHI9Ii45IiBmaWxsPSIjZDljZWY5IiBvcGFjaXR5PSIuMjgiLz4KICA8cGF0aCBkPSJNMCAyMmMxMyA0IDI1LTQgMzkgMCAxMSAzIDIwIDEgMzMtMnYyYy0xMyAzLTIyIDUtMzMgMi0xNC00LTI2IDQtMzkgMHoiIGZpbGw9IiNlOWM5ZDQiIG9wYWNpdHk9Ii4xMiIvPgogIDxwYXRoIGQ9Ik0wIDU1YzEyLTMgMjUgMiAzNy0xIDE0LTQgMjMtMyAzNSAxdjJjLTEyLTQtMjEtNS0zNS0xLTEyIDMtMjUtMi0zNyAxeiIgZmlsbD0iI2Q3YzhmNSIgb3BhY2l0eT0iLjEzIi8+CiAgPHBhdGggZD0iTTE0IDB2NzJNMzcgMHY3Mk02MCAwdjcyIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iLjciIG9wYWNpdHk9Ii4yOCIvPgo8L3N2Zz4K&quot;);
+  background-size: auto, auto, auto, auto, 72px 72px;
+}
+
+.bubble::before,
+.bubble::after {
+  content: &quot;&quot;;
+  position: absolute;
+  pointer-events: none;
+}
+
+.bubble::before {
+  width: 13px;
+  height: 13px;
+  bottom: 6px;
+  background: linear-gradient(135deg, var(--tail-a), var(--tail-b));
+  border: 1px solid var(--rim);
+  box-shadow: 0 3px 8px var(--shadow);
+  z-index: -1;
+}
+
+.bubble.mine::before {
+  right: -4px;
+  border-radius: 0 10px 12px 10px;
+  transform: rotate(-18deg) skewX(-12deg);
+}
+
+.bubble.other::before {
+  left: -4px;
+  border-radius: 10px 0 10px 12px;
+  transform: rotate(18deg) skewX(12deg);
+}
+
+.bubble::after {
+  inset: 4px;
+  border-radius: inherit;
+  border: 1px dashed rgba(129, 78, 103, 0.1);
+  z-index: 0;
+}
+
+.bubble.long::after,
+.bubble.tall::after {
+  border-style: solid;
+  border-color: rgba(255,255,255,0.34);
+}
+
+.bubble.short {
+  padding-top: 12px;
+  padding-bottom: 13px;
+}
+
+.bubble.short.mine .content {
+  padding-left: 18px;
+}
+
+.bubble.short.other .content {
+  padding-right: 18px;
+}
+
+.bubble.short.mine {
+  background:
+    linear-gradient(135deg, rgba(255,230,143,0.62) 0 16px, transparent 17px) right 15px top -2px / 56px 17px no-repeat,
+    radial-gradient(circle at 17px 13px, rgba(255,244,172,0.92) 0 13px, transparent 14px),
+    radial-gradient(circle at 16px 12px, rgba(255,255,255,0.9) 0 5px, transparent 6px),
+    radial-gradient(circle at calc(100% - 18px) 14px, rgba(255,192,215,0.38) 0 4px, transparent 5px),
+    linear-gradient(180deg, #fffaf0 0%, #ffeaf2 62%, #ffd3e4 100%),
+    url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MiIgaGVpZ2h0PSI3MiIgdmlld0JveD0iMCAwIDcyIDcyIj4KICA8cmVjdCB3aWR0aD0iNzIiIGhlaWdodD0iNzIiIGZpbGw9IiNmZmY4ZWEiLz4KICA8Y2lyY2xlIGN4PSI5IiBjeT0iMTMiIHI9IjEuMyIgZmlsbD0iI2YzYzhkNCIgb3BhY2l0eT0iLjM0Ii8+CiAgPGNpcmNsZSBjeD0iMzEiIGN5PSI4IiByPSIuOSIgZmlsbD0iI2VlYzRhNSIgb3BhY2l0eT0iLjI2Ii8+CiAgPGNpcmNsZSBjeD0iNjIiIGN5PSIxOCIgcj0iMS4xIiBmaWxsPSIjZjFiOWM5IiBvcGFjaXR5PSIuMjYiLz4KICA8Y2lyY2xlIGN4PSIxOSIgY3k9IjM5IiByPSIxIiBmaWxsPSIjZGZjNmZmIiBvcGFjaXR5PSIuMjUiLz4KICA8Y2lyY2xlIGN4PSI0OCIgY3k9IjM1IiByPSIxLjIiIGZpbGw9IiNmNGM3YWIiIG9wYWNpdHk9Ii4yNCIvPgogIDxjaXJjbGUgY3g9IjYzIiBjeT0iNTYiIHI9Ii45IiBmaWxsPSIjZDljZWY5IiBvcGFjaXR5PSIuMjgiLz4KICA8cGF0aCBkPSJNMCAyMmMxMyA0IDI1LTQgMzkgMCAxMSAzIDIwIDEgMzMtMnYyYy0xMyAzLTIyIDUtMzMgMi0xNC00LTI2IDQtMzkgMHoiIGZpbGw9IiNlOWM5ZDQiIG9wYWNpdHk9Ii4xMiIvPgogIDxwYXRoIGQ9Ik0wIDU1YzEyLTMgMjUgMiAzNy0xIDE0LTQgMjMtMyAzNSAxdjJjLTEyLTQtMjEtNS0zNS0xLTEyIDMtMjUtMi0zNyAxeiIgZmlsbD0iI2Q3YzhmNSIgb3BhY2l0eT0iLjEzIi8+CiAgPHBhdGggZD0iTTE0IDB2NzJNMzcgMHY3Mk02MCAwdjcyIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iLjciIG9wYWNpdHk9Ii4yOCIvPgo8L3N2Zz4K&quot;);
+}
+
+.bubble.short.other {
+  background:
+    linear-gradient(135deg, rgba(190,238,250,0.62) 0 16px, transparent 17px) left 15px top -2px / 56px 17px no-repeat,
+    radial-gradient(circle at calc(100% - 17px) 13px, rgba(212,247,255,0.94) 0 13px, transparent 14px),
+    radial-gradient(circle at 17px 12px, rgba(255,255,255,0.94) 0 5px, transparent 6px),
+    radial-gradient(circle at calc(100% - 18px) 14px, rgba(182,202,255,0.42) 0 4px, transparent 5px),
+    linear-gradient(180deg, #fffefa 0%, #f0f4ff 64%, #e6edff 100%),
+    url(&quot;data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI3MiIgaGVpZ2h0PSI3MiIgdmlld0JveD0iMCAwIDcyIDcyIj4KICA8cmVjdCB3aWR0aD0iNzIiIGhlaWdodD0iNzIiIGZpbGw9IiNmZmY4ZWEiLz4KICA8Y2lyY2xlIGN4PSI5IiBjeT0iMTMiIHI9IjEuMyIgZmlsbD0iI2YzYzhkNCIgb3BhY2l0eT0iLjM0Ii8+CiAgPGNpcmNsZSBjeD0iMzEiIGN5PSI4IiByPSIuOSIgZmlsbD0iI2VlYzRhNSIgb3BhY2l0eT0iLjI2Ii8+CiAgPGNpcmNsZSBjeD0iNjIiIGN5PSIxOCIgcj0iMS4xIiBmaWxsPSIjZjFiOWM5IiBvcGFjaXR5PSIuMjYiLz4KICA8Y2lyY2xlIGN4PSIxOSIgY3k9IjM5IiByPSIxIiBmaWxsPSIjZGZjNmZmIiBvcGFjaXR5PSIuMjUiLz4KICA8Y2lyY2xlIGN4PSI0OCIgY3k9IjM1IiByPSIxLjIiIGZpbGw9IiNmNGM3YWIiIG9wYWNpdHk9Ii4yNCIvPgogIDxjaXJjbGUgY3g9IjYzIiBjeT0iNTYiIHI9Ii45IiBmaWxsPSIjZDljZWY5IiBvcGFjaXR5PSIuMjgiLz4KICA8cGF0aCBkPSJNMCAyMmMxMyA0IDI1LTQgMzkgMCAxMSAzIDIwIDEgMzMtMnYyYy0xMyAzLTIyIDUtMzMgMi0xNC00LTI2IDQtMzkgMHoiIGZpbGw9IiNlOWM5ZDQiIG9wYWNpdHk9Ii4xMiIvPgogIDxwYXRoIGQ9Ik0wIDU1YzEyLTMgMjUgMiAzNy0xIDE0LTQgMjMtMyAzNSAxdjJjLTEyLTQtMjEtNS0zNS0xLTEyIDMtMjUtMi0zNyAxeiIgZmlsbD0iI2Q3YzhmNSIgb3BhY2l0eT0iLjEzIi8+CiAgPHBhdGggZD0iTTE0IDB2NzJNMzcgMHY3Mk02MCAwdjcyIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iLjciIG9wYWNpdHk9Ii4yOCIvPgo8L3N2Zz4K&quot;);
+}
+
+.bubble.medium {
+  padding: 10px 13px 11px;
+}
+
+.bubble.long,
+.bubble.tall {
+  padding: 10px 13px 11px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.78),
+    0 3px 9px rgba(128, 68, 92, 0.09);
+}
+
+.content {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  min-height: 22px;
+}
+</style></head><body><div id=&quot;bubble&quot; class=&quot;bubble mine&quot;>
+  <div id=&quot;content&quot; class=&quot;content&quot;></div>
+</div>
+<script>window.renderBubble = function renderBubble(ctx) {
+  const root = document.getElementById('bubble');
+  const content = document.getElementById('content');
+  if (!root || !content) return;
+
+  const text = String(ctx.text || '');
+  const isMine = Boolean(ctx.isMine);
+  const lengthClass = text.length > 120
+    ? 'tall'
+    : text.length > 56
+      ? 'long'
+      : text.length > 18
+        ? 'medium'
+        : 'short';
+
+  document.body.className = isMine ? 'is-mine' : 'is-other';
+  root.className = `bubble ${isMine ? 'mine' : 'other'} ${lengthClass}`;
+  content.textContent = text;
+};
+
+window.measureBubble = function measureBubble() {
+  const root = document.getElementById('bubble');
+  if (!root) return 0;
+  const rect = root.getBoundingClientRect();
+  const bodyStyle = window.getComputedStyle(document.body);
+  const paddingBottom = parseFloat(bodyStyle.paddingBottom || '0') || 0;
+  return Math.ceil(rect.bottom + paddingBottom);
+};
+</script><script>window.renderBubble({ text: &quot;[未配置 AI 服务] 请到 设置 → AI 服务 填写 API Key[未配置 AI 服务] 请到 设置 → AI 服务 填写 API Key[未配置 AI 服务] 请到 设置 → AI 服务 填写 API Key[未配置 AI 服务] 请到 设置 → AI 服务 填写 API Key[未配置 AI 服务] 请到 设置 → AI 服务 填写 API Key[未配置 AI 服务] 请到 设置 → AI 服务 填写 API Key[未配置 AI 服务] 请到 设置 → AI 服务 填写 API Key[未配置 AI 服务] 请到 设置 → AI 服务 填写 API Key&quot;, isMine: true, assets: {} }); setTimeout(() => { const b = document.getElementById('bubble'); const c = document.getElementById('content'); const br = b.getBoundingClientRect(); const cr = c.getBoundingClientRect(); const bs = getComputedStyle(document.body); const cs = getComputedStyle(b); parent.postMessage({ type: 'diag-v3-final', version: 'single-content-node', className: b.className, bodyClass: document.body.className, rect: { w: br.width, h: br.height, t: br.top, b: br.bottom }, contentRect: { w: cr.width, h: cr.height, t: cr.top, b: cr.bottom }, measured: typeof window.measureBubble === 'function' ? window.measureBubble() : null, computed: { display: cs.display, width: cs.width, height: cs.height, maxWidth: cs.maxWidth, position: cs.position, padding: cs.padding }, bodyStyle: { display: bs.display, textAlign: bs.textAlign }, textLength: c.textContent.length, childCount: b.children.length }, '*'); }, 120);</script></body></html>"></iframe></div><script>const results=[];window.addEventListener('message',e=>{const f=[...document.querySelectorAll('iframe')].find(x=>x.contentWindow===e.source);results.push({id:f&&f.id,...e.data});document.getElementById('out').textContent=JSON.stringify(results,null,2)});setTimeout(()=>document.getElementById('out').textContent=JSON.stringify(results,null,2),800)</script></body></html>

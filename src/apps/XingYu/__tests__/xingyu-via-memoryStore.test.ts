@@ -63,7 +63,7 @@ beforeEach(async () => {
 });
 
 describe('XingYu sendMessage flow — memoryStore integration', () => {
-  it('user send + AI reply → memoryStore has app-switch marker + user entry + ONE rendered assistant entry', async () => {
+  it('user send + multi-message AI reply → memoryStore keeps one assistant entry per reply item', async () => {
     const rawJson = '[{"type":"text","param":"挺不错的呀"},{"type":"text","param":"阳光明媚"}]';
     vi.spyOn(chatCompleteMod, 'chatComplete').mockResolvedValue(rawJson);
 
@@ -78,11 +78,11 @@ describe('XingYu sendMessage flow — memoryStore integration', () => {
     console.log('[t=1500ms]', useCharacterMemory.getState().getAll('char-001').length);
     await new Promise((r) => setTimeout(r, 1000));
     const mem = useCharacterMemory.getState().getAll('char-001');
-    // Order: [app-switch, scene, user, assistant]
+    // Order: [app-switch, scene, user, assistant item 1, assistant item 2]
     // - fireAppSwitchMarker fires first → [上下文切换] marker
     // - _appendMessage runs ensureSceneMarker → [场景] marker (single-chat)
-    // - then user entry, then assistant reply (rendered form, spec D1)
-    expect(mem).toHaveLength(4);
+    // - then user entry, then each assistant reply item as its own memory entry
+    expect(mem).toHaveLength(5);
     expect(mem[0]!.role).toBe('system');
     expect(mem[0]!.content).toMatch(/上下文切换/);
     expect(mem[1]!.role).toBe('system');
@@ -96,7 +96,13 @@ describe('XingYu sendMessage flow — memoryStore integration', () => {
     expect(mem[3]!).toMatchObject({
       role: 'assistant',
       speakerId: 'char-001',
-      content: '挺不错的呀\n阳光明媚', // ← rendered form, no speaker prefix
+      content: '挺不错的呀',
+      source: 'xingyu',
+    });
+    expect(mem[4]!).toMatchObject({
+      role: 'assistant',
+      speakerId: 'char-001',
+      content: '阳光明媚',
       source: 'xingyu',
     });
 

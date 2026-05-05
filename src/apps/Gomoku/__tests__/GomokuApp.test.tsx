@@ -20,27 +20,29 @@ vi.mock('../gomokuAiSession', () => ({
 
 const mockedRequest = vi.mocked(requestGomokuCharacterReply);
 
+function makeCharacter(id: string, name: string) {
+  return {
+    id,
+    name,
+    avatar: '/resource/avatars/preset-02.jpg',
+    description: '认真下棋',
+    personality: '',
+    scenario: '',
+    firstMessage: '',
+    messageExamples: '',
+    alternateGreetings: [],
+    systemPrompt: '',
+    postHistoryInstructions: '',
+    creatorNotes: '',
+    tags: [],
+    version: '1.0',
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   useCharacterStore.setState({
-    characters: [
-      {
-        id: 'char-001',
-        name: '凛',
-        avatar: '/resource/avatars/preset-02.jpg',
-        description: '认真下棋',
-        personality: '',
-        scenario: '',
-        firstMessage: '',
-        messageExamples: '',
-        alternateGreetings: [],
-        systemPrompt: '',
-        postHistoryInstructions: '',
-        creatorNotes: '',
-        tags: [],
-        version: '1.0',
-      },
-    ],
+    characters: [makeCharacter('char-001', '凛')],
     activeCharacterId: 'char-001',
   });
   useXYData.setState({
@@ -115,6 +117,34 @@ describe('GomokuApp', () => {
     const state = useGomokuStore.getState();
     expect(state.userStone).toBe('white');
     expect(state.aiStone).toBe('black');
+  });
+
+  it('keeps the new game start action in a fixed safe-area footer', async () => {
+    useCharacterStore.setState({
+      characters: [
+        makeCharacter('char-001', '凛'),
+        makeCharacter('char-002', '澪'),
+        makeCharacter('char-003', '遥'),
+        makeCharacter('char-004', '葵'),
+        makeCharacter('char-005', '奏'),
+      ],
+      activeCharacterId: 'char-001',
+    });
+
+    render(<GomokuApp />);
+
+    await userEvent.click(screen.getByTestId('gomoku-new-game-btn'));
+
+    const panel = screen.getByTestId('gomoku-new-game-panel');
+    const scrollArea = screen.getByTestId('gomoku-new-game-scroll');
+    const footer = screen.getByTestId('gomoku-new-game-footer');
+    const startButton = screen.getByTestId('gomoku-start-new-game');
+
+    expect(panel).toHaveClass('flex', 'flex-col', 'overflow-hidden');
+    expect(scrollArea).toHaveClass('min-h-0', 'flex-1', 'overflow-y-auto');
+    expect(footer).toHaveClass('shrink-0', 'pb-[var(--app-safe-bottom,12px)]');
+    expect(footer).toContainElement(startButton);
+    expect(scrollArea).not.toContainElement(startButton);
   });
 
   it('enters silence mode after repeated ignored chat replies', async () => {

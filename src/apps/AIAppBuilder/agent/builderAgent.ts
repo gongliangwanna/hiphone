@@ -72,6 +72,7 @@ export async function runBuilderAgent(input: RunAgentInput): Promise<void> {
         apiKey: cfg.apiKey,
         model: cfg.model,
         providerId: cfg.providerId,
+        openRouterProviderSlug: cfg.openRouterProviderSlug,
       },
       messages,
       cfg.generation,

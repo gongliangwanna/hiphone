@@ -10,6 +10,7 @@ import { usePersonaStore } from '@/platform/stores/personaStore';
 import { useHeartbeatStore } from '@/platform/stores/heartbeatStore';
 import { useXYData } from '@/apps/XingYu/xingYuDataStore';
 import {
+  useCharacterMemory,
   _resetCharacterMemoryForTests,
 } from '../characterMemoryStore';
 import { _resetToolRegistryForTests } from '../toolRegistry';
@@ -54,7 +55,15 @@ describe('heartbeatAgent — end-to-end via Tool Registry', () => {
     } as never);
     useHeartbeatStore.setState({
       globalEnabled: true,
-      configs: { [CHAR]: { enabled: true, intervalMinutes: 60, maxIterations: 5, aiChatMaxRounds: 3 } },
+      configs: {
+        [CHAR]: {
+          enabled: true,
+          intervalMinutes: 60,
+          maxIterations: 5,
+          aiChatMaxRounds: 3,
+          virtualWorldStoryEnabled: false,
+        },
+      },
       lastHeartbeat: {},
       runningCharacters: {},
       recentLog: [],
@@ -74,20 +83,27 @@ describe('heartbeatAgent — end-to-end via Tool Registry', () => {
     const spy = vi.spyOn(chatCompleteMod, 'chatComplete')
       .mockResolvedValueOnce('[{"type":"view_user_signature","param":{}}]')
       .mockResolvedValueOnce('[{"type":"send_message","param":{"text":"嗨"}}]')
-      .mockResolvedValueOnce('[{"type":"done","param":{}}]')
-      // 4th call: narrative summary (fires because actionsTaken is non-empty)
-      .mockResolvedValueOnce('今天自主活动了一会儿。');
+      .mockResolvedValueOnce('[{"type":"done","param":{}}]');
 
     await triggerHeartbeat(CHAR);
 
-    expect(spy).toHaveBeenCalledTimes(4);
+    expect(spy).toHaveBeenCalledTimes(3);
     // send_message wrote a proactive bubble into xingYuDataStore
     const msgs = useXYData.getState().messages;
     const proactive = msgs.find((m) => m.type === 'text' && m.text === '嗨');
     expect(proactive).toBeDefined();
 
-    // heartbeat_log appended to conversation
-    // NOTE: this test does not assert log text, just no crash + correct loop.
+    const log = msgs.find((m) => m.type === 'heartbeat_log');
+    expect(log?.text).toContain('[自主活动开始]');
+    expect(log?.text).toContain('我查看了用户的个性签名');
+
+    const memoryText = useCharacterMemory
+      .getState()
+      .getAll(CHAR)
+      .map((m) => m.content)
+      .join('\n');
+    expect(memoryText).toContain('[自主活动记录]');
+    expect(memoryText).toContain('我查看了用户的个性签名');
   });
 
   it('observations come back as role:user messages to the LLM (Anthropic compat)', async () => {
@@ -150,8 +166,7 @@ describe('heartbeatAgent — end-to-end via Tool Registry', () => {
     const spy = vi.spyOn(chatCompleteMod, 'chatComplete')
       .mockResolvedValueOnce('[{"type":"view_user_signature","param":{}}]')
       .mockResolvedValueOnce('[{"type":"send_message","param":{"text":"hi"}}]')
-      .mockResolvedValueOnce('[{"type":"done","param":{}}]')
-      .mockResolvedValueOnce('summary text'); // narrativeSummary
+      .mockResolvedValueOnce('[{"type":"done","param":{}}]');
 
     await triggerHeartbeat(CHAR);
 
@@ -170,7 +185,12 @@ describe('heartbeatAgent — end-to-end via Tool Registry', () => {
     await triggerHeartbeat(CHAR);
 
     const firstCallMessages = spy.mock.calls[0]![1];
-    const firstSys = firstCallMessages.find((m) => m.role === 'system')!.content as string;
+    const firstSys = firstCallMessages.find(
+      (m) =>
+        m.role === 'system' &&
+        typeof m.content === 'string' &&
+        m.content.includes('[回复格式]'),
+    )!.content as string;
 
     // Legacy ReAct-era markers should NOT appear
     expect(firstSys).not.toContain('Thought:');
@@ -183,5 +203,76 @@ describe('heartbeatAgent — end-to-end via Tool Registry', () => {
     expect(firstSys).toContain('[可用动作]');
     expect(firstSys).toContain('- send_message:');
     expect(firstSys).toContain('- done:');
+  });
+
+  it('experience disabled keeps the existing one-call done path', async () => {
+    useHeartbeatStore.setState({
+      configs: {
+        [CHAR]: {
+          enabled: true,
+          intervalMinutes: 60,
+          maxIterations: 5,
+          aiChatMaxRounds: 3,
+          virtualWorldStoryEnabled: false,
+        },
+      },
+    } as never);
+    const spy = vi.spyOn(chatCompleteMod, 'chatComplete')
+      .mockResolvedValueOnce('[{"type":"done","param":{}}]');
+
+    await triggerHeartbeat(CHAR);
+
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('experience enabled writes the story before the tool loop sees memory', async () => {
+    useHeartbeatStore.setState({
+      configs: {
+        [CHAR]: {
+          enabled: true,
+          intervalMinutes: 60,
+          maxIterations: 5,
+          aiChatMaxRounds: 3,
+          virtualWorldStoryEnabled: true,
+        },
+      },
+      lastHeartbeat: { [CHAR]: Date.now() - 24 * 60 * 60 * 1000 },
+    } as never);
+    const spy = vi.spyOn(chatCompleteMod, 'chatComplete')
+      .mockResolvedValueOnce('下午我试了一杯咸柠气泡水，后来把这个味道带进了晚饭。')
+      .mockResolvedValueOnce('[{"type":"done","param":{}}]');
+
+    await triggerHeartbeat(CHAR);
+
+    expect(spy).toHaveBeenCalledTimes(2);
+    const secondCallMessages = spy.mock.calls[1]![1];
+    const joined = secondCallMessages
+      .map((m) => (typeof m.content === 'string' ? m.content : ''))
+      .join('\n');
+    expect(joined).toContain('[经历]');
+    expect(joined).toContain('咸柠气泡水');
+  });
+
+  it('experience failure logs an error and continues tool loop', async () => {
+    useHeartbeatStore.setState({
+      configs: {
+        [CHAR]: {
+          enabled: true,
+          intervalMinutes: 60,
+          maxIterations: 5,
+          aiChatMaxRounds: 3,
+          virtualWorldStoryEnabled: true,
+        },
+      },
+      lastHeartbeat: { [CHAR]: Date.now() - 24 * 60 * 60 * 1000 },
+    } as never);
+    const spy = vi.spyOn(chatCompleteMod, 'chatComplete')
+      .mockRejectedValueOnce(new Error('story failed'))
+      .mockResolvedValueOnce('[{"type":"done","param":{}}]');
+
+    await triggerHeartbeat(CHAR);
+
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(useHeartbeatStore.getState().recentLog.some((entry) => entry.action === 'virtual_story_error')).toBe(true);
   });
 });

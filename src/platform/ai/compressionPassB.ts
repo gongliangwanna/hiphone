@@ -10,6 +10,7 @@
 import type { CharacterMemoryStateRecord, Boundary } from './memoryStateTypes';
 import type { PassBResult } from './memoryStateMutations';
 import type { PassMessage, PassACommonInput } from './compressionPassA';
+import { buildOpenRouterProviderRouting } from './providers';
 
 export interface PassBInput extends PassACommonInput {
   state: CharacterMemoryStateRecord;
@@ -80,17 +81,23 @@ export async function runPassB(input: PassBInput): Promise<PassBResult> {
     headers['HTTP-Referer'] = 'https://hiphone.app';
     headers['X-Title'] = 'hiPhone';
   }
+  const body: Record<string, unknown> = {
+    model: input.model,
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ],
+    max_tokens: input.maxTokens,
+    temperature: 0.2,
+  };
+  const providerRouting = buildOpenRouterProviderRouting(
+    input.providerId,
+    input.openRouterProviderSlug,
+  );
+  if (providerRouting) body.provider = providerRouting;
   const res = await fetch(`${input.endpoint}/chat/completions`, {
     method: 'POST', headers,
-    body: JSON.stringify({
-      model: input.model,
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
-      ],
-      max_tokens: input.maxTokens,
-      temperature: 0.2,
-    }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const body = await res.text();

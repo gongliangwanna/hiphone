@@ -35,16 +35,17 @@ import { getAdapter, pickGenerationParams } from '@/platform/ai/providers';
 import { chatComplete } from './chatComplete';
 import { assemblePrompt, type ChatMessage } from './promptAssembly';
 import { buildDeviceContext } from './deviceContext';
-import { executeHeartbeatTool, resetHeartbeatLimits, resolveCharacterId, uid } from './heartbeatTools';
+import { executeHeartbeatTool, resetHeartbeatLimits, uid } from './heartbeatTools';
 import { _appendMessage } from './memoryWriter';
 import {
   registerHeartbeatAi,
   HEARTBEAT_APP_ID,
 } from './heartbeatRegister';
-import { parseReply, type ReplyItem } from './replyParser';
+import { parseReply } from './replyParser';
 import { getTools } from './toolRegistry';
 import { getAppSystemPrompt } from './appSystemPromptRegistry';
 import { buildParseErrorMessage } from './parseErrorMessage';
+import { generateVirtualWorldStoryForHeartbeat } from './heartbeatVirtualWorldStory';
 import type { Message } from '@/apps/XingYu/data';
 
 // Idempotent — ensures tools/appSystemPrompt are registered before any
@@ -66,60 +67,13 @@ const activeControllers = new Map<string, AbortController>();
 const SCHEDULER_TICK_MS = 30_000; // 30 seconds
 
 // ---------------------------------------------------------------------------
-// Action detail formatter (for activity log)
-// ---------------------------------------------------------------------------
-
-const ACTION_LABELS: Record<string, (p: ReplyItem, selfId: string) => string> = {
-  send_message: (p) => {
-    const t = (p.param as { text?: unknown })?.text;
-    return `给用户发了消息:「${String(t ?? '').slice(0, 50)}」`;
-  },
-  post_moment: (p) => {
-    const t = (p.param as { text?: unknown })?.text;
-    return `发了一条动态:「${String(t ?? '').slice(0, 50)}」`;
-  },
-  view_moments: () => '浏览了星球动态',
-  like_moment: () => '给一条动态点了赞',
-  comment_moment: (p) => {
-    const t = (p.param as { text?: unknown })?.text;
-    return `评论了一条动态:「${String(t ?? '').slice(0, 50)}」`;
-  },
-  update_signature: (p) => {
-    const t = (p.param as { text?: unknown })?.text;
-    return `更新了个性签名:「${String(t ?? '').slice(0, 50)}」`;
-  },
-  view_user_signature: () => '查看了用户的个性签名',
-  view_user_signature_history: () => '查看了用户的历史签名',
-  view_own_signature_history: () => '查看了自己的历史签名',
-  view_unread_messages: () => '查看了未读消息',
-  view_unread_interactions: () => '查看了未读互动',
-  view_notes: () => '查看了自己的备忘录',
-  create_note: (p) => {
-    const title = (p.param as { title?: unknown })?.title;
-    return `写了一条备忘录:「${String(title ?? '').slice(0, 50)}」`;
-  },
-  view_characters: () => '查看了其他角色列表',
-  chat_with_character: (p, selfId) => {
-    const inp = p.param as { characterId?: unknown };
-    const rawId = String(inp?.characterId ?? '');
-    const targetId = resolveCharacterId(selfId, rawId);
-    const target = useCharacterStore.getState().characters.find((c) => c.id === targetId);
-    return `和${target?.name ?? rawId}聊过天`;
-  },
-};
-
-function formatActionDetail(item: ReplyItem, selfCharacterId: string): string {
-  const formatter = ACTION_LABELS[item.type];
-  return formatter ? formatter(item, selfCharacterId) : item.type;
-}
-
-// ---------------------------------------------------------------------------
 // ReAct agent loop (runs independently per character)
 // ---------------------------------------------------------------------------
 
 async function runHeartbeat(
   characterId: string,
   signal: AbortSignal,
+  previousLastHeartbeat?: number,
 ): Promise<void> {
   const config = useHeartbeatStore.getState().getCharacterConfig(characterId);
   const character = useCharacterStore
@@ -148,6 +102,25 @@ async function runHeartbeat(
   );
 
   resetHeartbeatLimits(characterId);
+
+  if (config.virtualWorldStoryEnabled) {
+    try {
+      await generateVirtualWorldStoryForHeartbeat({
+        characterId,
+        previousLastHeartbeat,
+        now: new Date(),
+        intervalMinutes: config.intervalMinutes,
+        signal,
+      });
+    } catch (e) {
+      if ((e as Error)?.name === 'AbortError') return;
+      useHeartbeatStore.getState().pushLog({
+        characterId,
+        action: 'virtual_story_error',
+        detail: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
 
   const frozenTools = getTools(HEARTBEAT_APP_ID);
   const frozenAppSystemPrompt = getAppSystemPrompt(HEARTBEAT_APP_ID)?.() ?? undefined;
@@ -207,7 +180,7 @@ async function runHeartbeat(
 
   useHeartbeatStore.getState().setRunning(characterId, 0);
 
-  const actionsTaken: { action: string; detail: string }[] = [];
+  const memoryEvents: string[] = [];
 
   for (let i = 0; i < config.maxIterations; i++) {
     if (signal.aborted) break;
@@ -216,7 +189,13 @@ async function runHeartbeat(
     let rawReply: string;
     try {
       rawReply = await chatComplete(
-        { endpoint, apiKey: aiConfig.apiKey, model: aiConfig.model, providerId: aiConfig.provider },
+        {
+          endpoint,
+          apiKey: aiConfig.apiKey,
+          model: aiConfig.model,
+          providerId: aiConfig.provider,
+          openRouterProviderSlug: aiConfig.openRouterProviderSlug,
+        },
         messages,
         pickGenerationParams(aiConfig),
         signal,
@@ -270,8 +249,10 @@ async function runHeartbeat(
         characterId,
         signal,
       );
-      actionsTaken.push({ action: item.type, detail: formatActionDetail(item, characterId) });
       observations.push(`[${item.type}] ${result.observation}`);
+      if (result.memoryEvents?.length) {
+        memoryEvents.push(...result.memoryEvents);
+      }
 
       if (result.done) { hitDone = true; break; }
     }
@@ -294,74 +275,24 @@ async function runHeartbeat(
     });
   }
 
-  // ── Insert heartbeat activity log into chat history ──
-  // Filter to write operations only (exclude send_message per user request, and all read-only actions)
-  const READ_ONLY_ACTIONS = new Set(['view_moments', 'view_user_signature', 'view_user_signature_history', 'view_own_signature_history', 'view_characters', 'view_notes', 'view_unread_messages', 'view_unread_interactions', 'done']);
-  const writeActions = actionsTaken.filter((a) => a.action !== 'send_message' && !READ_ONLY_ACTIONS.has(a.action));
-
-  if (actionsTaken.length > 0) {
-    // Ask the LLM to write a diary entry summarizing the heartbeat session.
-    // The `messages` array already contains the full session context (all
-    // observations, emotional reactions, tool results) so the LLM can produce
-    // a rich narrative that serves as memory for future interactions.
-    let narrativeSummary = '';
-    if (!signal.aborted) {
-      try {
-        const summaryMessages: ChatMessage[] = [
-          ...messages,
-          {
-            role: 'user',
-            content: '请用第一人称写一段简短的活动日记（100-200字），总结你刚才自主活动期间做了什么、看到了什么、有什么感悟和想法。像写日记一样自然，包含你的真实感受和情绪变化，提到重要的事件和发现。不要列举操作步骤，不要使用任何格式标记（如Thought/Actions），直接输出日记内容。',
-          },
-        ];
-        narrativeSummary = await chatComplete(
-          { endpoint, apiKey: aiConfig.apiKey, model: aiConfig.model, providerId: aiConfig.provider },
-          summaryMessages,
-          pickGenerationParams(aiConfig),
-          signal,
-        );
-        narrativeSummary = narrativeSummary.trim();
-      } catch {
-        // Fallback when the summary LLM call fails: synthesize from
-        // write-action labels only. Read-only actions (view_*) are
-        // excluded — a list of "查看了X、查看了Y" is robotic noise.
-        // If there were no write actions, return empty → silent skip.
-        narrativeSummary = writeActions.length > 0
-          ? writeActions.map((a) => a.detail).join(';')
-          : '';
-      }
-    } else {
-      // Aborted before summary could run — same fallback semantic.
-      narrativeSummary = writeActions.length > 0
-        ? writeActions.map((a) => a.detail).join(';')
-        : '';
-    }
-
-    const parts: string[] = [];
-
-    if (narrativeSummary) {
-      parts.push(narrativeSummary);
-    }
-
-    // Append write operations list
-    if (writeActions.length > 0) {
-      if (parts.length > 0) parts.push('');
-      for (const a of writeActions) {
-        parts.push(`· ${a.detail}`);
-      }
-    }
-
-    if (parts.length > 0) {
-      const logMsg: Message = {
-        id: uid(),
-        convId,
-        senderId: `char-${characterId}`,
-        type: 'heartbeat_log',
-        text: parts.join('\n'),
-        timestamp: Date.now(),
-      };
-      _appendMessage(logMsg, 'heartbeat');
-    }
+  // ── Insert deterministic heartbeat memory events into chat history ──
+  if (memoryEvents.length > 0) {
+    const logMsg: Message = {
+      id: uid(),
+      convId,
+      senderId: `char-${characterId}`,
+      type: 'heartbeat_log',
+      text: [
+        '[自主活动开始]',
+        '我开始了一次自主活动。',
+        '',
+        ...memoryEvents.flatMap((event) => [event, '']),
+        '[自主活动结束]',
+        '我结束了这次自主活动。',
+      ].join('\n').trim(),
+      timestamp: Date.now(),
+    };
+    _appendMessage(logMsg, 'heartbeat');
   }
 
   // Compression is handled automatically by the memoryStore post-append
@@ -380,9 +311,10 @@ function launchCharacterHeartbeat(characterId: string) {
   const controller = new AbortController();
   activeControllers.set(characterId, controller);
 
+  const previousLastHeartbeat = useHeartbeatStore.getState().lastHeartbeat[characterId];
   useHeartbeatStore.getState().setLastHeartbeat(characterId, Date.now());
 
-  runHeartbeat(characterId, controller.signal)
+  runHeartbeat(characterId, controller.signal, previousLastHeartbeat)
     .catch((e) => {
       console.warn(`[heartbeat] ${characterId} unexpected error:`, e);
       useHeartbeatStore.getState().pushLog({
@@ -527,10 +459,11 @@ export async function triggerHeartbeat(characterId: string): Promise<void> {
 
   const controller = new AbortController();
   activeControllers.set(characterId, controller);
+  const previousLastHeartbeat = useHeartbeatStore.getState().lastHeartbeat[characterId];
   useHeartbeatStore.getState().setLastHeartbeat(characterId, Date.now());
 
   try {
-    await runHeartbeat(characterId, controller.signal);
+    await runHeartbeat(characterId, controller.signal, previousLastHeartbeat);
   } finally {
     activeControllers.delete(characterId);
     useHeartbeatStore.getState().clearRunning(characterId);

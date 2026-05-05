@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { ChevronLeft, Search, X } from 'lucide-react';
 import { useXYNav } from '../xingYuNavStore';
 import { useXYData } from '../xingYuDataStore';
-import { getIdol, formatChatTime } from '../data';
+import { getIdol, formatChatTime, getLocationPreview } from '../data';
 import { useCharacterStore } from '@/platform/stores/characterStore';
 import { T, springs } from '../theme';
 
@@ -48,7 +48,11 @@ export function ChatSearch() {
     return allMessages
       .filter((m) => m.convId === activeChatId)
       .filter((m) => {
-        const text = (m.type === 'text' || m.type === 'heartbeat_log') ? m.text : undefined;
+        const text = (m.type === 'text' || m.type === 'heartbeat_log')
+          ? m.text
+          : m.type === 'location'
+            ? getLocationPreview(m.location)
+            : undefined;
         const desc = m.type === 'sticker' ? m.stickerDesc : undefined;
         return text?.toLowerCase().includes(q) || desc?.toLowerCase().includes(q);
       })
@@ -133,6 +137,7 @@ export function ChatSearch() {
               const senderName = isMine ? '我' : peerName;
               const preview = (
                 (msg.type === 'text' || msg.type === 'heartbeat_log') ? msg.text
+                : msg.type === 'location' ? getLocationPreview(msg.location)
                 : msg.type === 'sticker' ? (msg.stickerDesc ?? '')
                 : ''
               ).slice(0, 60);

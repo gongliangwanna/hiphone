@@ -1,0 +1,185 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+}
+
+body {
+  box-sizing: border-box;
+  padding: 5px 6px 8px;
+  text-align: left;
+}
+
+body.is-mine {
+  text-align: right;
+}
+
+body.is-other {
+  text-align: left;
+}
+
+.bubble {
+  --ink: #553a43;
+  --rim: rgba(222, 132, 165, 0.34);
+  --tail-a: #ffe7f0;
+  --tail-b: #ffc8dc;
+  --shadow: rgba(128, 68, 92, 0.13);
+  position: relative;
+  display: inline-block;
+  box-sizing: border-box;
+  min-width: 44px;
+  max-width: calc(100% - 10px);
+  min-height: 34px;
+  padding: 9px 13px 10px;
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.48;
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+  vertical-align: top;
+  overflow: visible;
+  background:
+    linear-gradient(90deg, transparent 0 18px, rgba(255, 177, 203, 0.22) 18px 19px, transparent 19px) left calc(100% - 9px) / 38px 8px repeat-x,
+    radial-gradient(circle at 9px calc(100% - 9px), rgba(170,198,255,0.34) 0 5px, transparent 5.5px),
+    radial-gradient(circle at calc(100% - 12px) calc(100% - 11px), rgba(255,124,162,0.35) 0 5px, transparent 5.5px),
+    radial-gradient(circle at 16px 12px, rgba(255,255,255,0.92) 0 5px, transparent 6px),
+    radial-gradient(circle at calc(100% - 18px) 14px, rgba(255,192,215,0.36) 0 4px, transparent 5px),
+    radial-gradient(circle at 80% 86%, rgba(255,143,184,0.2), transparent 30%),
+    linear-gradient(180deg, #fffaf0 0%, #ffeaf2 62%, #ffd3e4 100%),
+    asset("paper");
+  background-size: 38px 8px, auto, auto, auto, auto, auto, auto, 72px 72px;
+  border: 1px solid var(--rim);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.82),
+    0 4px 12px var(--shadow);
+}
+
+.bubble.mine {
+  border-radius: 21px 9px 21px 21px;
+}
+
+.bubble.other {
+  --ink: #4d4a64;
+  --rim: rgba(123, 151, 213, 0.26);
+  --tail-a: #eef4ff;
+  --tail-b: #dfe8ff;
+  --shadow: rgba(83, 94, 140, 0.11);
+  border-radius: 9px 21px 21px 21px;
+  background:
+    linear-gradient(90deg, transparent 0 18px, rgba(148, 174, 226, 0.16) 18px 19px, transparent 19px) left calc(100% - 9px) / 38px 8px repeat-x,
+    radial-gradient(circle at 9px calc(100% - 9px), rgba(170,198,255,0.3) 0 5px, transparent 5.5px),
+    radial-gradient(circle at calc(100% - 12px) calc(100% - 11px), rgba(185,209,255,0.32) 0 5px, transparent 5.5px),
+    radial-gradient(circle at 17px 12px, rgba(255,255,255,0.94) 0 5px, transparent 6px),
+    radial-gradient(circle at calc(100% - 18px) 14px, rgba(182,202,255,0.42) 0 4px, transparent 5px),
+    radial-gradient(circle at 84% 84%, rgba(196,205,255,0.2), transparent 30%),
+    linear-gradient(180deg, #fffefa 0%, #f0f4ff 64%, #e6edff 100%),
+    asset("paper");
+  background-size: 38px 8px, auto, auto, auto, auto, auto, auto, 72px 72px;
+}
+
+.bubble::before,
+.bubble::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.bubble::before {
+  width: 13px;
+  height: 13px;
+  bottom: 6px;
+  background: linear-gradient(135deg, var(--tail-a), var(--tail-b));
+  border: 1px solid var(--rim);
+  box-shadow: 0 3px 8px var(--shadow);
+  z-index: -1;
+}
+
+.bubble.mine::before {
+  right: -4px;
+  border-radius: 0 10px 12px 10px;
+  transform: rotate(-18deg) skewX(-12deg);
+}
+
+.bubble.other::before {
+  left: -4px;
+  border-radius: 10px 0 10px 12px;
+  transform: rotate(18deg) skewX(12deg);
+}
+
+.bubble::after {
+  inset: 4px;
+  border-radius: inherit;
+  border: 1px dashed rgba(129, 78, 103, 0.1);
+  z-index: 0;
+}
+
+.bubble.long::after,
+.bubble.tall::after {
+  border-style: solid;
+  border-color: rgba(255,255,255,0.34);
+}
+
+.bubble.short {
+  padding-top: 11px;
+  padding-bottom: 12px;
+}
+
+.bubble.short.mine .content {
+  padding-left: 18px;
+}
+
+.bubble.short.other .content {
+  padding-right: 18px;
+}
+
+.bubble.short.mine {
+  background:
+    linear-gradient(135deg, rgba(255,230,143,0.62) 0 16px, transparent 17px) right 15px top -2px / 56px 17px no-repeat,
+    radial-gradient(circle at 14px 12px, rgba(255,244,172,0.95) 0 12px, transparent 12.8px),
+    radial-gradient(circle at 7px 5px, rgba(255,244,172,0.9) 0 6px, transparent 6.8px),
+    radial-gradient(circle at 22px 5px, rgba(255,244,172,0.9) 0 6px, transparent 6.8px),
+    radial-gradient(circle at 16px 12px, rgba(255,255,255,0.9) 0 5px, transparent 6px),
+    radial-gradient(circle at calc(100% - 18px) 14px, rgba(255,192,215,0.38) 0 4px, transparent 5px),
+    radial-gradient(circle at 9px calc(100% - 9px), rgba(170,198,255,0.34) 0 5px, transparent 5.5px),
+    radial-gradient(circle at calc(100% - 12px) calc(100% - 11px), rgba(255,124,162,0.35) 0 5px, transparent 5.5px),
+    linear-gradient(180deg, #fffaf0 0%, #ffeaf2 62%, #ffd3e4 100%),
+    asset("paper");
+}
+
+.bubble.short.other {
+  background:
+    linear-gradient(135deg, rgba(190,238,250,0.62) 0 16px, transparent 17px) left 15px top -2px / 56px 17px no-repeat,
+    radial-gradient(circle at calc(100% - 14px) 12px, rgba(212,247,255,0.96) 0 12px, transparent 12.8px),
+    radial-gradient(circle at calc(100% - 7px) 5px, rgba(212,247,255,0.9) 0 6px, transparent 6.8px),
+    radial-gradient(circle at calc(100% - 22px) 5px, rgba(212,247,255,0.9) 0 6px, transparent 6.8px),
+    radial-gradient(circle at 17px 12px, rgba(255,255,255,0.94) 0 5px, transparent 6px),
+    radial-gradient(circle at calc(100% - 18px) 14px, rgba(182,202,255,0.42) 0 4px, transparent 5px),
+    radial-gradient(circle at 9px calc(100% - 9px), rgba(170,198,255,0.3) 0 5px, transparent 5.5px),
+    radial-gradient(circle at calc(100% - 12px) calc(100% - 11px), rgba(185,209,255,0.32) 0 5px, transparent 5.5px),
+    linear-gradient(180deg, #fffefa 0%, #f0f4ff 64%, #e6edff 100%),
+    asset("paper");
+}
+
+.bubble.medium {
+  padding: 9px 13px 10px;
+}
+
+.bubble.long,
+.bubble.tall {
+  padding: 9px 13px 10px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.78),
+    0 3px 9px rgba(128, 68, 92, 0.09);
+}
+
+.content {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  min-height: 22px;
+  margin: 0;
+}

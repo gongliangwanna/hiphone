@@ -20,6 +20,7 @@ import {
 } from '@/platform/stores/aiConfigStore';
 import { useSettingsNavStore } from '../settingsNavStore';
 import { PresetSwitcherSheet } from './PresetSwitcherSheet';
+import { OpenRouterProviderSection } from './OpenRouterProviderSection';
 
 /* ── Shared UI pieces ── */
 
@@ -185,6 +186,7 @@ export function AIServicePage() {
   const apiKey = useAIConfigStore((s) => s.apiKey);
   const apiEndpoint = useAIConfigStore((s) => s.apiEndpoint);
   const model = useAIConfigStore((s) => s.model);
+  const openRouterProviderSlug = useAIConfigStore((s) => s.openRouterProviderSlug);
   const fetchedModels = useAIConfigStore((s) => s.fetchedModels);
   const modelListLoading = useAIConfigStore((s) => s.modelListLoading);
   const modelListError = useAIConfigStore((s) => s.modelListError);
@@ -193,6 +195,7 @@ export function AIServicePage() {
   const activePreset = presets.find((p) => p.id === activePresetId);
 
   const setProvider = useAIConfigStore((s) => s.setProvider);
+  const setOpenRouterProviderSlug = useAIConfigStore((s) => s.setOpenRouterProviderSlug);
   const setApiKey = useAIConfigStore((s) => s.setApiKey);
   const setApiEndpoint = useAIConfigStore((s) => s.setApiEndpoint);
   const setModel = useAIConfigStore((s) => s.setModel);
@@ -241,7 +244,7 @@ export function AIServicePage() {
 
     const endpoint = apiEndpoint || adapterInfo?.defaultEndpoint || '';
     streamChat(
-      { endpoint, apiKey, model, providerId: provider },
+      { endpoint, apiKey, model, providerId: provider, openRouterProviderSlug },
       [{ role: 'user', content: '你好，请用一句话介绍你自己。' }],
       (token) => setTestOutput((prev) => prev + token),
       ctrl.signal,
@@ -252,7 +255,7 @@ export function AIServicePage() {
         setTestStatus('error');
         setTestOutput(e instanceof Error ? e.message : String(e));
       });
-  }, [canTest, apiKey, apiEndpoint, model, provider, adapterInfo]);
+  }, [canTest, apiKey, apiEndpoint, model, provider, openRouterProviderSlug, adapterInfo]);
 
   const handleFetch = useCallback(() => {
     if (!canFetch) {
@@ -411,6 +414,13 @@ export function AIServicePage() {
         </div>
       </div>
       <SectionFooter text={adapterInfo?.requiresKeyForModels ? '需要 API Key 才能拉取模型列表' : '模型列表无需 API Key'} />
+
+      {provider === 'openrouter' && (
+        <OpenRouterProviderSection
+          value={openRouterProviderSlug}
+          onChange={setOpenRouterProviderSlug}
+        />
+      )}
 
       {/* ── Fetch Models Button ── */}
       <div className="mx-4 mb-5">

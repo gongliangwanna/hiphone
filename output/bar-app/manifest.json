@@ -1,0 +1,7 @@
+{
+  "id": "ai-app-codex-draft",
+  "name": "微醺酒馆",
+  "version": "1.0.0",
+  "entry": "App.tsx",
+  "perspectiveAware": false
+}

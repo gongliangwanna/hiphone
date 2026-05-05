@@ -1,11 +1,14 @@
 import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback, memo } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ChevronLeft, Phone, Send, Smile, MoreHorizontal, Play, Plus, MessageCircle, Loader2 } from 'lucide-react';
+import { ChevronLeft, Phone, Send, Smile, MoreHorizontal, Play, Plus, MessageCircle, Loader2, MapPin } from 'lucide-react';
 import { useXYNav } from '../xingYuNavStore';
 import { useXYData } from '../xingYuDataStore';
 import { GroupMemberStrip } from '../components/GroupMemberStrip';
-import { getIdol, formatChatTime, DEFAULT_AVATAR } from '../data';
-import type { Message, QuoteRef } from '../data';
+import { getIdol, formatChatTime, DEFAULT_AVATAR, formatLocationText, getLocationAddress, getLocationTitle } from '../data';
+import type { LocationPayload, Message, QuoteRef } from '../data';
+import { reverseGeocode } from '@/apps/Maps/searchService';
+import { TILE_URL } from '@/apps/Maps/mapConfig';
+import { useMapsStore, type PlaceResult } from '@/apps/Maps/mapsStore';
 import { useCharacterStore } from '@/platform/stores/characterStore';
 import { usePersonaStore } from '@/platform/stores/personaStore';
 import { usePerspective } from '@/platform/hooks/usePerspective';
@@ -61,6 +64,7 @@ export function ChatDetail() {
   const allMessages = useXYData((s) => s.messages);
   const sendMessage = useXYData((s) => s.sendMessage);
   const sendImageMessage = useXYData((s) => s.sendImageMessage);
+  const sendLocationMessage = useXYData((s) => s.sendLocationMessage);
   const sendStickerMessage = useXYData((s) => s.sendStickerMessage);
   const markRead = useXYData((s) => s.markRead);
   const addFavorite = useXYData((s) => s.addFavorite);
@@ -436,7 +440,9 @@ export function ChatDetail() {
               : 'text'
           : quoteMsg.type === 'image'
             ? 'image'
-            : 'sticker';
+            : quoteMsg.type === 'location'
+              ? 'location'
+              : 'sticker';
       ref = {
         msgId: quoteMsg.id,
         senderId: quoteMsg.senderId,
@@ -473,6 +479,49 @@ export function ChatDetail() {
     },
     [activeChatId, sendImageMessage],
   );
+
+  const handleSendLocation = useCallback(() => {
+    if (!activeChatId) return;
+    const geolocation = navigator.geolocation;
+    if (!geolocation) {
+      useToastStore.getState().show('无法获取当前位置');
+      setPickerMode('none');
+      return;
+    }
+
+    setPickerMode('none');
+    geolocation.getCurrentPosition(
+      async (position) => {
+        const latitude = position.coords.latitude;
+        const longitude = position.coords.longitude;
+        let place: PlaceResult;
+        try {
+          place = await reverseGeocode(latitude, longitude);
+        } catch {
+          useToastStore.getState().show('无法解析当前位置');
+          return;
+        }
+        const location: LocationPayload = {
+          label: place.name || '当前位置',
+          ...(place.address ? { address: place.address } : {}),
+          ...(place.displayName ? { displayName: place.displayName } : {}),
+          ...(place.id ? { placeId: place.id } : {}),
+          latitude,
+          longitude,
+          ...(Number.isFinite(position.coords.accuracy) ? { accuracy: position.coords.accuracy } : {}),
+        };
+        sendLocationMessage(activeChatId, location);
+      },
+      () => {
+        useToastStore.getState().show('无法获取当前位置');
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10_000,
+        maximumAge: 60_000,
+      },
+    );
+  }, [activeChatId, sendLocationMessage]);
 
   const handleSendSticker = useCallback(
     (stickerUrl: string, stickerDesc: string) => {
@@ -519,18 +568,36 @@ export function ChatDetail() {
     });
   }, []);
 
+  const handleOpenLocationInMaps = useCallback((location: LocationPayload) => {
+    const center: [number, number] = [location.latitude, location.longitude];
+    useMapsStore.getState().setMapView(center, 16);
+    useMapsStore.getState().selectPlace({
+      id: location.placeId || `loc-${location.latitude}-${location.longitude}`,
+      name: getLocationTitle(location),
+      displayName: location.displayName || location.address || getLocationTitle(location),
+      lat: location.latitude,
+      lon: location.longitude,
+      type: 'location',
+      category: 'location',
+      address: getLocationAddress(location),
+    });
+    useAppRuntimeStore.getState().openApp('maps', null);
+  }, []);
+
   const handleCloseMenu = useCallback(() => setActionMenu(null), []);
 
   const handleMessageAction = useCallback((type: ActionType, msg: Message) => {
     setActionMenu(null);
     switch (type) {
       case 'copy':
-        if (msg.type === 'text') {
-          const txt = msg.noteRef
-            ? `${msg.noteRef.title}\n${msg.noteRef.body}`
-            : msg.songRef
-              ? `${msg.songRef.title} - ${msg.songRef.artist}`
-              : msg.text;
+        if (msg.type === 'text' || msg.type === 'location') {
+          const txt = msg.type === 'location'
+            ? formatLocationText(msg.location)
+            : msg.noteRef
+              ? `${msg.noteRef.title}\n${msg.noteRef.body}`
+              : msg.songRef
+                ? `${msg.songRef.title} - ${msg.songRef.artist}`
+                : msg.text;
           navigator.clipboard?.writeText(txt).catch(() => {});
           useToastStore.getState().show('已复制');
         }
@@ -753,6 +820,7 @@ export function ChatDetail() {
               selected={selectedMsgIds.has(msg.id)}
               onToggleSelect={toggleMsgSelection}
               onForwardCardTap={handleForwardCardTap}
+              onOpenLocation={handleOpenLocationInMaps}
             />
           );
         })}
@@ -1006,6 +1074,7 @@ export function ChatDetail() {
       <AttachmentDrawer
         visible={pickerMode === 'attach'}
         onPickImage={() => setPickerMode('image')}
+        onPickLocation={handleSendLocation}
       />
       <ImagePicker
         visible={pickerMode === 'image'}
@@ -1046,6 +1115,7 @@ const MsgBubble = memo(function MsgBubble({
   selected,
   onToggleSelect,
   onForwardCardTap,
+  onOpenLocation,
 }: {
   msg: Message;
   peer: { id: string; avatar: string; ringIndex: number; isGroup?: boolean };
@@ -1066,6 +1136,7 @@ const MsgBubble = memo(function MsgBubble({
   selected?: boolean;
   onToggleSelect?: (msgId: string) => void;
   onForwardCardTap?: (msg: Message) => void;
+  onOpenLocation?: (location: LocationPayload) => void;
 }) {
   const { isSelf: perspectiveIsSelf, phoneOwnerId } = usePerspective();
   const isMine = aiChatPeers
@@ -1088,6 +1159,7 @@ const MsgBubble = memo(function MsgBubble({
   const hasContent =
     (msg.type === 'text' && !!msg.text) ||
     (msg.type === 'image' && !!msg.imageUrl) ||
+    msg.type === 'location' ||
     (msg.type === 'sticker' && !!msg.stickerUrl) ||
     msg.type === 'forward_card';
 
@@ -1179,7 +1251,7 @@ const MsgBubble = memo(function MsgBubble({
 
         <div
           style={{
-            maxWidth: msg.type === 'image' ? '58%' : '70%',
+            maxWidth: msg.type === 'image' ? '58%' : msg.type === 'location' ? '76%' : '70%',
             touchAction: 'pan-y',
             ...(multiSelectMode ? { pointerEvents: 'none' as const } : {}),
           }}
@@ -1251,6 +1323,10 @@ const MsgBubble = memo(function MsgBubble({
                 onLoad={() => setImgLoaded(true)}
               />
             </div>
+          )}
+
+          {msg.type === 'location' && (
+            <LocationCard location={msg.location} isMine={isMine} onOpen={onOpenLocation} />
           )}
 
           {msg.type === 'text' && msg.noteRef ? (
@@ -1479,6 +1555,173 @@ const MsgBubble = memo(function MsgBubble({
     </motion.div>
   );
 });
+
+function LocationCard({
+  location,
+  isMine,
+  onOpen,
+}: {
+  location: LocationPayload;
+  isMine: boolean;
+  onOpen?: (location: LocationPayload) => void;
+}) {
+  const title = getLocationTitle(location);
+  const address = getLocationAddress(location);
+
+  return (
+    <button
+      type="button"
+      data-testid="xy-location-card"
+      className="block text-left"
+      onClick={() => onOpen?.(location)}
+      style={{
+        width: 250,
+        borderRadius: 18,
+        overflow: 'hidden',
+        background: T.card,
+        border: `0.5px solid ${T.border}`,
+        boxShadow: T.shadow1,
+        marginLeft: isMine ? 'auto' : undefined,
+        padding: 0,
+        cursor: onOpen ? 'pointer' : 'default',
+      }}
+    >
+      <StaticMapPreview location={location} />
+      <div style={{ padding: '12px 14px' }}>
+        <div
+          className="truncate"
+          style={{ fontSize: 15, fontWeight: 700, color: T.textPrimary, lineHeight: 1.2 }}
+        >
+          {title}
+        </div>
+        {address ? (
+          <div
+            className="truncate"
+            style={{ fontSize: 12, color: T.textSecondary, lineHeight: 1.2, marginTop: 5 }}
+          >
+            {address}
+          </div>
+        ) : null}
+        <div style={{ fontSize: 11, color: T.textMuted, lineHeight: 1.2, marginTop: 6 }}>
+          在地图中打开
+        </div>
+      </div>
+    </button>
+  );
+}
+
+const STATIC_MAP_WIDTH = 250;
+const STATIC_MAP_HEIGHT = 126;
+const STATIC_MAP_ZOOM = 16;
+const TILE_SIZE = 256;
+
+function StaticMapPreview({ location }: { location: LocationPayload }) {
+  const tiles = buildStaticMapTiles(location.latitude, location.longitude);
+
+  return (
+    <div
+      data-testid="xy-location-map"
+      className="relative overflow-hidden"
+      style={{
+        width: STATIC_MAP_WIDTH,
+        height: STATIC_MAP_HEIGHT,
+        background: '#e9ece8',
+        borderBottom: `0.5px solid ${T.border}`,
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          width: tiles.gridWidth,
+          height: tiles.gridHeight,
+          left: tiles.left,
+          top: tiles.top,
+          display: 'grid',
+          gridTemplateColumns: `repeat(${tiles.columns}, ${TILE_SIZE}px)`,
+          gridTemplateRows: `repeat(${tiles.rows}, ${TILE_SIZE}px)`,
+        }}
+      >
+        {tiles.urls.map((url) => (
+          <img
+            key={url}
+            src={url}
+            alt="地图瓦片"
+            draggable={false}
+            style={{ width: TILE_SIZE, height: TILE_SIZE, display: 'block' }}
+          />
+        ))}
+      </div>
+      <div
+        className="flex items-center justify-center"
+        style={{
+          position: 'absolute',
+          left: '50%',
+          top: '50%',
+          width: 42,
+          height: 42,
+          borderRadius: '50%',
+          background: T.accentGrad,
+          boxShadow: '0 8px 22px rgba(0,122,255,0.28)',
+          border: '3px solid rgba(255,255,255,0.94)',
+          transform: 'translate(-50%, -62%)',
+        }}
+      >
+        <MapPin size={22} strokeWidth={2.4} color="#fff" />
+      </div>
+    </div>
+  );
+}
+
+function buildStaticMapTiles(latitude: number, longitude: number) {
+  const columns = 3;
+  const rows = 3;
+  const center = latLonToGlobalPixel(latitude, longitude, STATIC_MAP_ZOOM);
+  const centerTileX = Math.floor(center.x / TILE_SIZE);
+  const centerTileY = Math.floor(center.y / TILE_SIZE);
+  const startX = centerTileX - 1;
+  const startY = centerTileY - 1;
+  const centerLocalX = center.x - startX * TILE_SIZE;
+  const centerLocalY = center.y - startY * TILE_SIZE;
+  const maxTile = 2 ** STATIC_MAP_ZOOM;
+  const urls: string[] = [];
+
+  for (let y = 0; y < rows; y += 1) {
+    for (let x = 0; x < columns; x += 1) {
+      const tileX = ((startX + x) % maxTile + maxTile) % maxTile;
+      const tileY = Math.min(maxTile - 1, Math.max(0, startY + y));
+      urls.push(buildTileUrl(tileX, tileY, STATIC_MAP_ZOOM));
+    }
+  }
+
+  return {
+    urls,
+    columns,
+    rows,
+    gridWidth: columns * TILE_SIZE,
+    gridHeight: rows * TILE_SIZE,
+    left: STATIC_MAP_WIDTH / 2 - centerLocalX,
+    top: STATIC_MAP_HEIGHT / 2 - centerLocalY,
+  };
+}
+
+function latLonToGlobalPixel(latitude: number, longitude: number, zoom: number) {
+  const sinLat = Math.sin((Math.max(-85.05112878, Math.min(85.05112878, latitude)) * Math.PI) / 180);
+  const scale = TILE_SIZE * 2 ** zoom;
+  return {
+    x: ((longitude + 180) / 360) * scale,
+    y: (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * scale,
+  };
+}
+
+function buildTileUrl(x: number, y: number, z: number): string {
+  const subdomain = ['a', 'b', 'c'][(x + y) % 3] ?? 'a';
+  return TILE_URL
+    .replace('{s}', subdomain)
+    .replace('{z}', String(z))
+    .replace('{x}', String(x))
+    .replace('{y}', String(y))
+    .replace('{r}', '');
+}
 
 /* ── Typing ── */
 

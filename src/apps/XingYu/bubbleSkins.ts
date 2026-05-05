@@ -4,6 +4,9 @@ import { T } from './theme';
 export const DEFAULT_BUBBLE_SKIN_ID = 'ios-blue';
 export const LOCAL_PAPER_BUBBLE_SKIN_ID = 'local-paper';
 export const SANDBOX_TAPE_BUBBLE_SKIN_ID = 'sandbox-tape';
+export const JELLY_CREAM_BUBBLE_SKIN_ID = 'jelly-cream';
+export const HOLOGRAPHIC_BUBBLE_SKIN_ID = 'holographic';
+export const STICKER_NOTE_BUBBLE_SKIN_ID = 'sticker-note';
 
 export interface ChatThemeTimestamp {
   background: string;
@@ -173,6 +176,107 @@ window.renderBubble = function renderBubble(ctx) {
 };
 `;
 
+const STICKER_NOTE_HTML = '<div id="bubble"></div>';
+const STICKER_NOTE_CSS = `
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+}
+
+body {
+  padding: 9px 12px 14px;
+}
+
+#bubble {
+  position: relative;
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 13px 16px 12px;
+  border-radius: 14px;
+  font-size: 15px;
+  line-height: 1.5;
+  font-weight: 500;
+  letter-spacing: 0.1px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  transform-origin: 50% 50%;
+}
+
+#bubble.mine {
+  background:
+    radial-gradient(120% 90% at 28% 18%, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 55%),
+    linear-gradient(180deg, #FFE2EC 0%, #FFCCD9 100%);
+  color: #6B2A40;
+  border: 1px solid rgba(255, 165, 195, 0.55);
+  box-shadow:
+    0 8px 18px -3px rgba(120, 50, 80, 0.22),
+    0 2px 4px rgba(120, 50, 80, 0.10);
+  transform: rotate(1.4deg);
+}
+
+#bubble.other {
+  background:
+    radial-gradient(120% 90% at 28% 18%, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0) 55%),
+    linear-gradient(180deg, #E5F5EC 0%, #CFEEE0 100%);
+  color: #1F4438;
+  border: 1px solid rgba(120, 195, 168, 0.5);
+  box-shadow:
+    0 8px 18px -3px rgba(45, 90, 75, 0.20),
+    0 2px 4px rgba(45, 90, 75, 0.09);
+  transform: rotate(-1.4deg);
+}
+
+.tape {
+  position: absolute;
+  top: -5px;
+  width: 48px;
+  height: 14px;
+  border-radius: 1.5px;
+  pointer-events: none;
+  background-image:
+    linear-gradient(180deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.10) 50%, rgba(255,255,255,0.40) 100%),
+    repeating-linear-gradient(90deg, rgba(255,255,255,0) 0 6px, rgba(255,255,255,0.18) 6px 7px);
+  box-shadow: 0 1px 2px rgba(70, 40, 55, 0.14);
+}
+
+#bubble.mine .tape {
+  right: 18px;
+  transform: rotate(7deg);
+  background-color: rgba(255, 220, 232, 0.78);
+}
+
+#bubble.other .tape {
+  left: 18px;
+  transform: rotate(-7deg);
+  background-color: rgba(212, 236, 224, 0.82);
+}
+
+.content {
+  position: relative;
+  z-index: 1;
+}
+`;
+const STICKER_NOTE_JS = `
+window.renderBubble = function renderBubble(ctx) {
+  const root = document.getElementById('bubble');
+  root.className = ctx.isMine ? 'mine' : 'other';
+  root.textContent = '';
+
+  const tape = document.createElement('div');
+  tape.className = 'tape';
+  root.appendChild(tape);
+
+  const content = document.createElement('div');
+  content.className = 'content';
+  content.textContent = ctx.text;
+  root.appendChild(content);
+};
+`;
+
 export const BUILTIN_BUBBLE_SKINS: BubbleSkin[] = [
   {
     id: DEFAULT_BUBBLE_SKIN_ID,
@@ -199,6 +303,117 @@ export const BUILTIN_BUBBLE_SKINS: BubbleSkin[] = [
       borderRadius: T.r.xl,
       tailRadius: 6,
       boxShadow: T.shadow1,
+    },
+  },
+  {
+    id: JELLY_CREAM_BUBBLE_SKIN_ID,
+    name: '果冻奶油',
+    description: '半透明白桃质感，软糯弹性的果冻气泡',
+    source: 'builtin',
+    accentColor: '#FF8FB1',
+    timestamp: {
+      background: 'rgba(255, 200, 215, 0.32)',
+      color: '#8C3F5A',
+      border: '1px solid rgba(255, 160, 185, 0.28)',
+      backdropFilter: 'blur(14px)',
+    },
+    mine: {
+      background:
+        'radial-gradient(115% 90% at 28% 18%, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0.05) 50%), ' +
+        'linear-gradient(180deg, #FFE6EE 0%, #FFCBD9 100%)',
+      color: '#6E2940',
+      border: '1px solid rgba(255, 175, 200, 0.55)',
+      borderRadius: 22,
+      tailRadius: 8,
+      boxShadow:
+        '0 8px 20px -4px rgba(255, 130, 165, 0.32), ' +
+        '0 1px 0 rgba(255,255,255,0.7) inset, ' +
+        '0 -3px 10px -3px rgba(255, 130, 165, 0.22) inset',
+    },
+    other: {
+      background:
+        'radial-gradient(115% 90% at 28% 18%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.05) 55%), ' +
+        'linear-gradient(180deg, #FFFFFF 0%, #FFF3F7 100%)',
+      color: '#3A2A30',
+      border: '1px solid rgba(255, 195, 215, 0.5)',
+      borderRadius: 22,
+      tailRadius: 8,
+      boxShadow:
+        '0 6px 16px -3px rgba(255, 150, 175, 0.24), ' +
+        '0 1px 0 rgba(255,255,255,0.85) inset',
+    },
+  },
+  {
+    id: HOLOGRAPHIC_BUBBLE_SKIN_ID,
+    name: '咕卡 Holographic',
+    description: '镭射全息描边，透明卡片质感，偶像周边气质',
+    source: 'builtin',
+    accentColor: '#D8A6E8',
+    timestamp: {
+      background: 'rgba(170, 145, 220, 0.22)',
+      color: '#6A4A88',
+      border: '1px solid rgba(170, 145, 220, 0.18)',
+      backdropFilter: 'blur(14px)',
+    },
+    mine: {
+      background:
+        'linear-gradient(180deg, rgba(255,221,232,0.92) 0%, rgba(255,205,222,0.95) 100%) padding-box, ' +
+        'conic-gradient(from 140deg at 50% 50%, #FFB5D6 0deg, #D8B4FE 90deg, #A5D8FF 180deg, #FFE9B3 270deg, #FFB5D6 360deg) border-box',
+      color: '#5A1F3D',
+      border: '2.5px solid transparent',
+      borderRadius: 22,
+      tailRadius: 8,
+      boxShadow:
+        '0 6px 18px -3px rgba(220, 130, 200, 0.28), ' +
+        '0 1px 0 rgba(255,255,255,0.45) inset',
+    },
+    other: {
+      background:
+        'linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(248,246,255,0.97) 100%) padding-box, ' +
+        'conic-gradient(from 140deg at 50% 50%, #FFB5D6 0deg, #D8B4FE 90deg, #A5D8FF 180deg, #FFE9B3 270deg, #FFB5D6 360deg) border-box',
+      color: '#2C2730',
+      border: '2.5px solid transparent',
+      borderRadius: 22,
+      tailRadius: 8,
+      boxShadow:
+        '0 5px 14px -3px rgba(160, 130, 220, 0.22), ' +
+        '0 1px 0 rgba(255,255,255,0.7) inset',
+    },
+  },
+  {
+    id: STICKER_NOTE_BUBBLE_SKIN_ID,
+    name: '贴纸便签',
+    description: '微倾斜异形贴纸气泡，顶部胶带与软阴影',
+    source: 'sandbox-code',
+    renderMode: 'sandbox',
+    accentColor: '#FF9DBA',
+    timestamp: {
+      background: 'rgba(255, 200, 215, 0.28)',
+      color: '#7A3A52',
+      border: '1px solid rgba(255, 160, 185, 0.22)',
+      backdropFilter: 'blur(12px)',
+    },
+    mine: {
+      background: 'linear-gradient(180deg, #FFE2EC 0%, #FFCCD9 100%)',
+      color: '#6B2A40',
+      border: '1px solid rgba(255, 165, 195, 0.55)',
+      borderRadius: 14,
+      tailRadius: 14,
+      boxShadow: '0 8px 18px -3px rgba(120, 50, 80, 0.22), 0 2px 4px rgba(120, 50, 80, 0.10)',
+    },
+    other: {
+      background: 'linear-gradient(180deg, #E5F5EC 0%, #CFEEE0 100%)',
+      color: '#1F4438',
+      border: '1px solid rgba(120, 195, 168, 0.5)',
+      borderRadius: 14,
+      tailRadius: 14,
+      boxShadow: '0 8px 18px -3px rgba(45, 90, 75, 0.20), 0 2px 4px rgba(45, 90, 75, 0.09)',
+    },
+    sandbox: {
+      html: STICKER_NOTE_HTML,
+      css: STICKER_NOTE_CSS,
+      js: STICKER_NOTE_JS,
+      minHeight: 56,
     },
   },
   {
@@ -399,6 +614,9 @@ export function surfaceToCss(surface: BubbleSkinSurface, isMine: boolean): CSSPr
 }
 
 function paintToCss(paint: string): CSSProperties {
+  if (/\b(padding-box|border-box|content-box)\b/.test(paint)) {
+    return { background: paint };
+  }
   if (paint.includes('gradient(') || paint.includes('url(')) {
     return { backgroundImage: paint };
   }

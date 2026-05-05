@@ -1,9 +1,9 @@
 import { useMemo, useCallback } from 'react';
 import { motion } from 'motion/react';
-import { ChevronLeft, Trash2, Star } from 'lucide-react';
+import { ChevronLeft, Trash2, Star, MapPin } from 'lucide-react';
 import { useXYNav } from '../xingYuNavStore';
 import { useXYData } from '../xingYuDataStore';
-import type { Favorite } from '../data';
+import { formatCoordinate, getLocationTitle, type Favorite } from '../data';
 import { useToastStore } from '@/system';
 import { T } from '../theme';
 
@@ -193,6 +193,46 @@ function FavoriteContent({ fav }: { fav: Favorite }) {
         alt=""
         style={{ width: 96, height: 96, objectFit: 'contain', display: 'block' }}
       />
+    );
+  }
+
+  if (content.location) {
+    return (
+      <div
+        className="flex items-center gap-3"
+        style={{
+          background: T.bg,
+          borderRadius: 10,
+          padding: '10px 12px',
+          border: `0.5px solid ${T.separator}`,
+        }}
+      >
+        <div
+          className="flex shrink-0 items-center justify-center"
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: 12,
+            background: T.accentGrad,
+          }}
+        >
+          <MapPin size={20} strokeWidth={2.2} color="#fff" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div
+            className="truncate"
+            style={{ fontSize: 13, fontWeight: 600, color: T.textPrimary }}
+          >
+            {getLocationTitle(content.location)}
+          </div>
+          <div
+            className="truncate"
+            style={{ fontSize: 12, color: T.textSecondary, marginTop: 2 }}
+          >
+            {formatCoordinate(content.location.latitude)}, {formatCoordinate(content.location.longitude)}
+          </div>
+        </div>
+      </div>
     );
   }
 

@@ -28,6 +28,7 @@ export interface CompressionPipelineInput {
   apiKey: string;
   model: string;
   providerId: string;
+  openRouterProviderSlug?: string;
   maxTokens: number;
 }
 
@@ -39,6 +40,7 @@ export async function runCompressionPipeline(
     apiKey: input.apiKey,
     model: input.model,
     providerId: input.providerId,
+    openRouterProviderSlug: input.openRouterProviderSlug,
     maxTokens: input.maxTokens,
   };
 

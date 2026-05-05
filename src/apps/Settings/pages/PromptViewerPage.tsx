@@ -21,6 +21,7 @@ const SECTION_ICONS: Record<string, typeof Brain> = {
   '状态层(关系/事实/Loops/Highlights)': Cpu,
   '长期记忆': FileText,
   '历史记录': MessageSquare,
+  'App 协议': Cpu,
   'Post-history 指令': Clock,
   '当前输入': Send,
 };

@@ -8,7 +8,7 @@
  */
 
 import type { ChatMessage, ContentPart } from './promptAssembly';
-import type { GenerationParams } from './providers';
+import { buildOpenRouterProviderRouting, type GenerationParams } from './providers';
 
 /**
  * Strip control characters (except \n \r \t) and lone surrogates from a string.
@@ -43,6 +43,7 @@ export interface ChatCompleteConfig {
   apiKey: string;
   model: string;
   providerId: string;
+  openRouterProviderSlug?: string;
 }
 
 /**
@@ -73,6 +74,11 @@ export async function chatComplete(
   if (generationParams?.frequencyPenalty != null) body.frequency_penalty = generationParams.frequencyPenalty;
   if (generationParams?.presencePenalty != null) body.presence_penalty = generationParams.presencePenalty;
   if (generationParams?.reasoningEffort) body.reasoning_effort = generationParams.reasoningEffort;
+  const providerRouting = buildOpenRouterProviderRouting(
+    config.providerId,
+    config.openRouterProviderSlug,
+  );
+  if (providerRouting) body.provider = providerRouting;
 
   const res = await fetch(`${config.endpoint}/chat/completions`, {
     method: 'POST',

@@ -14,6 +14,8 @@ export interface HeartbeatCharacterConfig {
   maxIterations: number;
   /** Max rounds when chatting with another AI character: 2-10 */
   aiChatMaxRounds: number;
+  /** Generate a hidden virtual-world life story before each heartbeat. */
+  virtualWorldStoryEnabled: boolean;
 }
 
 export interface HeartbeatLogEntry {
@@ -59,7 +61,10 @@ const DEFAULT_CONFIG: HeartbeatCharacterConfig = {
   intervalMinutes: 60,
   maxIterations: 10,
   aiChatMaxRounds: 6,
+  virtualWorldStoryEnabled: false,
 };
+
+const legacyConfigCache = new WeakMap<object, HeartbeatCharacterConfig>();
 
 const MAX_LOG_ENTRIES = 50;
 
@@ -88,7 +93,16 @@ export const useHeartbeatStore = create<HeartbeatState>()(
         })),
 
       getCharacterConfig: (characterId) => {
-        return get().configs[characterId] ?? DEFAULT_CONFIG;
+        const config = get().configs[characterId];
+        if (!config) return DEFAULT_CONFIG;
+        if (config.virtualWorldStoryEnabled === undefined) {
+          const cached = legacyConfigCache.get(config);
+          if (cached) return cached;
+          const normalized = { ...DEFAULT_CONFIG, ...config, virtualWorldStoryEnabled: false };
+          legacyConfigCache.set(config, normalized);
+          return normalized;
+        }
+        return config;
       },
 
       setLastHeartbeat: (characterId, ts) =>

@@ -21,6 +21,7 @@ import type {
   Favorite,
   ForwardCardMessage,
   ForwardedMsg,
+  LocationPayload,
   Message,
   Moment,
   MomentInteraction,
@@ -32,7 +33,9 @@ import {
   SEED_MSGS,
   SEED_MOMENTS,
   IDOL_REPLY_POOL,
+  formatLocationText,
   getIdol,
+  getLocationPreview,
 } from './data';
 import { useCharacterStore } from '@/platform/stores/characterStore';
 import { useAIConfigStore } from '@/platform/stores/aiConfigStore';
@@ -176,6 +179,7 @@ interface XingYuDataState {
   sendNoteMessage: (convId: string, noteRef: { noteId: string; title: string; body: string }) => void;
   sendSongMessage: (convId: string, songRef: { songId: string; title: string; artist: string; artworkUrl: string }, lyricsText?: string) => void;
   sendImageMessage: (convId: string, imageUrl: string) => void;
+  sendLocationMessage: (convId: string, location: LocationPayload) => void;
   sendStickerMessage: (convId: string, stickerUrl: string, stickerDesc: string) => void;
   markRead: (convId: string) => void;
   /**
@@ -366,6 +370,45 @@ function buildStickerBubble(args: {
   };
 }
 
+type XingYuReplyItem = ChatReply['items'][number];
+
+function renderReplyItemForMemory(item: XingYuReplyItem): string | null {
+  switch (item.type) {
+    case 'text': {
+      const paramText = typeof item.param === 'string' ? item.param : '';
+      return filterReply(paramText) || '[空回复]';
+    }
+    case 'sticker': {
+      const p = (item.param ?? {}) as {
+        stickerId?: unknown;
+        content?: unknown;
+      };
+      const stickerId = typeof p.stickerId === 'string' ? p.stickerId : '';
+      const explicitContent = typeof p.content === 'string' ? p.content : '';
+      const knownSticker = stickerId
+        ? useStickerStore
+            .getState()
+            .packs.flatMap((pack) => pack.stickers)
+            .find((sticker) => sticker.id === stickerId)
+        : undefined;
+      const desc = explicitContent || knownSticker?.description || '表情';
+      return `发了一个"${desc}"的表情包`;
+    }
+    case 'update_signature': {
+      const p = (item.param ?? {}) as { text?: unknown };
+      const text = typeof p.text === 'string' ? p.text : '';
+      return text ? `更新了个性签名：${text}` : null;
+    }
+    default: {
+      const paramStr =
+        typeof item.param === 'string'
+          ? item.param
+          : (JSON.stringify(item.param) ?? 'undefined');
+      return `【${item.type}】${paramStr}`;
+    }
+  }
+}
+
 /**
  * 非流式 AI 回复 + 多消息投递。
  *
@@ -378,7 +421,7 @@ function buildStickerBubble(args: {
  * 1. 显示 typing indicator（streaming placeholder）
  * 2. `session.replyToLast({ mirror: false })` 获取 ChatReply —— 用户轮
  *    已经由 `_appendMessage` 写进 memoryStore，session 直接复用。
- * 3. 移除 placeholder，手动向 memoryStore append 一条 rendered assistant
+ * 3. 移除 placeholder，按 reply item 粒度手动 append assistant memory
  * 4. 逐条投递消息（每条间隔 300-800ms），基于 M4.2.5 unified {type, param}
  *    switch 派发: text / sticker / update_signature / 其他(降级文字)
  */
@@ -523,36 +566,47 @@ function scheduleAICharacterReply(
         return;
       }
 
-      // Assistant memory entry — rendered (natural-language) form. The
-      // renderer preserves every decision-relevant identifier (stickerId,
-      // action params) so the next prompt still has full context.
+      // Assistant memory entries — match the UI bubble/action granularity.
+      // Multiple text items are separate chat messages, so they must become
+      // separate memory entries; otherwise transcript rendering can only show
+      // them as one multi-line message with a single speaker prefix.
       const convForFanout = useXYData
         .getState()
         .conversations.find((c) => c.id === convId);
-      if (convForFanout) ensureSceneMarker(characterId, convForFanout);
-      useCharacterMemory.getState().append(characterId, {
-        role: 'assistant',
-        speakerId: characterId,
-        content: reply.rendered,
-        source: 'xingyu',
-      });
+      const memoryContents = reply.items
+        .map((item) => renderReplyItemForMemory(item))
+        .filter((content): content is string => Boolean(content));
+
+      if (convForFanout && memoryContents.length > 0) {
+        ensureSceneMarker(characterId, convForFanout);
+      }
+      for (const content of memoryContents) {
+        useCharacterMemory.getState().append(characterId, {
+          role: 'assistant',
+          speakerId: characterId,
+          content,
+          source: 'xingyu',
+        });
+      }
 
       // Group fan-out: per-item bubbles below are written via direct
       // setState (not _appendMessage), so other members never see the
-      // speaker's reply unless we mirror it here. Mirror the same rendered
-      // form as a third-party user turn — speakerId is the senderId so the
+      // speaker's reply unless we mirror it here. Mirror the same per-item
+      // content as third-party user turns — speakerId is the senderId so the
       // transcript renderer resolves it to the speaker's display name (it
       // strips one `char-` prefix when looking up charactersById).
-      if (convForFanout?.groupMemberIds?.length) {
+      if (convForFanout?.groupMemberIds?.length && memoryContents.length > 0) {
         for (const otherId of convForFanout.groupMemberIds) {
           if (otherId === characterId) continue;
           ensureSceneMarker(otherId, convForFanout);
-          useCharacterMemory.getState().append(otherId, {
-            role: 'user',
-            speakerId: senderId,
-            content: reply.rendered,
-            source: 'xingyu',
-          });
+          for (const content of memoryContents) {
+            useCharacterMemory.getState().append(otherId, {
+              role: 'user',
+              speakerId: senderId,
+              content,
+              source: 'xingyu',
+            });
+          }
         }
       }
 
@@ -684,6 +738,8 @@ function extractFavoriteContent(msg: Message): Favorite['content'] {
       return { text: msg.text, noteRef: msg.noteRef, songRef: msg.songRef };
     case 'image':
       return { imageUrl: msg.imageUrl };
+    case 'location':
+      return { location: msg.location };
     case 'sticker':
       return { stickerUrl: msg.stickerUrl };
     case 'forward_card':
@@ -719,6 +775,11 @@ function buildForwardedMessage(
       return {
         newMsg: { ...base, type: 'image', imageUrl: msg.imageUrl },
         preview: '[图片]',
+      };
+    case 'location':
+      return {
+        newMsg: { ...base, type: 'location', location: msg.location },
+        preview: getLocationPreview(msg.location),
       };
     case 'sticker':
       return {
@@ -799,6 +860,20 @@ export const useXYData = create<XingYuDataState>()(
 
       sendImageMessage: (convId, imageUrl) => {
         const msg: Message = { id: uid(), convId, senderId: 'me', type: 'image', imageUrl, timestamp: Date.now() };
+        fireAppSwitchMarker(convId, get);
+        _appendMessage(msg, 'xingyu');
+        scheduleIdolReply(convId, get);
+      },
+
+      sendLocationMessage: (convId, location) => {
+        const msg: Message = {
+          id: uid(),
+          convId,
+          senderId: 'me',
+          type: 'location',
+          location,
+          timestamp: Date.now(),
+        };
         fireAppSwitchMarker(convId, get);
         _appendMessage(msg, 'xingyu');
         scheduleIdolReply(convId, get);
@@ -1205,8 +1280,14 @@ export const useXYData = create<XingYuDataState>()(
       forwardAsCard: (msgs, targetConvId, title, getSenderName) => {
         const now = Date.now();
         const forwarded: ForwardedMsg[] = msgs.map((m) => {
-          const flatType: 'text' | 'image' | 'sticker' =
-            m.type === 'image' ? 'image' : m.type === 'sticker' ? 'sticker' : 'text';
+          const flatType: ForwardedMsg['type'] =
+            m.type === 'image'
+              ? 'image'
+              : m.type === 'sticker'
+                ? 'sticker'
+                : m.type === 'location'
+                  ? 'location'
+                  : 'text';
           return {
             senderId: m.senderId,
             senderName: getSenderName(m.senderId),
@@ -1218,14 +1299,17 @@ export const useXYData = create<XingYuDataState>()(
                   ? m.text
                   : m.type === 'forward_card'
                     ? '[聊天记录]'
+                    : m.type === 'location'
+                      ? formatLocationText(m.location)
                     : undefined,
             imageUrl: m.type === 'image' ? m.imageUrl : undefined,
             stickerUrl: m.type === 'sticker' ? m.stickerUrl : undefined,
+            location: m.type === 'location' ? m.location : undefined,
             timestamp: m.timestamp,
           };
         });
         const preview = forwarded.slice(0, 4).map((f) => {
-          const content = f.text || (f.imageUrl ? '[图片]' : '[表情]');
+          const content = f.text || (f.imageUrl ? '[图片]' : f.location ? getLocationPreview(f.location) : '[表情]');
           return `${f.senderName}: ${content.slice(0, 20)}`;
         });
         const cardMsg: ForwardCardMessage = {

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Material } from '@/system/Material';
 
 type NavBarVariant = 'inline' | 'largeTitle';
+type NavBarTone = 'default' | 'darkGlass';
 
 interface NavBarButton {
   icon: ReactNode;
@@ -16,6 +17,7 @@ interface NavBarProps {
   showBack?: boolean;
   backLabel?: string;
   variant?: NavBarVariant;
+  tone?: NavBarTone;
   rightButtons?: NavBarButton[];
 }
 
@@ -28,8 +30,13 @@ export function NavBar({
   showBack = false,
   backLabel = '返回',
   variant = 'inline',
+  tone = 'default',
   rightButtons,
 }: NavBarProps) {
+  const isDarkGlass = tone === 'darkGlass';
+  const labelColor = isDarkGlass ? '#ffffff' : 'var(--color-label)';
+  const controlColor = isDarkGlass ? 'rgb(10,132,255)' : 'var(--color-systemBlue)';
+
   if (variant === 'largeTitle') {
     return (
       <div
@@ -41,6 +48,7 @@ export function NavBar({
         }}
         data-testid="nav-bar"
         data-variant="largeTitle"
+        data-tone={tone}
       >
         <h1
           style={{
@@ -48,7 +56,7 @@ export function NavBar({
             fontSize: 'var(--font-size-largeTitle)',
             fontWeight: 'var(--font-weight-bold)',
             lineHeight: 1.1,
-            color: 'var(--color-label)',
+            color: labelColor,
           }}
         >
           {title}
@@ -65,7 +73,7 @@ export function NavBar({
                 style={{
                   minWidth: 44,
                   minHeight: 44,
-                  color: 'var(--color-systemBlue)',
+                  color: controlColor,
                 }}
                 data-testid={btn.testId}
               >
@@ -84,11 +92,17 @@ export function NavBar({
       data-testid="nav-bar"
       className="flex items-center"
       data-variant="inline"
+      data-tone={tone}
       style={{
         height: INLINE_HEIGHT,
         position: 'relative',
         paddingInline: 'var(--spacing-4)',
-        borderBottom: '0.5px solid var(--color-separator)',
+        borderBottom: isDarkGlass
+          ? '0.5px solid rgba(255,255,255,0.14)'
+          : '0.5px solid var(--color-separator)',
+        backgroundColor: isDarkGlass
+          ? 'rgba(18,18,22,0.48)'
+          : undefined,
       }}
     >
       {showBack && (
@@ -96,7 +110,7 @@ export function NavBar({
           onClick={onBack}
           className="absolute left-2 flex items-center px-2"
           style={{
-            color: 'var(--color-systemBlue)',
+            color: controlColor,
             fontSize: 'var(--font-size-body)',
             minWidth: 44,
             minHeight: 44,
@@ -126,7 +140,7 @@ export function NavBar({
         style={{
           fontSize: 'var(--font-size-headline)',
           fontWeight: 'var(--font-weight-semibold)',
-          color: 'var(--color-label)',
+          color: labelColor,
         }}
       >
         {title}
@@ -143,7 +157,7 @@ export function NavBar({
               style={{
                 minWidth: 44,
                 minHeight: 44,
-                color: 'var(--color-systemBlue)',
+                color: controlColor,
               }}
               data-testid={btn.testId}
             >

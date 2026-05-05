@@ -13,6 +13,7 @@ export interface ApiPreset {
   id: string;
   name: string;
   provider: ProviderId;
+  openRouterProviderSlug: string;
   apiKey: string;
   apiEndpoint: string;
   model: string;
@@ -22,6 +23,7 @@ export interface ApiPreset {
 export interface AIConfigState {
   // Connection (mirrors of active preset)
   provider: ProviderId;
+  openRouterProviderSlug: string;
   apiKey: string;
   apiEndpoint: string;
   model: string;
@@ -67,6 +69,7 @@ export interface AIConfigState {
 
   // Actions — connection
   setProvider: (p: ProviderId) => void;
+  setOpenRouterProviderSlug: (slug: string) => void;
   setApiKey: (k: string) => void;
   setApiEndpoint: (url: string) => void;
   setModel: (m: string) => void;
@@ -100,6 +103,7 @@ export const useAIConfigStore = create<AIConfigState>()(
   persist(
     (set, get) => ({
       provider: 'openrouter',
+      openRouterProviderSlug: '',
       apiKey: '',
       apiEndpoint: '',
       model: '',
@@ -138,6 +142,7 @@ export const useAIConfigStore = create<AIConfigState>()(
           id: uid(),
           name: finalName,
           provider: 'openrouter',
+          openRouterProviderSlug: '',
           apiKey: '',
           apiEndpoint: '',
           model: '',
@@ -149,12 +154,21 @@ export const useAIConfigStore = create<AIConfigState>()(
 
       createPresetFromCurrent: (name) => {
         const trimmed = name.trim();
-        const { presets, provider, apiKey, apiEndpoint, model, fetchedModels } = get();
+        const {
+          presets,
+          provider,
+          openRouterProviderSlug,
+          apiKey,
+          apiEndpoint,
+          model,
+          fetchedModels,
+        } = get();
         const finalName = trimmed === '' ? `预设 ${presets.length + 1}` : trimmed;
         const newPreset: ApiPreset = {
           id: uid(),
           name: finalName,
           provider,
+          openRouterProviderSlug,
           apiKey,
           apiEndpoint,
           model,
@@ -174,6 +188,7 @@ export const useAIConfigStore = create<AIConfigState>()(
         set({
           activePresetId: id,
           provider: target.provider,
+          openRouterProviderSlug: target.openRouterProviderSlug ?? '',
           apiKey: target.apiKey,
           apiEndpoint: target.apiEndpoint,
           model: target.model,
@@ -205,6 +220,7 @@ export const useAIConfigStore = create<AIConfigState>()(
             presets: next,
             activePresetId: fallback.id,
             provider: fallback.provider,
+            openRouterProviderSlug: fallback.openRouterProviderSlug ?? '',
             apiKey: fallback.apiKey,
             apiEndpoint: fallback.apiEndpoint,
             model: fallback.model,
@@ -226,6 +242,16 @@ export const useAIConfigStore = create<AIConfigState>()(
           provider: p,
           presets: presets.map((pr) => (pr.id === activePresetId ? { ...pr, provider: p } : pr)),
           modelListError: null,
+        });
+      },
+      setOpenRouterProviderSlug: (slug) => {
+        const { activePresetId, presets } = get();
+        const value = slug.trim();
+        set({
+          openRouterProviderSlug: value,
+          presets: presets.map((p) =>
+            p.id === activePresetId ? { ...p, openRouterProviderSlug: value } : p,
+          ),
         });
       },
       setApiKey: (k) => {
@@ -303,11 +329,13 @@ export const useAIConfigStore = create<AIConfigState>()(
     }),
     {
       name: 'hiPhone-ai-config',
-      version: 2,
+      version: 3,
       storage: idbStorage,
       migrate: (persisted, version) => {
-        if (version < 2) return migrateToV2(persisted as LegacyPersisted);
-        return persisted;
+        let next = persisted as LegacyPersisted;
+        if (version < 2) next = migrateToV2(next);
+        if (version < 3) next = migrateToV3(next);
+        return next as unknown as AIConfigState;
       },
       onRehydrateStorage: () => (state) => {
         if (!state) return;
@@ -319,6 +347,7 @@ export const useAIConfigStore = create<AIConfigState>()(
         if (active) {
           useAIConfigStore.setState({
             provider: active.provider,
+            openRouterProviderSlug: active.openRouterProviderSlug ?? '',
             apiKey: active.apiKey,
             apiEndpoint: active.apiEndpoint,
             model: active.model,
@@ -328,6 +357,7 @@ export const useAIConfigStore = create<AIConfigState>()(
       },
       partialize: (s) => ({
         provider: s.provider,
+        openRouterProviderSlug: s.openRouterProviderSlug,
         apiKey: s.apiKey,
         apiEndpoint: s.apiEndpoint,
         model: s.model,
@@ -372,6 +402,7 @@ type LegacyProviderConfig = {
 
 type LegacyPersisted = {
   provider?: ProviderId;
+  openRouterProviderSlug?: string;
   apiKey?: string;
   apiEndpoint?: string;
   model?: string;
@@ -399,6 +430,7 @@ export function migrateToV2(persisted: LegacyPersisted): LegacyPersisted & {
       id: uid(),
       name: '默认',
       provider: (persisted.provider ?? 'openrouter') as ProviderId,
+      openRouterProviderSlug: persisted.openRouterProviderSlug ?? '',
       apiKey: persisted.apiKey ?? '',
       apiEndpoint: persisted.apiEndpoint ?? '',
       model: persisted.model ?? '',
@@ -417,6 +449,7 @@ export function migrateToV2(persisted: LegacyPersisted): LegacyPersisted & {
         id: uid(),
         name: `默认 - ${providerId}`,
         provider: providerId as ProviderId,
+        openRouterProviderSlug: '',
         apiKey: cfg.apiKey ?? '',
         apiEndpoint: cfg.apiEndpoint ?? '',
         model: cfg.model ?? '',
@@ -430,6 +463,7 @@ export function migrateToV2(persisted: LegacyPersisted): LegacyPersisted & {
       id: uid(),
       name: '预设 1',
       provider: 'openrouter',
+      openRouterProviderSlug: '',
       apiKey: '',
       apiEndpoint: '',
       model: '',
@@ -448,10 +482,26 @@ export function migrateToV2(persisted: LegacyPersisted): LegacyPersisted & {
     presets,
     activePresetId: activeId,
     provider: active.provider,
+    openRouterProviderSlug: active.openRouterProviderSlug ?? '',
     apiKey: active.apiKey,
     apiEndpoint: active.apiEndpoint,
     model: active.model,
     fetchedModels: active.fetchedModels,
+  };
+}
+
+export function migrateToV3<T extends LegacyPersisted>(persisted: T): T {
+  const presets = Array.isArray(persisted.presets)
+    ? persisted.presets.map((p) => ({
+      ...p,
+      openRouterProviderSlug: p.openRouterProviderSlug ?? '',
+    }))
+    : persisted.presets;
+  const active = presets?.find((p) => p.id === persisted.activePresetId);
+  return {
+    ...persisted,
+    openRouterProviderSlug: active?.openRouterProviderSlug ?? persisted.openRouterProviderSlug ?? '',
+    presets,
   };
 }
 
@@ -463,6 +513,7 @@ export function ensureAtLeastOnePreset<T extends { presets: ApiPreset[]; activeP
       id: uid(),
       name: '预设 1',
       provider: 'openrouter',
+      openRouterProviderSlug: '',
       apiKey: '',
       apiEndpoint: '',
       model: '',

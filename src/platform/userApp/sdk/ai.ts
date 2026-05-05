@@ -95,6 +95,7 @@ interface ProviderBundle {
   apiKey: string;
   model: string;
   providerId: string;
+  openRouterProviderSlug?: string;
   generation: GenerationParams;
 }
 
@@ -108,6 +109,7 @@ function requireProvider(): ProviderBundle {
     apiKey: cfg.apiKey,
     model: cfg.model,
     providerId: cfg.provider,
+    openRouterProviderSlug: cfg.openRouterProviderSlug,
     generation: pickGenerationParams(cfg),
   };
 }
@@ -122,7 +124,13 @@ export async function complete(
 ): Promise<string> {
   const p = requireProvider();
   return chatComplete(
-    { endpoint: p.endpoint, apiKey: p.apiKey, model: p.model, providerId: p.providerId },
+    {
+      endpoint: p.endpoint,
+      apiKey: p.apiKey,
+      model: p.model,
+      providerId: p.providerId,
+      openRouterProviderSlug: p.openRouterProviderSlug,
+    },
     messages,
     { ...p.generation, temperature: opts.temperature ?? p.generation.temperature },
   );
@@ -140,7 +148,13 @@ export async function* streamComplete(
 ): AsyncIterable<string> {
   const p = requireProvider();
   const full = await chatComplete(
-    { endpoint: p.endpoint, apiKey: p.apiKey, model: p.model, providerId: p.providerId },
+    {
+      endpoint: p.endpoint,
+      apiKey: p.apiKey,
+      model: p.model,
+      providerId: p.providerId,
+      openRouterProviderSlug: p.openRouterProviderSlug,
+    },
     messages,
     { ...p.generation, temperature: opts.temperature ?? p.generation.temperature },
     opts.signal,
@@ -510,7 +524,13 @@ export function chatWithCharacter(
     });
 
     return chatComplete(
-      { endpoint: provider.endpoint, apiKey: provider.apiKey, model: provider.model, providerId: provider.providerId },
+      {
+        endpoint: provider.endpoint,
+        apiKey: provider.apiKey,
+        model: provider.model,
+        providerId: provider.providerId,
+        openRouterProviderSlug: provider.openRouterProviderSlug,
+      },
       messages,
       provider.generation,
       controller.signal,

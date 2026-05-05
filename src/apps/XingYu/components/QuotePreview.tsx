@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Reply, X } from 'lucide-react';
-import type { Message } from '../data';
+import { getLocationPreview, type Message } from '../data';
 import { T } from '../theme';
 
 export function getQuotePreviewText(msg: Message): string {
@@ -11,6 +11,8 @@ export function getQuotePreviewText(msg: Message): string {
       return msg.text.slice(0, 40);
     case 'image':
       return '[图片]';
+    case 'location':
+      return getLocationPreview(msg.location);
     case 'sticker':
       return '[贴纸]';
     case 'forward_card':

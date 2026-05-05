@@ -1,4 +1,4 @@
-import { NOMINATIM_SEARCH_URL } from './mapConfig';
+import { NOMINATIM_REVERSE_URL, NOMINATIM_SEARCH_URL } from './mapConfig';
 import type { PlaceResult } from './mapsStore';
 
 /**
@@ -32,24 +32,77 @@ export async function searchPlaces(
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
   const data = await res.json();
-  return data.map((item: Record<string, unknown>) => ({
-    id: String(item.place_id),
-    name: String(item.name || item.display_name || '').split(',')[0],
-    displayName: String(item.display_name || ''),
-    lat: Number(item.lat),
-    lon: Number(item.lon),
+  return data.map((item: Record<string, unknown>) => placeFromNominatim(item));
+}
+
+export async function reverseGeocode(latitude: number, longitude: number): Promise<PlaceResult> {
+  const params = new URLSearchParams({
+    lat: String(latitude),
+    lon: String(longitude),
+    format: 'json',
+    addressdetails: '1',
+    zoom: '18',
+    'accept-language': 'zh-CN,zh,en',
+  });
+
+  const res = await fetch(`${NOMINATIM_REVERSE_URL}?${params}`, {
+    headers: { 'User-Agent': 'hiPhone-Maps/1.0' },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+  const item = (await res.json()) as Record<string, unknown>;
+  return placeFromNominatim(item, latitude, longitude);
+}
+
+function placeFromNominatim(
+  item: Record<string, unknown>,
+  fallbackLat?: number,
+  fallbackLon?: number,
+): PlaceResult {
+  const address = item.address as Record<string, string> | undefined;
+  const displayName = String(item.display_name || '');
+  return {
+    id: String(item.place_id || `${fallbackLat ?? item.lat},${fallbackLon ?? item.lon}`),
+    name: resolvePlaceName(item, address),
+    displayName,
+    lat: Number(item.lat ?? fallbackLat),
+    lon: Number(item.lon ?? fallbackLon),
     type: String(item.type || ''),
     category: String(item.category || ''),
-    address: formatAddress(item.address as Record<string, string> | undefined),
-  }));
+    address: formatAddress(address),
+  };
+}
+
+function resolvePlaceName(item: Record<string, unknown>, addr?: Record<string, string>): string {
+  const directName = String(item.name || '').trim();
+  if (directName) return directName;
+  const fromAddress = [
+    addr?.amenity,
+    addr?.tourism,
+    addr?.leisure,
+    addr?.shop,
+    addr?.building,
+    addr?.road,
+    addr?.neighbourhood,
+    addr?.suburb,
+    addr?.city_district,
+    addr?.city,
+    addr?.town,
+    addr?.village,
+  ].find((part) => part?.trim());
+  if (fromAddress) return fromAddress;
+  return String(item.display_name || '').split(',')[0] || '当前位置';
 }
 
 function formatAddress(addr?: Record<string, string>): string {
   if (!addr) return '';
   const parts = [
+    addr.road,
+    addr.neighbourhood || addr.suburb,
+    addr.city_district,
     addr.city || addr.town || addr.village,
     addr.state || addr.province,
     addr.country,
   ].filter(Boolean);
-  return parts.join(', ');
+  return [...new Set(parts)].join(', ');
 }

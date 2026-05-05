@@ -14,7 +14,7 @@ interface ActionItem {
 function getActions(msg: Message): ActionItem[] {
   const actions: ActionItem[] = [];
 
-  if (msg.type === 'text') {
+  if (msg.type === 'text' || msg.type === 'location') {
     actions.push({ type: 'copy', icon: Copy, label: '复制' });
   }
 

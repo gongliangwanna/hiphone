@@ -81,4 +81,41 @@ describe('streamChat — reasoning_effort wiring', () => {
     const body = JSON.parse(mockFetch.mock.calls[0]![1].body);
     expect(body.reasoning_effort).toBeUndefined();
   });
+
+  it('strictly pins OpenRouter routing to the selected provider slug', async () => {
+    await streamChat(
+      {
+        endpoint: 'https://api.example/v1',
+        apiKey: 'k',
+        model: 'm',
+        providerId: 'openrouter',
+        openRouterProviderSlug: 'cerebras',
+      },
+      [{ role: 'user', content: 'hi' }],
+      () => {},
+    );
+
+    const body = JSON.parse(mockFetch.mock.calls[0]![1].body);
+    expect(body.provider).toEqual({
+      only: ['cerebras'],
+      allow_fallbacks: false,
+    });
+  });
+
+  it('ignores OpenRouter provider slug for non-OpenRouter providers', async () => {
+    await streamChat(
+      {
+        endpoint: 'https://api.example/v1',
+        apiKey: 'k',
+        model: 'm',
+        providerId: 'siliconflow',
+        openRouterProviderSlug: 'cerebras',
+      },
+      [{ role: 'user', content: 'hi' }],
+      () => {},
+    );
+
+    const body = JSON.parse(mockFetch.mock.calls[0]![1].body);
+    expect(body.provider).toBeUndefined();
+  });
 });

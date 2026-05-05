@@ -163,7 +163,13 @@ export async function runAIChat(opts: AIChatOptions): Promise<AIChatResult> {
     let rawReply: string;
     try {
       rawReply = await chatComplete(
-        { endpoint, apiKey: aiConfig.apiKey, model: aiConfig.model, providerId: aiConfig.provider },
+        {
+          endpoint,
+          apiKey: aiConfig.apiKey,
+          model: aiConfig.model,
+          providerId: aiConfig.provider,
+          openRouterProviderSlug: aiConfig.openRouterProviderSlug,
+        },
         chatMessages,
         pickGenerationParams(aiConfig),
         signal,

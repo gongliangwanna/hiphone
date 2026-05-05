@@ -86,6 +86,44 @@ describe('PresenceApp', () => {
     expect(screen.queryByText('场景笔记')).not.toBeInTheDocument();
   });
 
+  it('uses a fullscreen backdrop behind the active scene content', () => {
+    render(<PresenceApp />);
+
+    fireEvent.click(screen.getByTestId('presence-enter-scene'));
+
+    expect(screen.getByTestId('presence-scene-backdrop')).toHaveClass(
+      'absolute',
+      'inset-0',
+    );
+    expect(screen.getByTestId('presence-scene-content')).toHaveClass(
+      'relative',
+      'z-10',
+    );
+  });
+
+  it('uses the preview-style floating input tray in an active scene', () => {
+    render(<PresenceApp />);
+
+    fireEvent.click(screen.getByTestId('presence-enter-scene'));
+
+    expect(screen.getByTestId('presence-input-tray')).toHaveClass(
+      'bg-transparent',
+      'px-4',
+    );
+    expect(screen.getByTestId('presence-input')).toHaveClass('rounded-[24px]');
+  });
+
+  it('uses dark chrome navigation while reading an active scene', () => {
+    render(<PresenceApp />);
+
+    fireEvent.click(screen.getByTestId('presence-enter-scene'));
+
+    expect(screen.getByTestId('nav-bar')).toHaveAttribute(
+      'data-tone',
+      'darkGlass',
+    );
+  });
+
   it('opens a completed record as read-only without an input bar', () => {
     const session = usePresenceStore.getState().startSession({
       characterId: 'char-001',

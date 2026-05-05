@@ -45,3 +45,27 @@ describe('AIServicePage — preset row', () => {
     expect(stack[stack.length - 1]?.page).toBe('aiPresets');
   });
 });
+
+describe('AIServicePage — OpenRouter provider routing', () => {
+  beforeEach(() => {
+    useSettingsNavStore.getState().reset();
+    seed();
+  });
+
+  it('lets OpenRouter strictly pin routing to Cerebras', () => {
+    render(<AIServicePage />);
+
+    expect(screen.getByText('厂商')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Cerebras/ }));
+
+    expect(useAIConfigStore.getState().openRouterProviderSlug).toBe('cerebras');
+  });
+
+  it('hides OpenRouter provider routing for non-OpenRouter providers', () => {
+    render(<AIServicePage />);
+
+    fireEvent.click(screen.getByRole('button', { name: /硅基流动/ }));
+
+    expect(screen.queryByText('厂商')).toBeNull();
+  });
+});

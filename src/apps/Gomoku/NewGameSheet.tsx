@@ -48,7 +48,8 @@ export function NewGameSheet({
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', stiffness: 330, damping: 30 }}
-            className="absolute bottom-0 left-0 right-0 max-h-[78%] overflow-hidden rounded-t-[24px] bg-[#F2F2F7] pb-safe shadow-[0_-16px_40px_rgba(0,0,0,0.22)]"
+            className="absolute bottom-0 left-0 right-0 flex max-h-[78%] flex-col overflow-hidden rounded-t-[24px] bg-[#F2F2F7] shadow-[0_-16px_40px_rgba(0,0,0,0.22)]"
+            data-testid="gomoku-new-game-panel"
           >
             <div className="flex justify-center pb-2 pt-3">
               <div className="h-1 w-10 rounded-full bg-black/18" />
@@ -75,7 +76,10 @@ export function NewGameSheet({
               </button>
             </div>
 
-            <div className="min-h-0 overflow-y-auto px-4 pb-4">
+            <div
+              className="min-h-0 flex-1 overflow-y-auto px-4 pb-3"
+              data-testid="gomoku-new-game-scroll"
+            >
               <div className="mb-4 overflow-hidden rounded-[16px] bg-white">
                 {characters.map((character, index) => {
                   const active = character.id === selectedCharacterId;
@@ -130,7 +134,12 @@ export function NewGameSheet({
                   onClick={() => onSelectUserStone('white')}
                 />
               </div>
+            </div>
 
+            <div
+              className="shrink-0 border-t border-black/6 bg-[#F2F2F7] px-4 pb-[var(--app-safe-bottom,12px)] pt-3"
+              data-testid="gomoku-new-game-footer"
+            >
               <button
                 type="button"
                 onClick={onStart}

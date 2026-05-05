@@ -30,12 +30,114 @@ const BASE: PromptInput = {
   now: new Date('2026-04-21T12:00:00Z'),
 };
 
-function systemBlock(input: PromptInput): string {
+function appProtocolBlock(input: PromptInput): string {
   const { messages } = assemblePrompt(input);
-  const sys = messages.find((m) => m.role === 'system');
-  if (!sys || typeof sys.content !== 'string') throw new Error('no system block');
+  const sys = messages.find(
+    (m) =>
+      m.role === 'system' &&
+      typeof m.content === 'string' &&
+      m.content.includes('[回复格式]'),
+  );
+  if (!sys || typeof sys.content !== 'string') throw new Error('no app protocol block');
   return sys.content;
 }
+
+describe('app protocol placement', () => {
+  it('keeps app prompt and tool descriptions after history, out of the stable system prefix', () => {
+    const tools: ToolDefinition[] = [
+      { type: 'bid_call', description: '宣布叫价', param: '{amount: number}' },
+    ];
+    const out = assemblePrompt({
+      ...BASE,
+      character: {
+        ...BASE.character,
+        description: '稳定角色设定',
+      },
+      appSystemPromptSnapshot: '你是一场拍卖会主持人',
+      currentAppId: 'auction-app',
+      availableTools: tools,
+      memoryEntries: [
+        {
+          id: 'a1',
+          characterId: 'char-001',
+          role: 'assistant',
+          speakerId: 'char-001',
+          content: '历史里的一句话',
+          source: 'xingyu',
+          createdAt: new Date(2026, 3, 21, 10, 0).getTime(),
+        },
+        {
+          id: 'u1',
+          characterId: 'char-001',
+          role: 'user',
+          speakerId: 'me',
+          content: '开始拍卖',
+          source: 'xingyu',
+          createdAt: new Date(2026, 3, 21, 10, 1).getTime(),
+        },
+      ],
+    });
+
+    const firstSystem = out.messages[0]!.content as string;
+    expect(firstSystem).toContain('稳定角色设定');
+    expect(firstSystem).not.toContain('[当前任务]');
+    expect(firstSystem).not.toContain('[回复格式]');
+    expect(firstSystem).not.toContain('[可用动作]');
+
+    const contents = out.messages.map((m) =>
+      typeof m.content === 'string' ? m.content : '',
+    );
+    const historyIdx = contents.findIndex((c) => c.startsWith('[历史记录]'));
+    const appProtocolIdx = contents.findIndex((c) => c.includes('[当前任务]'));
+    const postHistoryIdx = contents.findIndex((c) => c.includes('[当前时间'));
+    const userIdx = out.messages.findIndex((m) => m.role === 'user');
+
+    expect(historyIdx).toBeGreaterThan(0);
+    expect(appProtocolIdx).toBeGreaterThan(historyIdx);
+    expect(postHistoryIdx).toBeGreaterThan(appProtocolIdx);
+    expect(userIdx).toBeGreaterThan(postHistoryIdx);
+
+    const appProtocol = contents[appProtocolIdx]!;
+    expect(appProtocol).toContain('[当前任务]\n你是一场拍卖会主持人');
+    expect(appProtocol).toContain('[回复格式]');
+    expect(appProtocol).toContain('[可用动作]');
+    expect(appProtocol).toContain('- bid_call: 宣布叫价');
+  });
+
+  it('responseMode=narrative skips app protocol but keeps memory and post-history', () => {
+    const out = assemblePrompt({
+      ...BASE,
+      memoryEntries: [
+        {
+          id: 'm1',
+          characterId: 'char-001',
+          role: 'assistant',
+          speakerId: 'char-001',
+          content: '[经历]\n昨天试了一杯咸柠气泡水。',
+          source: 'heartbeat',
+          createdAt: new Date('2026-05-03T10:00:00+08:00').getTime(),
+        },
+      ],
+      now: new Date('2026-05-04T10:00:00+08:00'),
+      availableTools: [
+        { type: 'send_message', description: '发消息', param: '{text:string}' },
+      ],
+      appSystemPromptSnapshot: '自主行为模式',
+      currentAppId: 'heartbeat',
+      responseMode: 'narrative',
+    });
+
+    const joined = out.messages
+      .map((m) => (typeof m.content === 'string' ? m.content : ''))
+      .join('\n');
+    expect(joined).not.toContain('[回复格式]');
+    expect(joined).not.toContain('[可用动作]');
+    expect(joined).not.toContain('[当前任务]');
+    expect(joined).toContain('[历史记录]');
+    expect(joined).toContain('[经历]');
+    expect(joined).toContain('[当前时间：2026年5月4日');
+  });
+});
 
 describe('promptAssembly chunks 7 / 8 (M4.2.5 unified)', () => {
   it('builds the role definition from description only and ignores legacy split fields', () => {
@@ -76,7 +178,7 @@ describe('promptAssembly chunks 7 / 8 (M4.2.5 unified)', () => {
     const tools: ToolDefinition[] = [
       { type: 'text', description: 't', param: 'string' },
     ];
-    const out = systemBlock({ ...BASE, availableTools: tools });
+    const out = appProtocolBlock({ ...BASE, availableTools: tools });
     expect(out).toContain('[回复格式]');
     expect(out).toContain('每条是一个工具调用');
     expect(out).toContain('{"type":"<type>","param":<param>}');
@@ -87,7 +189,7 @@ describe('promptAssembly chunks 7 / 8 (M4.2.5 unified)', () => {
   });
 
   it('chunk 6.5 [当前任务] still honors appSystemPromptSnapshot', () => {
-    const out = systemBlock({
+    const out = appProtocolBlock({
       ...BASE,
       appSystemPromptSnapshot: '你是一场拍卖会主持人',
     });
@@ -100,7 +202,7 @@ describe('promptAssembly chunks 7 / 8 (M4.2.5 unified)', () => {
       { type: 'bid_call', description: '宣布叫价', param: '{item: string, min: number}' },
       { type: 'hammer_down', description: '落槌', param: '{item: string, final: number}' },
     ];
-    const out = systemBlock({ ...BASE, availableTools: tools });
+    const out = appProtocolBlock({ ...BASE, availableTools: tools });
     expect(out).toContain('[可用动作]');
     expect(out).toContain('- bid_call: 宣布叫价');
     expect(out).toContain('  param: {item: string, min: number}');
@@ -112,22 +214,22 @@ describe('promptAssembly chunks 7 / 8 (M4.2.5 unified)', () => {
     const tools: ToolDefinition[] = [
       { type: 'pass', description: '跳过', param: '' },
     ];
-    const out = systemBlock({ ...BASE, availableTools: tools });
+    const out = appProtocolBlock({ ...BASE, availableTools: tools });
     expect(out).toContain('- pass: 跳过');
     // No "param:" label when hint is empty
     expect(out).not.toMatch(/- pass: 跳过\n\s*param:/);
   });
 
   it('chunk 8 omitted entirely when availableTools is empty or undefined', () => {
-    const outNone = systemBlock(BASE); // no availableTools
+    const outNone = appProtocolBlock(BASE); // no availableTools
     expect(outNone).not.toContain('[可用动作]');
 
-    const outEmpty = systemBlock({ ...BASE, availableTools: [] });
+    const outEmpty = appProtocolBlock({ ...BASE, availableTools: [] });
     expect(outEmpty).not.toContain('[可用动作]');
   });
 
   it('chunk 7 still fires even when no tools — unified path is the default', () => {
-    const out = systemBlock({
+    const out = appProtocolBlock({
       ...BASE,
       appSystemPromptSnapshot: 'some task',
       // no availableTools
@@ -141,7 +243,7 @@ describe('promptAssembly chunks 7 / 8 (M4.2.5 unified)', () => {
     const tools: ToolDefinition[] = [
       { type: 'x', description: 'd', param: 'string' },
     ];
-    const out = systemBlock({
+    const out = appProtocolBlock({
       ...BASE,
       appSystemPromptSnapshot: 'task',
       availableTools: tools,
@@ -155,7 +257,7 @@ describe('promptAssembly chunks 7 / 8 (M4.2.5 unified)', () => {
   });
 
   it('legacy availableStickers path: emits old [可用表情包] block when neither appPrompt nor tools set', () => {
-    const out = systemBlock({
+    const out = appProtocolBlock({
       ...BASE,
       availableStickers: [{ id: 's1', description: '笑' }],
     });
@@ -175,7 +277,7 @@ describe('[工具状态] inline chunk (dynamicContext, default placement)', () =
         dynamicContext: (ctx) => `state for ${ctx.characterId}`,
       },
     ];
-    const sys = systemBlock({ ...BASE, currentAppId: 'test-app', availableTools: tools });
+    const sys = appProtocolBlock({ ...BASE, currentAppId: 'test-app', availableTools: tools });
 
     // [可用动作] stays static
     expect(sys).toContain('[可用动作]');
@@ -197,7 +299,7 @@ describe('[工具状态] inline chunk (dynamicContext, default placement)', () =
       { type: 'tool_b', description: 'B', param: '', dynamicContext: () => '' },
       { type: 'tool_c', description: 'C', param: '', dynamicContext: () => '  ' },
     ];
-    const sys = systemBlock({ ...BASE, currentAppId: 'test-app', availableTools: tools });
+    const sys = appProtocolBlock({ ...BASE, currentAppId: 'test-app', availableTools: tools });
     expect(sys).not.toContain('[工具状态]');
   });
 
@@ -206,7 +308,7 @@ describe('[工具状态] inline chunk (dynamicContext, default placement)', () =
       { type: 'inline', description: '', param: '', dynamicContext: () => 'I am inline' },
       { type: 'tail', description: '', param: '', dynamicContext: () => 'I am tail', contextAtTail: true },
     ];
-    const sys = systemBlock({ ...BASE, currentAppId: 'test-app', availableTools: tools });
+    const sys = appProtocolBlock({ ...BASE, currentAppId: 'test-app', availableTools: tools });
     expect(sys).toContain('I am inline');
     expect(sys).not.toContain('I am tail');
   });
@@ -282,11 +384,14 @@ describe('[工具状态] tail chunk (dynamicContext with contextAtTail:true)', (
       ],
     });
 
-    // First system block is the big system block — should contain inline body, NOT tail body.
-    const firstSys = out.messages[0]!;
-    const sys1 = firstSys.content as string;
-    expect(sys1).toContain('inline body');
-    expect(sys1).not.toContain('tail body');
+    const protocol = out.messages.find(
+      (m) =>
+        m.role === 'system' &&
+        typeof m.content === 'string' &&
+        m.content.includes('[可用动作]'),
+    )!.content as string;
+    expect(protocol).toContain('inline body');
+    expect(protocol).not.toContain('tail body');
 
     // Aggregate all message contents — tail body must show up somewhere.
     const allContent = out.messages

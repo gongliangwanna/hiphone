@@ -9,9 +9,20 @@ import { List, ListSection, ListRow } from '@/system';
 // Toggle component (iOS style)
 // ---------------------------------------------------------------------------
 
-function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+function Toggle({
+  value,
+  onChange,
+  label,
+}: {
+  value: boolean;
+  onChange: (v: boolean) => void;
+  label?: string;
+}) {
   return (
-    <div
+    <button
+      type="button"
+      aria-label={label}
+      aria-pressed={value}
       onClick={() => onChange(!value)}
       style={{
         width: 51,
@@ -21,6 +32,7 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
         padding: 2,
         cursor: 'pointer',
         transition: 'background-color 0.2s',
+        border: 'none',
       }}
     >
       <div
@@ -34,7 +46,7 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
           transition: 'transform 0.2s',
         }}
       />
-    </div>
+    </button>
   );
 }
 
@@ -190,11 +202,32 @@ function CharacterConfigRow({ characterId, name }: { characterId: string; name: 
             </span>
           )}
         </div>
-        <Toggle value={config.enabled} onChange={(v) => setConfig(characterId, { enabled: v })} />
+        <Toggle
+          label={`${name} 心跳`}
+          value={config.enabled}
+          onChange={(v) => setConfig(characterId, { enabled: v })}
+        />
       </div>
 
       {config.enabled && (
         <div className="pb-2">
+          {/* Experience generation */}
+          <div className="flex items-center justify-between px-4" style={{ height: 44 }}>
+            <div>
+              <div style={{ fontSize: 'var(--font-size-body)', color: 'var(--color-label)' }}>
+                经历
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--color-secondaryLabel)', marginTop: 2 }}>
+                心跳前生成隐藏经历记忆
+              </div>
+            </div>
+            <Toggle
+              label="经历"
+              value={config.virtualWorldStoryEnabled}
+              onChange={(v) => setConfig(characterId, { virtualWorldStoryEnabled: v })}
+            />
+          </div>
+
           {/* Interval */}
           <div className="px-4 pb-2">
             <span
@@ -346,7 +379,7 @@ export function HeartbeatSettingsPage() {
                 启用心跳
               </span>
             </div>
-            <Toggle value={globalEnabled} onChange={setGlobalEnabled} />
+            <Toggle label="启用心跳" value={globalEnabled} onChange={setGlobalEnabled} />
           </div>
         </ListSection>
 

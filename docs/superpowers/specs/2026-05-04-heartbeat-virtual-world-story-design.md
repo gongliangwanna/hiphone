@@ -1,8 +1,8 @@
-# 心跳虚拟世界离线经历 · Design
+# 心跳经历 · Design
 
 **Date:** 2026-05-04
 **Status:** spec
-**Scope:** 心跳触发时，为开启该功能的角色先生成一段发生在虚拟世界里的离线经历，写入角色记忆，并让同一次心跳后续行为立刻感知这段新经历。
+**Scope:** 心跳触发时，为开启该功能的角色先生成一段发生在小手机外的离线经历，写入角色记忆，并让同一次心跳后续行为立刻感知这段新经历。
 
 ## Context
 
@@ -13,14 +13,14 @@
 - 工具执行结果通过 `ToolResult.memoryEvents` 生成确定性的 `[自主活动记录]`，再由隐藏 `heartbeat_log` 写入 `characterMemoryStore`。
 - 手机内可见行为，例如主动消息、星球动态、AI-AI 聊天，通过各自链路写入 XingYu 数据和角色记忆。
 
-本需求新增第三类记忆：**虚拟世界离线经历**。它不是手机内行为，不对应任何 App 工具，也不显示为聊天气泡。它代表角色在两次心跳之间于虚拟世界中发生的真实生活片段，用来让角色像真人一样拥有持续经历、增量记忆和可自然提起的谈资。
+本需求新增第三类记忆：**经历**。它不是手机内行为，不对应任何 App 工具，也不显示为聊天气泡。它代表角色在两次心跳之间于小手机外生活中发生的真实生活片段，用来让角色像真人一样拥有持续经历、增量记忆和可自然提起的谈资。
 
-这会成为 `src/platform/ai/CLAUDE.md` 中“心跳工具 memoryEvents 必须确定性”的明确例外：工具行为日志继续保持确定性；虚拟世界离线经历是一个独立的、开关控制的 LLM 生成阶段，不归入工具 `memoryEvents`。
+这会成为 `src/platform/ai/CLAUDE.md` 中“心跳工具 memoryEvents 必须确定性”的明确例外：工具行为日志继续保持确定性；经历是一个独立的、开关控制的 LLM 生成阶段，不归入工具 `memoryEvents`。
 
 ## User Requirements
 
 1. 心跳触发后第一件事是让角色生成一段故事：从上次心跳到这次心跳之间发生了什么。
-2. 故事不是发生在小手机里，而是角色在虚拟世界里的生活经历。
+2. 故事不是发生在小手机里，而是角色在小手机外的生活经历。
 3. 生成的经历完整记入角色记忆，使 AI 角色像真人一样有故事、有增量记忆，因此之后言之有物。
 4. 这段故事要立刻影响同一次心跳后续工具决策。
 5. 每个角色独立开关，默认关闭。
@@ -42,7 +42,7 @@
 | D5 | Prompt 上下文 | 使用角色完整上下文，并给 prompt 组装器增加明确的 narrative 输出模式 | 既保持记忆连续性，又避免普通工具 JSON 回复格式污染故事输出 |
 | D6 | 同次心跳感知 | 故事写入后重新读取 `characterMemoryStore` 并组装工具循环 prompt | 让后续发消息、发动态、写备忘录等行为能基于刚发生的经历 |
 | D7 | 失败策略 | 故事生成失败不阻断心跳 | 心跳自主行为比故事生成更基础，不能因单步失败整次失效 |
-| D8 | 与工具 memoryEvents 关系 | 明确分离 | 工具日志仍确定性；虚拟经历是独立 LLM 生成记忆 |
+| D8 | 与工具 memoryEvents 关系 | 明确分离 | 工具日志仍确定性；经历是独立 LLM 生成记忆 |
 
 ## Architecture
 
@@ -60,7 +60,7 @@ virtualWorldStoryEnabled: boolean;
 virtualWorldStoryEnabled: false;
 ```
 
-`HeartbeatSettingsPage` 的每个角色配置卡片中新增一个开关，例如“虚拟世界经历”。关闭时心跳完全保持现有行为；开启时才执行前置故事生成。
+`HeartbeatSettingsPage` 的每个角色配置卡片中新增一个开关，例如“经历”。关闭时心跳完全保持现有行为；开启时才执行前置故事生成。
 
 ### 2. Story Generation Module
 
@@ -109,7 +109,7 @@ const msg: Message = {
   senderId: `char-${characterId}`,
   type: 'heartbeat_log',
   text: [
-    '[虚拟世界经历]',
+    '[经历]',
     `时间跨度：${fromLabel} 至 ${toLabel}`,
     '',
     story.trim(),
@@ -126,19 +126,19 @@ _appendMessage(msg, 'heartbeat');
 <msg.text>
 ```
 
-实现时必须让 `buildMemoryEntry` 识别 `[虚拟世界经历]` 并渲染成更清晰的：
+实现时必须让 `buildMemoryEntry` 识别 `[经历]` 并渲染成更清晰的：
 
 ```text
-[虚拟世界经历]
+[经历]
 时间跨度：...
 ...
 ```
 
-这样可以避免虚拟世界经历被嵌在 `[自主活动记录]` 里造成语义混淆。现有不带 `[虚拟世界经历]` 前缀的 `heartbeat_log` 继续走 `[自主活动记录]`。
+这样可以避免经历被嵌在 `[自主活动记录]` 里造成语义混淆。现有不带 `[经历]` 前缀的 `heartbeat_log` 继续走 `[自主活动记录]`。
 
 ## Data Flow
 
-开启虚拟世界经历后的一次心跳：
+开启经历后的一次心跳：
 
 ```text
 triggerHeartbeat / scheduler tick
@@ -148,7 +148,7 @@ runHeartbeat(characterId)
 读取角色心跳配置
   ↓
 如果 virtualWorldStoryEnabled=true:
-  生成虚拟世界经历
+  生成经历
   写入隐藏 heartbeat_log + characterMemoryStore
   失败则 pushLog(error) 并继续
   ↓
@@ -168,7 +168,7 @@ runHeartbeat(characterId)
 故事生成的核心任务指令：
 
 ```text
-你现在要补全一段“从上次心跳到这次心跳之间”发生在你虚拟世界里的生活经历。
+你现在要补全一段“从上次心跳到这次心跳之间”发生在你小手机外生活中的经历。
 
 这不是聊天回复，不是发给用户的消息，也不是发生在小手机里的行为记录。
 这段内容会作为你的真实经历写入长期记忆。之后你会自然记得它，并可以在合适的时候把它当作谈资、心情来源或行动背景。
@@ -180,7 +180,7 @@ runHeartbeat(characterId)
 写作要求：
 - 使用第一人称“我”。
 - 必须基于你的完整上下文生成：角色设定、世界书、长期记忆、近期记忆、当前时间都会影响这段经历。
-- 故事发生在你的虚拟世界生活中，不发生在手机 App、聊天窗口、朋友圈、备忘录等小手机系统里。
+- 故事发生在你的小手机外生活中，不发生在手机 App、聊天窗口、朋友圈、备忘录等小手机系统里。
 - 不要让用户出现在事件中。
 - 不要让其他 AI 角色出现在事件中。
 - 不要替用户或其他角色新增事实、承诺、情绪或行动。
@@ -210,13 +210,13 @@ runHeartbeat(characterId)
 - 大段写“我有点难过/释然/孤独”，但没有具体事件。
 ```
 
-模型只输出正文。`[虚拟世界经历]`、时间跨度和其他元数据由程序写入。
+模型只输出正文。`[经历]`、时间跨度和其他元数据由程序写入。
 
 ## Time Span And Length
 
 时间跨度来源优先级：
 
-1. 该角色上一条 `[虚拟世界经历]` 记忆的时间戳。
+1. 该角色上一条 `[经历]` 记忆的时间戳。
 2. 若不存在，使用本次心跳启动前捕获的 `previousLastHeartbeat`。
 3. 若仍不存在，使用当前时间往前推一个心跳间隔。
 
@@ -244,12 +244,12 @@ const targetChars = Math.min(1000, elapsedDays * 300);
 新增或扩展单测：
 
 1. `heartbeatStore` 默认配置中 `virtualWorldStoryEnabled` 为 `false`。
-2. 设置页每个角色卡片能独立开关虚拟世界经历。
+2. 设置页每个角色卡片能独立开关经历。
 3. 开关关闭时，`triggerHeartbeat` 不调用故事生成模块。
 4. 开关开启时，故事生成发生在工具循环第一次 `chatComplete` 之前。
-5. 故事写入后，同一次工具循环的 prompt 包含 `[虚拟世界经历]`。
+5. 故事写入后，同一次工具循环的 prompt 包含 `[经历]`。
 6. 故事生成失败时，仍继续现有工具循环。
-7. `buildMemoryEntry` 对虚拟世界经历隐藏日志生成清晰记忆文本。
+7. `buildMemoryEntry` 对经历隐藏日志生成清晰记忆文本。
 8. `ChatDetail` 继续隐藏 `heartbeat_log`，不显示故事气泡。
 9. 长度计算：1 天 300、2 天 600、4 天 capped 到 1000。
 
@@ -260,12 +260,12 @@ const targetChars = Math.min(1000, elapsedDays * 300);
 - 不让故事生成阶段调用工具。
 - 不在故事中创建手机内动态、备忘录或聊天消息。
 - 不引入向量检索。
-- 不让用户或其他 AI 角色参与虚拟世界事件。
+- 不让用户或其他 AI 角色参与经历事件。
 
 ## Documentation Notes
 
 实施阶段需要同步更新：
 
-- `src/platform/ai/CLAUDE.md`：记录虚拟世界经历是心跳工具确定性 memoryEvents 规则之外的独立例外。
+- `src/platform/ai/CLAUDE.md`：记录经历是心跳工具确定性 memoryEvents 规则之外的独立例外。
 - 如新增 `src/platform/ai/AGENTS.md` 不必要；现有 `CLAUDE.md` 已覆盖 AI 基建踩坑。
 - 按项目规范，代码实施前还需要写 `docs/plan/yyyy-mm-dd-hhmm-计划名.md`，记录实施步骤和关键决策。

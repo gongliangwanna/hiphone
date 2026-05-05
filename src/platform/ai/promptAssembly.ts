@@ -58,6 +58,8 @@ export interface AvailableSticker {
   description: string;
 }
 
+export type PromptResponseMode = 'structured-actions' | 'narrative';
+
 export interface PromptInput {
   character: PromptCharacter;
   persona: PromptPersona;
@@ -84,6 +86,8 @@ export interface PromptInput {
   appSystemPromptSnapshot?: string;
   /** 场景级提示词（AI-AI 用来传 `[当前场景]`）；拼在 post-history 末尾。 */
   sceneHint?: string;
+  /** Output contract. Narrative mode skips JSON/tool protocol for plain prose generation. */
+  responseMode?: PromptResponseMode;
 }
 
 // Multimodal content parts (OpenAI Vision format)
@@ -183,22 +187,24 @@ function resolveTranscriptSpeaker(
   return resolveSpeakerName(entry.speakerId, ctx);
 }
 
+function normalizeExperienceLabels(content: string): string {
+  return content
+    .split('[虚拟世界经历结束]').join('[经历结束]')
+    .split('[虚拟世界经历]').join('[经历]');
+}
+
 function renderTranscriptLine(entry: MemoryEntry, ctx: MemoryRenderContext): string {
   const time = formatHHMM(entry.createdAt);
   const speaker = resolveTranscriptSpeaker(entry, ctx);
-  const lines = entry.content.split('\n');
+  const lines = normalizeExperienceLabels(entry.content).split('\n');
   // System entries (speaker === null) get one timestamp, no speaker label.
   // Multi-line content stays untouched on continuation lines.
   if (speaker === null) {
     return `[${time}] ${lines.join('\n')}`;
   }
-  // User / assistant entries: first line carries `[HH:MM] speaker：`,
-  // continuation lines carry `speaker：` only. This is the format a reader
-  // encountering multi-tool replies (e.g. text + sticker) expects.
-  const first = `[${time}] ${speaker}：${lines[0] ?? ''}`;
-  if (lines.length === 1) return first;
-  const rest = lines.slice(1).map((l) => `${speaker}：${l}`);
-  return [first, ...rest].join('\n');
+  // User / assistant entries are message blocks: the speaker label belongs to
+  // the entry, not every physical line. This preserves intentional blank lines.
+  return `[${time}] ${speaker}：${lines.join('\n')}`;
 }
 
 export function renderMemoryToTranscript(
@@ -324,11 +330,6 @@ function buildSystemBlock(
   persona: PromptPersona,
   aiConfig: PromptAIConfig,
   worldBookChunk: string,
-  availableStickers?: AvailableSticker[],
-  availableTools?: ToolDefinition[],
-  appSystemPromptSnapshot?: string,
-  currentAppId?: string,
-  currentCharId?: string,
 ): string {
   const chunks: string[] = [];
 
@@ -357,7 +358,19 @@ function buildSystemBlock(
     chunks.push(`[关于用户]\n用户的名字是${persona.name}。`);
   }
 
-  // 5 / 6 / 7 — Format / tools / app-task chunks.
+  return chunks.join('\n\n');
+}
+
+function buildAppProtocolBlock(
+  availableStickers?: AvailableSticker[],
+  availableTools?: ToolDefinition[],
+  appSystemPromptSnapshot?: string,
+  currentAppId?: string,
+  currentCharId?: string,
+): string {
+  const chunks: string[] = [];
+
+  // App protocol — app-task, reply format, tools, and inline tool state.
   //
   // Priority (first match wins):
   //   1. Legacy XingYu   → old 7 [回复格式] + [可用表情包]. Fires when availableStickers
@@ -568,19 +581,27 @@ export interface PromptInspection {
  */
 export function inspectPrompt(input: PromptInput): PromptInspection {
   const { character, persona, aiConfig, worldBookChunk, now, deviceContext, availableStickers } = input;
+  const responseMode = input.responseMode ?? 'structured-actions';
 
   let systemBlock = buildSystemBlock(
     character,
     persona,
     aiConfig,
     worldBookChunk,
-    availableStickers,
-    input.availableTools,
-    input.appSystemPromptSnapshot,
-    input.currentAppId,
-    input.currentCharId,
   );
   systemBlock = expandMacros(systemBlock, character, persona, now);
+
+  let appProtocol = '';
+  if (responseMode === 'structured-actions') {
+    appProtocol = buildAppProtocolBlock(
+      availableStickers,
+      input.availableTools,
+      input.appSystemPromptSnapshot,
+      input.currentAppId,
+      input.currentCharId,
+    );
+    appProtocol = expandMacros(appProtocol, character, persona, now);
+  }
 
   // PromptInput.currentCharId is non-optional, so no undefined guard needed
   // here (cf. buildSystemBlock which takes currentCharId?: string for
@@ -589,17 +610,23 @@ export function inspectPrompt(input: PromptInput): PromptInspection {
     appId: input.currentAppId ?? '',
     characterId: input.currentCharId,
   };
-  const tailContext = buildTailToolStateChunk(input.availableTools, toolBuildCtx);
+  const tailContext = responseMode === 'structured-actions'
+    ? buildTailToolStateChunk(input.availableTools, toolBuildCtx)
+    : undefined;
   let postHistory = buildPostHistory(
     aiConfig, now, deviceContext, input.sceneHint, tailContext,
   );
   postHistory = expandMacros(postHistory, character, persona, now);
 
   const systemTokens = estimateTokens(systemBlock);
+  const appProtocolTokens = estimateTokens(appProtocol);
   const postTokens = estimateTokens(postHistory);
   const overhead = 3;
   const totalBudget = Math.floor(aiConfig.contextWindow * SAFETY_MARGIN);
-  const historyBudget = Math.max(0, totalBudget - aiConfig.maxTokens - systemTokens - postTokens - overhead);
+  const historyBudget = Math.max(
+    0,
+    totalBudget - aiConfig.maxTokens - systemTokens - appProtocolTokens - postTokens - overhead,
+  );
 
   const trimmed = trimMemoryToFit(input.memoryEntries, historyBudget, aiConfig.keepRecentMessages);
   const { longTermMemory, stateTailBlock, transcriptBlock, userTurn } = renderMemoryToTranscript(trimmed, {
@@ -636,6 +663,10 @@ export function inspectPrompt(input: PromptInput): PromptInspection {
     });
   }
 
+  if (appProtocol) {
+    sections.push({ label: 'App 协议', content: appProtocol, tokens: appProtocolTokens });
+  }
+
   if (postHistory) {
     sections.push({ label: 'Post-history 指令', content: postHistory, tokens: postTokens });
   }
@@ -656,7 +687,7 @@ export function inspectPrompt(input: PromptInput): PromptInspection {
 
   return {
     sections,
-    totalTokens: systemTokens + historyTokens + postTokens + overhead,
+    totalTokens: systemTokens + historyTokens + appProtocolTokens + postTokens + overhead,
     contextWindow: aiConfig.contextWindow,
     maxTokens: aiConfig.maxTokens,
     historyBudget,
@@ -669,6 +700,7 @@ export function inspectPrompt(input: PromptInput): PromptInspection {
 
 export function assemblePrompt(input: PromptInput): PromptOutput {
   const { character, persona, aiConfig, worldBookChunk, now, deviceContext, availableStickers } = input;
+  const responseMode = input.responseMode ?? 'structured-actions';
 
   // Phase 1 — System block.
   let systemBlock = buildSystemBlock(
@@ -676,13 +708,20 @@ export function assemblePrompt(input: PromptInput): PromptOutput {
     persona,
     aiConfig,
     worldBookChunk,
-    availableStickers,
-    input.availableTools,
-    input.appSystemPromptSnapshot,
-    input.currentAppId,
-    input.currentCharId,
   );
   systemBlock = expandMacros(systemBlock, character, persona, now);
+
+  let appProtocol = '';
+  if (responseMode === 'structured-actions') {
+    appProtocol = buildAppProtocolBlock(
+      availableStickers,
+      input.availableTools,
+      input.appSystemPromptSnapshot,
+      input.currentAppId,
+      input.currentCharId,
+    );
+    appProtocol = expandMacros(appProtocol, character, persona, now);
+  }
 
   // Phase 3 — Post-history (built before Phase 2 so we can subtract its cost
   // from the history budget).
@@ -693,7 +732,9 @@ export function assemblePrompt(input: PromptInput): PromptOutput {
     appId: input.currentAppId ?? '',
     characterId: input.currentCharId,
   };
-  const tailContext = buildTailToolStateChunk(input.availableTools, toolBuildCtx);
+  const tailContext = responseMode === 'structured-actions'
+    ? buildTailToolStateChunk(input.availableTools, toolBuildCtx)
+    : undefined;
   let postHistory = buildPostHistory(
     aiConfig, now, deviceContext, input.sceneHint, tailContext,
   );
@@ -701,12 +742,13 @@ export function assemblePrompt(input: PromptInput): PromptOutput {
 
   // Compute token budgets.
   const systemTokens = estimateTokens(systemBlock);
+  const appProtocolTokens = estimateTokens(appProtocol);
   const postTokens = estimateTokens(postHistory);
   const overhead = 3; // assistant start tokens
   const totalBudget = Math.floor(aiConfig.contextWindow * SAFETY_MARGIN);
   const historyBudget = Math.max(
     0,
-    totalBudget - aiConfig.maxTokens - systemTokens - postTokens - overhead,
+    totalBudget - aiConfig.maxTokens - systemTokens - appProtocolTokens - postTokens - overhead,
   );
 
   // Phase 2 — Chat history. Compression ratio uses live (non-compressed) entries.
@@ -728,7 +770,8 @@ export function assemblePrompt(input: PromptInput): PromptOutput {
     },
   );
 
-  // Assemble final message array: system #1, optional state tail / long-term / transcript, post-history, optional user turn.
+  // Assemble final message array: stable system, app-independent memory/history,
+  // app protocol, post-history, optional user turn.
   const messages: ChatMessage[] = [{ role: 'system', content: systemBlock }];
   if (stateTailBlock) {
     messages.push({ role: 'system', content: stateTailBlock });
@@ -738,6 +781,9 @@ export function assemblePrompt(input: PromptInput): PromptOutput {
   }
   if (transcriptBlock) {
     messages.push({ role: 'system', content: transcriptBlock });
+  }
+  if (appProtocol) {
+    messages.push({ role: 'system', content: appProtocol });
   }
   if (postHistory) {
     messages.push({ role: 'system', content: postHistory });
@@ -752,7 +798,7 @@ export function assemblePrompt(input: PromptInput): PromptOutput {
     (transcriptBlock ? estimateTokens(transcriptBlock) : 0) +
     (userTurn ? estimateContentTokens(userTurn.content) : 0);
 
-  const tokenEstimate = systemTokens + historyTokens + postTokens + overhead;
+  const tokenEstimate = systemTokens + historyTokens + appProtocolTokens + postTokens + overhead;
 
   // Ratio: how much of the history budget is consumed by raw history tokens.
   const historyTokenRatio = historyBudget > 0 ? preTrimTokens / historyBudget : 0;

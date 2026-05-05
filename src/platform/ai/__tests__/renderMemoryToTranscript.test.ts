@@ -88,7 +88,7 @@ describe('renderMemoryToTranscript — row formatting', () => {
     expect(out.transcriptBlock).toBe('[历史记录]\n[01:02] char-ghost：?\n[01:03] 我：ok');
   });
 
-  it('multi-line assistant content: first line has [HH:MM] speaker, continuations keep speaker only', () => {
+  it('multi-line assistant content: only the message block starts with [HH:MM] speaker', () => {
     const out = renderMemoryToTranscript(
       [
         mem({
@@ -101,12 +101,87 @@ describe('renderMemoryToTranscript — row formatting', () => {
       ],
       ctx,
     );
-    // Each content-line needs a speaker label so the next prompt can tell text
-    // turns from sticker turns when the reply contains multiple tool items.
     expect(out.transcriptBlock).toBe(
-      '[历史记录]\n[02:00] 我：你好呀\n我：发了一个"笑脸"的表情包',
+      '[历史记录]\n[02:00] 我：你好呀\n发了一个"笑脸"的表情包',
     );
     expect(out.userTurn).toEqual({ role: 'user', content: '小米：好的' });
+  });
+
+  it('multi-line assistant content preserves blank lines instead of rendering empty speaker turns', () => {
+    const out = renderMemoryToTranscript(
+      [
+        mem({
+          role: 'assistant',
+          speakerId: 'char-001',
+          content: '第一行\n\n第三行',
+          createdAt: tsAt(2, 0),
+        }),
+        mem({ role: 'user', speakerId: 'me', content: '收到', createdAt: tsAt(2, 1) }),
+      ],
+      ctx,
+    );
+    expect(out.transcriptBlock).toBe(
+      '[历史记录]\n[02:00] 我：第一行\n\n第三行',
+    );
+    expect(out.transcriptBlock).not.toContain('\n我：\n');
+  });
+
+  it('legacy virtual-world experience labels are normalized to experience labels in transcript context', () => {
+    const out = renderMemoryToTranscript(
+      [
+        mem({
+          role: 'assistant',
+          speakerId: 'char-001',
+          source: 'heartbeat',
+          content: '[虚拟世界经历]\n时间跨度：old\n\n我试了一杯咸柠气泡水。\n[虚拟世界经历结束]',
+          createdAt: tsAt(2, 0),
+        }),
+        mem({ role: 'user', speakerId: 'me', content: '收到', createdAt: tsAt(2, 1) }),
+      ],
+      ctx,
+    );
+
+    expect(out.transcriptBlock).toBe(
+      '[历史记录]\n[02:00] 我：[经历]\n时间跨度：old\n\n我试了一杯咸柠气泡水。\n[经历结束]',
+    );
+  });
+
+  it('consecutive assistant messages each keep their own speaker prefix', () => {
+    const out = renderMemoryToTranscript(
+      [
+        mem({ role: 'assistant', speakerId: 'char-001', content: '……', createdAt: tsAt(23, 50) }),
+        mem({ role: 'assistant', speakerId: 'char-001', content: '五个多小时', createdAt: tsAt(23, 50) }),
+        mem({ role: 'assistant', speakerId: 'char-001', content: '你就发一个hi', createdAt: tsAt(23, 50) }),
+        mem({ role: 'assistant', speakerId: 'char-001', content: '本将军在手机前坐到贝壳都被我捏裂了', createdAt: tsAt(23, 50) }),
+      ],
+      ctx,
+    );
+    expect(out.transcriptBlock).toBe(
+      [
+        '[历史记录]',
+        '[23:50] 我：……',
+        '[23:50] 我：五个多小时',
+        '[23:50] 我：你就发一个hi',
+        '[23:50] 我：本将军在手机前坐到贝壳都被我捏裂了',
+      ].join('\n'),
+    );
+  });
+
+  it('latest multi-line user turn is prefixed once and keeps inner blank lines', () => {
+    const out = renderMemoryToTranscript(
+      [
+        mem({ role: 'assistant', speakerId: 'char-001', content: '说吧', createdAt: tsAt(2, 0) }),
+        mem({
+          role: 'user',
+          speakerId: 'me',
+          content: '第一行\n\n第三行',
+          createdAt: tsAt(2, 1),
+        }),
+      ],
+      ctx,
+    );
+    expect(out.transcriptBlock).toBe('[历史记录]\n[02:00] 我：说吧');
+    expect(out.userTurn).toEqual({ role: 'user', content: '小米：第一行\n\n第三行' });
   });
 
   it('multi-line system entry keeps [HH:MM] only (no speaker prefix on any line)', () => {

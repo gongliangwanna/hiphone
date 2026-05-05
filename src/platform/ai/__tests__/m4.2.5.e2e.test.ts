@@ -28,6 +28,22 @@ import * as toastMod from '@/platform/userApp/sdk/toast';
 const XINGYU = 'xingyu';
 const AUCTION = 'ai-auction';
 
+function findSystemContent(
+  messages: readonly { role: string; content: unknown }[],
+  marker: string,
+): string {
+  const found = messages.find(
+    (m) =>
+      m.role === 'system' &&
+      typeof m.content === 'string' &&
+      m.content.includes(marker),
+  );
+  if (!found || typeof found.content !== 'string') {
+    throw new Error(`missing system content: ${marker}`);
+  }
+  return found.content;
+}
+
 beforeEach(async () => {
   await _resetCharacterMemoryForTests();
   _resetToolRegistryForTests();
@@ -127,7 +143,7 @@ describe('M4.2.5 E2E — unified {type, param} across apps', () => {
 
     // Confirm XingYu prompt had ONLY XingYu's tools in chunk 8
     const xingyuMessages = chatSpy.mock.calls[0]![1];
-    const xingyuSys = xingyuMessages.find((m) => m.role === 'system')!.content as string;
+    const xingyuSys = findSystemContent(xingyuMessages, '[可用动作]');
     expect(xingyuSys).toContain('- text:');
     expect(xingyuSys).toContain('- sticker:');
     expect(xingyuSys).toContain('- update_signature:');
@@ -161,7 +177,7 @@ describe('M4.2.5 E2E — unified {type, param} across apps', () => {
 
     // Auction prompt must NOT contain XingYu tools
     const auctionMessages = chatSpy.mock.calls[1]![1];
-    const auctionSys = auctionMessages.find((m) => m.role === 'system')!.content as string;
+    const auctionSys = findSystemContent(auctionMessages, '[可用动作]');
     expect(auctionSys).toContain('- bid_call:');
     expect(auctionSys).toContain('- hammer_down:');
     expect(auctionSys).not.toContain('- sticker:');
@@ -190,7 +206,7 @@ describe('M4.2.5 E2E — unified {type, param} across apps', () => {
 
     // Final XingYu prompt re-scopes to XingYu tools
     const finalMessages = chatSpy.mock.calls[2]![1];
-    const finalSys = finalMessages.find((m) => m.role === 'system')!.content as string;
+    const finalSys = findSystemContent(finalMessages, '[可用动作]');
     expect(finalSys).toContain('- sticker:');
     expect(finalSys).not.toContain('- bid_call:');
   });

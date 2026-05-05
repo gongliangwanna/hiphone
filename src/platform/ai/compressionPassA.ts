@@ -11,6 +11,7 @@ import type {
   FactSubject,
 } from './memoryStateTypes';
 import type { PassAResult } from './memoryStateMutations';
+import { buildOpenRouterProviderRouting } from './providers';
 
 export interface PassMessage {
   role: 'user' | 'assistant' | 'system';
@@ -30,6 +31,7 @@ export interface PassACommonInput {
   apiKey: string;
   model: string;
   providerId: string;
+  openRouterProviderSlug?: string;
   maxTokens: number;
 }
 
@@ -146,18 +148,25 @@ export async function runPassA(input: PassAInput): Promise<PassAResult> {
     headers['X-Title'] = 'hiPhone';
   }
 
+  const body: Record<string, unknown> = {
+    model: input.model,
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ],
+    max_tokens: input.maxTokens,
+    temperature: 0.2,
+  };
+  const providerRouting = buildOpenRouterProviderRouting(
+    input.providerId,
+    input.openRouterProviderSlug,
+  );
+  if (providerRouting) body.provider = providerRouting;
+
   const res = await fetch(`${input.endpoint}/chat/completions`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({
-      model: input.model,
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
-      ],
-      max_tokens: input.maxTokens,
-      temperature: 0.2,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {

@@ -105,7 +105,12 @@ describe('ai-auction integration', () => {
 
     expect(spy).toHaveBeenCalled();
     const messages = spy.mock.calls[0]![1];
-    const systemContent = messages.find((m) => m.role === 'system')!.content as string;
+    const systemContent = messages.find(
+      (m) =>
+        m.role === 'system' &&
+        typeof m.content === 'string' &&
+        m.content.includes('[当前任务]'),
+    )!.content as string;
 
     expect(systemContent).toContain('[当前任务]');
     expect(systemContent).toContain('你是拍卖师');

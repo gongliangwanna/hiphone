@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useXYData } from '../xingYuDataStore';
-import type { TextMessage, ImageMessage, Conversation } from '../data';
+import type { TextMessage, ImageMessage, LocationMessage, Conversation } from '../data';
 
 beforeEach(() => {
   useXYData.setState({
@@ -58,6 +58,22 @@ describe('addFavorite', () => {
 
     const fav = useXYData.getState().favorites[0]!;
     expect(fav.content.imageUrl).toBe('data:abc');
+    expect(fav.content.text).toBeUndefined();
+  });
+
+  it('extracts location payload for location messages', () => {
+    const msg: LocationMessage = {
+      id: 'm-loc',
+      convId: 'c1',
+      senderId: 'a',
+      type: 'location',
+      location: { label: '我的位置', latitude: 31.2304, longitude: 121.4737 },
+      timestamp: 1,
+    };
+    useXYData.getState().addFavorite(msg, 'A');
+
+    const fav = useXYData.getState().favorites[0]!;
+    expect(fav.content.location).toEqual({ label: '我的位置', latitude: 31.2304, longitude: 121.4737 });
     expect(fav.content.text).toBeUndefined();
   });
 });
@@ -119,6 +135,28 @@ describe('forwardMessage', () => {
     const updated = useXYData.getState().conversations.find((c) => c.id === 'c2')!;
     expect(updated.lastMsg).toBe('[图片]');
   });
+
+  it('copies a location message and updates target preview', () => {
+    const conv: Conversation = { id: 'c2', idolId: 'idol2', lastMsg: '', lastTime: 0, unread: 0 };
+    useXYData.setState({ conversations: [conv] });
+    const msg: LocationMessage = {
+      id: 'm-loc',
+      convId: 'c1',
+      senderId: 'a',
+      type: 'location',
+      location: { label: '我的位置', latitude: 31.2304, longitude: 121.4737 },
+      timestamp: 1,
+    };
+
+    useXYData.getState().forwardMessage(msg, 'c2');
+
+    const created = useXYData.getState().messages.find((m) => m.convId === 'c2')!;
+    expect(created.type).toBe('location');
+    if (created.type !== 'location') throw new Error('expected location');
+    expect(created.location).toEqual(msg.location);
+    const updated = useXYData.getState().conversations.find((c) => c.id === 'c2')!;
+    expect(updated.lastMsg).toBe('[位置] 我的位置');
+  });
 });
 
 describe('forwardMessages', () => {
@@ -167,5 +205,29 @@ describe('forwardAsCard', () => {
     if (created.type !== 'forward_card') throw new Error('expected forward_card');
     expect(created.forwardCard.preview[0]).toContain('Alice');
     expect(created.forwardCard.preview[0]).toContain('hello');
+  });
+
+  it('merge-forward preview includes location labels', () => {
+    const conv: Conversation = { id: 'c2', idolId: 'idol2', lastMsg: '', lastTime: 0, unread: 0 };
+    useXYData.setState({ conversations: [conv] });
+
+    const msgs: LocationMessage[] = [
+      {
+        id: 'm-loc',
+        convId: 'c1',
+        senderId: 'a',
+        type: 'location',
+        location: { label: '我的位置', latitude: 31.2304, longitude: 121.4737 },
+        timestamp: 1,
+      },
+    ];
+    useXYData.getState().forwardAsCard(msgs, 'c2', '位置记录', () => 'Alice');
+
+    const created = useXYData.getState().messages.find((m) => m.convId === 'c2')!;
+    if (created.type !== 'forward_card') throw new Error('expected forward_card');
+    expect(created.forwardCard.messages[0]!.type).toBe('location');
+    expect(created.forwardCard.messages[0]!.location).toEqual(msgs[0]!.location);
+    expect(created.forwardCard.preview[0]).toContain('Alice');
+    expect(created.forwardCard.preview[0]).toContain('[位置] 我的位置');
   });
 });

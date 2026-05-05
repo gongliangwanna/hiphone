@@ -18,6 +18,7 @@ interface ProviderBundle {
   apiKey: string;
   model: string;
   providerId: string;
+  openRouterProviderSlug?: string;
   generation: ReturnType<typeof pickGenerationParams>;
 }
 
@@ -31,6 +32,7 @@ function requireProvider(): ProviderBundle {
     apiKey: cfg.apiKey,
     model: cfg.model,
     providerId: cfg.provider,
+    openRouterProviderSlug: cfg.openRouterProviderSlug,
     generation: pickGenerationParams(cfg),
   };
 }
@@ -191,6 +193,7 @@ export async function requestPresenceReply(input: {
       apiKey: provider.apiKey,
       model: provider.model,
       providerId: provider.providerId,
+      openRouterProviderSlug: provider.openRouterProviderSlug,
     },
     messages,
     provider.generation,
@@ -288,6 +291,7 @@ export async function summarizePresenceSession(input: {
       apiKey: provider.apiKey,
       model: provider.model,
       providerId: provider.providerId,
+      openRouterProviderSlug: provider.openRouterProviderSlug,
     },
     messages,
     { ...provider.generation, temperature: 0.2 },

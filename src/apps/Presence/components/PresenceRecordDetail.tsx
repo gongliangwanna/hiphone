@@ -90,7 +90,11 @@ export function PresenceRecordDetail({
           </span>
         </motion.div>
 
-        <FragmentStream turns={record.turns} emptyText="这条记录没有互动片段。" />
+        <FragmentStream
+          turns={record.turns}
+          emptyText="这条记录没有互动片段。"
+          characterName={character?.name}
+        />
 
         <motion.div
           className="space-y-2 px-4 pb-4"

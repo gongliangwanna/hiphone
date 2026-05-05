@@ -34,4 +34,11 @@ describe('NavBar', () => {
     expect(screen.queryByTestId('nav-back')).toBeNull();
     expect(screen.getByRole('heading', { name: '设置' })).toBeInTheDocument();
   });
+
+  it('supports dark glass tone for immersive app pages', () => {
+    render(<NavBar title="安静图书馆" tone="darkGlass" showBack />);
+
+    expect(screen.getByTestId('nav-bar')).toHaveAttribute('data-tone', 'darkGlass');
+    expect(screen.getByText('安静图书馆')).toHaveStyle({ color: '#ffffff' });
+  });
 });

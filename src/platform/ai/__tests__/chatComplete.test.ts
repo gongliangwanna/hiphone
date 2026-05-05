@@ -110,6 +110,30 @@ describe('chatComplete', () => {
     expect(headers['HTTP-Referer']).toBeUndefined();
   });
 
+  it('strictly pins OpenRouter routing to the selected provider slug', async () => {
+    makeFetchOk('response');
+
+    await chatComplete({ ...baseConfig, openRouterProviderSlug: 'cerebras' }, messages);
+
+    const body = JSON.parse(mockFetch.mock.calls[0]![1].body);
+    expect(body.provider).toEqual({
+      only: ['cerebras'],
+      allow_fallbacks: false,
+    });
+  });
+
+  it('ignores OpenRouter provider slug for other providers', async () => {
+    makeFetchOk('response');
+
+    await chatComplete(
+      { ...baseConfig, providerId: 'siliconflow', openRouterProviderSlug: 'cerebras' },
+      messages,
+    );
+
+    const body = JSON.parse(mockFetch.mock.calls[0]![1].body);
+    expect(body.provider).toBeUndefined();
+  });
+
   it('returns empty string when choices is missing', async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,

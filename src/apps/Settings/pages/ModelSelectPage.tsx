@@ -20,6 +20,7 @@ import {
 } from '@/platform/stores/aiConfigStore';
 import { useSettingsNavStore } from '../settingsNavStore';
 import { PresetSwitcherSheet } from './PresetSwitcherSheet';
+import { OpenRouterProviderSection } from './OpenRouterProviderSection';
 
 // ---------------------------------------------------------------------------
 // Shared UI pieces
@@ -178,11 +179,13 @@ export function ModelSelectPage() {
   const apiKey = useAIConfigStore((s) => s.apiKey);
   const apiEndpoint = useAIConfigStore((s) => s.apiEndpoint);
   const model = useAIConfigStore((s) => s.model);
+  const openRouterProviderSlug = useAIConfigStore((s) => s.openRouterProviderSlug);
   const fetchedModels = useAIConfigStore((s) => s.fetchedModels);
   const modelListLoading = useAIConfigStore((s) => s.modelListLoading);
   const modelListError = useAIConfigStore((s) => s.modelListError);
 
   const setProvider = useAIConfigStore((s) => s.setProvider);
+  const setOpenRouterProviderSlug = useAIConfigStore((s) => s.setOpenRouterProviderSlug);
   const setApiKey = useAIConfigStore((s) => s.setApiKey);
   const setApiEndpoint = useAIConfigStore((s) => s.setApiEndpoint);
   const setModel = useAIConfigStore((s) => s.setModel);
@@ -228,7 +231,7 @@ export function ModelSelectPage() {
 
     const endpoint = apiEndpoint || adapterInfo?.defaultEndpoint || '';
     streamChat(
-      { endpoint, apiKey, model, providerId: provider },
+      { endpoint, apiKey, model, providerId: provider, openRouterProviderSlug },
       [{ role: 'user', content: 'Hi' }],
       () => {},
       ctrl.signal,
@@ -239,7 +242,7 @@ export function ModelSelectPage() {
         setTestStatus('error');
         setTestError(e instanceof Error ? e.message : String(e));
       });
-  }, [canTest, apiKey, apiEndpoint, model, provider, adapterInfo]);
+  }, [canTest, apiKey, apiEndpoint, model, provider, openRouterProviderSlug, adapterInfo]);
 
   const handleFetch = useCallback(() => {
     fetchModels();
@@ -399,6 +402,13 @@ export function ModelSelectPage() {
           </div>
           <SectionFooter text="输入模型 ID，也可通过下方拉取模型列表选择" />
         </>
+      )}
+
+      {provider === 'openrouter' && (
+        <OpenRouterProviderSection
+          value={openRouterProviderSlug}
+          onChange={setOpenRouterProviderSlug}
+        />
       )}
 
       {/* ═══════════════ 3. 操作按钮 ═══════════════ */}

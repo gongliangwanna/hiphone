@@ -25,6 +25,7 @@ export interface BuilderProviderConfig {
   apiKey: string;
   model: string;
   providerId: string;
+  openRouterProviderSlug?: string;
   generation: GenerationParams;
 }
 
@@ -45,6 +46,7 @@ export function resolveBuilderProviderConfig(): BuilderProviderConfig {
     apiKey: ai.apiKey.trim(),
     model: ai.model.trim(),
     providerId,
+    openRouterProviderSlug: ai.openRouterProviderSlug,
     generation: pickGenerationParams(ai),
   };
 }

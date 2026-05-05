@@ -73,6 +73,38 @@ export function resetHeartbeatLimits(characterId: string) {
 export interface ToolResult {
   observation: string;
   done: boolean;
+  memoryEvents?: string[];
+}
+
+function memoryEvent(...lines: string[]): string {
+  return ['[自主活动]', ...lines].join('\n');
+}
+
+function xingYuNameOf(userId: string): string {
+  const state = useXYData.getState();
+  if (userId === 'me') return state.userSettings.nickname || '用户';
+  if (userId.startsWith('char-')) {
+    const char = useCharacterStore.getState().characters.find((c) => c.id === userId.slice(5));
+    return char?.name ?? userId;
+  }
+  return userId;
+}
+
+function formatMomentForMemory(moment: Moment, alias?: string): string[] {
+  const lines = [
+    `${alias ? `[${alias}] ` : ''}作者：${xingYuNameOf(moment.idolId)}`,
+    `内容：${moment.text}`,
+    `点赞数：${moment.likedBy.length}`,
+  ];
+  if (moment.comments.length > 0) {
+    lines.push('评论：');
+    for (const c of moment.comments) {
+      lines.push(`- ${xingYuNameOf(c.userId)}：${c.text}`);
+    }
+  } else {
+    lines.push('评论：无');
+  }
+  return lines;
 }
 
 export async function executeHeartbeatTool(
@@ -218,7 +250,16 @@ function execPostMoment(
     detail: text.slice(0, 40),
   });
 
-  return { observation: '动态已发布。', done: false };
+  return {
+    observation: '动态已发布。',
+    done: false,
+    memoryEvents: [
+      memoryEvent(
+        '我发布了一条星球动态。',
+        `内容：${text}`,
+      ),
+    ],
+  };
 }
 
 const PAGE_SIZE = 5;
@@ -229,14 +270,26 @@ function execViewMoments(input: Record<string, unknown>, characterId: string): T
   const totalPages = Math.max(1, Math.ceil(allMoments.length / PAGE_SIZE));
 
   if (allMoments.length === 0) {
-    return { observation: '暂无星球动态。', done: false };
+    return {
+      observation: '暂无星球动态。',
+      done: false,
+      memoryEvents: [
+        memoryEvent('我查看了星球动态，发现暂无星球动态。'),
+      ],
+    };
   }
 
   const start = (page - 1) * PAGE_SIZE;
   const slice = allMoments.slice(start, start + PAGE_SIZE);
 
   if (slice.length === 0) {
-    return { observation: `第${page}页没有更多动态了（共${totalPages}页）。`, done: false };
+    return {
+      observation: `第${page}页没有更多动态了（共${totalPages}页）。`,
+      done: false,
+      memoryEvents: [
+        memoryEvent(`我查看了星球动态第${page}页，发现没有更多动态（共${totalPages}页）。`),
+      ],
+    };
   }
 
   const userSettings = useXYData.getState().userSettings;
@@ -252,10 +305,15 @@ function execViewMoments(input: Record<string, unknown>, characterId: string): T
     return id;
   };
 
+  const memoryLines: string[] = [
+    `我查看了星球动态第${page}页，读到了${slice.length}条动态：`,
+  ];
+
   const lines = slice.map((m, i) => {
     // Register short alias: m1, m2, ...
     const alias = `m${start + i + 1}`;
     aliases.set(alias, m.id);
+    memoryLines.push(...formatMomentForMemory(m, alias), '');
 
     const authorName = nameOf(m.idolId);
     const likedStr = m.likedBy.includes(`char-${characterId}`) ? '（你已赞）' : '';
@@ -275,7 +333,11 @@ function execViewMoments(input: Record<string, unknown>, characterId: string): T
   lines.push(`--- 第${page}/${totalPages}页，共${allMoments.length}条 ---`);
   lines.push('提示：用 m1、m2… 作为 momentId 操作对应动态');
 
-  return { observation: lines.join('\n'), done: false };
+  return {
+    observation: lines.join('\n'),
+    done: false,
+    memoryEvents: [memoryEvent(...memoryLines.filter((line) => line !== ''))],
+  };
 }
 
 function execLikeMoment(input: Record<string, unknown>, characterId: string): ToolResult {
@@ -287,16 +349,41 @@ function execLikeMoment(input: Record<string, unknown>, characterId: string): To
 
   const moment = useXYData.getState().moments.find((m) => m.id === momentId);
   if (!moment) {
-    return { observation: `找不到动态 ${rawId}。先用 view_moments 查看。`, done: false };
+    return {
+      observation: `找不到动态 ${rawId}。先用 view_moments 查看。`,
+      done: false,
+      memoryEvents: [
+        memoryEvent(`我尝试点赞动态 ${rawId}，但没有找到。`),
+      ],
+    };
   }
   const charUserId = `char-${characterId}`;
   if (moment.likedBy.includes(charUserId)) {
-    return { observation: '已经点过赞了。', done: false };
+    return {
+      observation: '已经点过赞了。',
+      done: false,
+      memoryEvents: [
+        memoryEvent(
+          '我尝试点赞一条星球动态，发现自己已经点过赞了。',
+          ...formatMomentForMemory(moment),
+        ),
+      ],
+    };
   }
 
   useXYData.getState().toggleLike(momentId, charUserId);
+  const updatedMoment = useXYData.getState().moments.find((m) => m.id === momentId) ?? moment;
 
-  return { observation: '已点赞。', done: false };
+  return {
+    observation: '已点赞。',
+    done: false,
+    memoryEvents: [
+      memoryEvent(
+        '我点赞了一条星球动态。',
+        ...formatMomentForMemory(updatedMoment),
+      ),
+    ],
+  };
 }
 
 function execCommentMoment(
@@ -316,12 +403,19 @@ function execCommentMoment(
 
   const moment = useXYData.getState().moments.find((m) => m.id === momentId);
   if (!moment) {
-    return { observation: `找不到动态 ${momentId}。`, done: false };
+    return {
+      observation: `找不到动态 ${momentId}。`,
+      done: false,
+      memoryEvents: [
+        memoryEvent(`我尝试评论动态 ${rawId}，但没有找到。`),
+      ],
+    };
   }
 
   // Write comment via centralized addComment (also generates interaction records)
   const commentUserId = `char-${characterId}`;
   useXYData.getState().addComment(momentId, text, commentUserId);
+  const updatedMoment = useXYData.getState().moments.find((m) => m.id === momentId) ?? moment;
 
   useHeartbeatStore.getState().pushLog({
     characterId,
@@ -329,21 +423,49 @@ function execCommentMoment(
     detail: text.slice(0, 40),
   });
 
-  return { observation: '评论已发布。', done: false };
+  return {
+    observation: '评论已发布。',
+    done: false,
+    memoryEvents: [
+      memoryEvent(
+        '我评论了一条星球动态。',
+        ...formatMomentForMemory(updatedMoment),
+        `我的评论：${text}`,
+      ),
+    ],
+  };
 }
 
 function execViewUserSignature(): ToolResult {
   const { bio, nickname } = useXYData.getState().userSettings;
   if (bio) {
-    return { observation: `${nickname}的个性签名：「${bio}」`, done: false };
+    return {
+      observation: `${nickname}的个性签名：「${bio}」`,
+      done: false,
+      memoryEvents: [
+        memoryEvent('我查看了用户的个性签名。', `${nickname}的个性签名：${bio}`),
+      ],
+    };
   }
-  return { observation: `${nickname}还没有设置个性签名。`, done: false };
+  return {
+    observation: `${nickname}还没有设置个性签名。`,
+    done: false,
+    memoryEvents: [
+      memoryEvent('我查看了用户的个性签名。', `${nickname}还没有设置个性签名。`),
+    ],
+  };
 }
 
 function execViewUserSignatureHistory(): ToolResult {
   const { userSettings, userSignatureHistory } = useXYData.getState();
   if (userSignatureHistory.length === 0) {
-    return { observation: `${userSettings.nickname}没有历史签名记录。`, done: false };
+    return {
+      observation: `${userSettings.nickname}没有历史签名记录。`,
+      done: false,
+      memoryEvents: [
+        memoryEvent('我查看了用户的历史签名。', `${userSettings.nickname}没有历史签名记录。`),
+      ],
+    };
   }
 
   const lines = userSignatureHistory.slice(0, 10).map((record) => {
@@ -356,7 +478,13 @@ function execViewUserSignatureHistory(): ToolResult {
   });
 
   lines.unshift(`${userSettings.nickname}的历史签名（最近${lines.length}条）：`);
-  return { observation: lines.join('\n'), done: false };
+  return {
+    observation: lines.join('\n'),
+    done: false,
+    memoryEvents: [
+      memoryEvent('我查看了用户的历史签名。', ...lines),
+    ],
+  };
 }
 
 const DEFAULT_SIGNATURE_HISTORY_LIMIT = 5;
@@ -391,7 +519,13 @@ function execViewOwnSignatureHistory(
 
   if (history.length === 0) {
     lines.push('还没有历史签名记录。更新签名前仍要避免重复当前签名。');
-    return { observation: lines.join('\n'), done: false };
+    return {
+      observation: lines.join('\n'),
+      done: false,
+      memoryEvents: [
+        memoryEvent('我查看了自己的历史签名。', ...lines),
+      ],
+    };
   }
 
   lines.push(`最近${recent.length}条历史签名（共${history.length}条，建议查看5条）：`);
@@ -399,7 +533,13 @@ function execViewOwnSignatureHistory(
     lines.push(`- 「${record.text}」 (${formatSignatureTime(record.timestamp)})`);
   }
 
-  return { observation: lines.join('\n'), done: false };
+  return {
+    observation: lines.join('\n'),
+    done: false,
+    memoryEvents: [
+      memoryEvent('我查看了自己的历史签名。', ...lines),
+    ],
+  };
 }
 
 function execUpdateSignature(
@@ -419,7 +559,13 @@ function execUpdateSignature(
     detail: text.slice(0, 40),
   });
 
-  return { observation: '签名已更新。', done: false };
+  return {
+    observation: '签名已更新。',
+    done: false,
+    memoryEvents: [
+      memoryEvent('我更新了自己的个性签名。', `新的签名：${text}`),
+    ],
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -450,28 +596,54 @@ async function execViewNotes(input: Record<string, unknown>, characterId: string
   const totalPages = Math.max(1, Math.ceil(allNotes.length / PAGE_SIZE));
 
   if (allNotes.length === 0) {
-    return { observation: '你还没有写过备忘录。', done: false };
+    return {
+      observation: '你还没有写过备忘录。',
+      done: false,
+      memoryEvents: [
+        memoryEvent('我查看了备忘录，发现还没有写过备忘录。'),
+      ],
+    };
   }
 
   const start = (page - 1) * PAGE_SIZE;
   const slice = allNotes.slice(start, start + PAGE_SIZE);
 
   if (slice.length === 0) {
-    return { observation: `第${page}页没有更多备忘录了（共${totalPages}页）。`, done: false };
+    return {
+      observation: `第${page}页没有更多备忘录了（共${totalPages}页）。`,
+      done: false,
+      memoryEvents: [
+        memoryEvent(`我查看了备忘录第${page}页，发现第${page}页没有更多备忘录（共${totalPages}页）。`),
+      ],
+    };
   }
 
   const aliases = getNoteAlias(characterId);
+  const memoryLines: string[] = [
+    `我查看了备忘录第${page}页，读到了${slice.length}篇备忘录：`,
+  ];
+
   const lines = slice.map((n, i) => {
     const alias = `n${start + i + 1}`;
     aliases.set(alias, n.id);
     const d = new Date(n.updatedAt);
     const dateStr = `${d.getMonth() + 1}/${d.getDate()}`;
+    memoryLines.push(
+      `[${alias}] 标题：${n.title || '无标题'}`,
+      `内容：${n.body}`,
+      `更新时间：${dateStr}`,
+      '',
+    );
     return `[${alias}] ${n.title || '无标题'} — ${n.body.slice(0, 60)} (${dateStr})`;
   });
 
   lines.push(`--- 第${page}/${totalPages}页，共${allNotes.length}条 ---`);
 
-  return { observation: lines.join('\n'), done: false };
+  return {
+    observation: lines.join('\n'),
+    done: false,
+    memoryEvents: [memoryEvent(...memoryLines.filter((line) => line !== ''))],
+  };
 }
 
 async function execCreateNote(input: Record<string, unknown>, characterId: string): Promise<ToolResult> {
@@ -492,7 +664,17 @@ async function execCreateNote(input: Record<string, unknown>, characterId: strin
     detail: (title || body).slice(0, 40),
   });
 
-  return { observation: '备忘录已创建。', done: false };
+  return {
+    observation: '备忘录已创建。',
+    done: false,
+    memoryEvents: [
+      memoryEvent(
+        '我写了一篇备忘录。',
+        `标题：${title || '无标题'}`,
+        `内容：${body || '（空）'}`,
+      ),
+    ],
+  };
 }
 
 function execViewCharacters(selfCharacterId: string): ToolResult {
@@ -500,7 +682,13 @@ function execViewCharacters(selfCharacterId: string): ToolResult {
   const others = characters.filter((c) => c.id !== selfCharacterId);
 
   if (others.length === 0) {
-    return { observation: '目前没有其他角色。', done: false };
+    return {
+      observation: '目前没有其他角色。',
+      done: false,
+      memoryEvents: [
+        memoryEvent('我查看了可以聊天的角色列表，发现目前没有其他角色。'),
+      ],
+    };
   }
 
   const aliases = getCharacterAlias(selfCharacterId);
@@ -514,7 +702,13 @@ function execViewCharacters(selfCharacterId: string): ToolResult {
 
   lines.push('提示：用 c1、c2… 作为 characterId 操作对应角色');
 
-  return { observation: `可以聊天的角色：\n${lines.join('\n')}`, done: false };
+  return {
+    observation: `可以聊天的角色：\n${lines.join('\n')}`,
+    done: false,
+    memoryEvents: [
+      memoryEvent('我查看了可以聊天的角色列表。', ...lines),
+    ],
+  };
 }
 
 async function execChatWithCharacter(
@@ -570,14 +764,34 @@ async function execChatWithCharacter(
   }
 
   if (result.messages.length === 0) {
-    return { observation: `和${target.name}的聊天没有产生对话。`, done: false };
+    return {
+      observation: `和${target.name}的聊天没有产生对话。`,
+      done: false,
+      memoryEvents: [
+        memoryEvent(
+          `我主动找${target.name}聊天。`,
+          `我说：${message}`,
+          '这次聊天没有产生对话。',
+        ),
+      ],
+    };
   }
 
   const transcript = result.messages
     .map((m) => `${m.senderName}：${m.text}`)
     .join('\n');
 
-  return { observation: `和${target.name}的聊天记录：\n${transcript}`, done: false };
+  return {
+    observation: `和${target.name}的聊天记录：\n${transcript}`,
+    done: false,
+    memoryEvents: [
+      memoryEvent(
+        `我主动找${target.name}聊天。`,
+        `我说：${message}`,
+        '完整聊天记录已通过聊天系统保存。',
+      ),
+    ],
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -605,17 +819,30 @@ function execViewUnreadMessages(characterId: string): ToolResult {
   useXYData.getState().markCharacterMsgRead(characterId);
 
   if (unreadMsgs.length === 0) {
-    return { observation: '没有未读消息。', done: false };
+    return {
+      observation: '没有未读消息。',
+      done: false,
+      memoryEvents: [
+        memoryEvent('我查看了未读消息，发现没有未读消息。'),
+      ],
+    };
   }
 
-  const preview = unreadMsgs
-    .slice(-5)
+  const visibleMsgs = unreadMsgs.slice(-5);
+  const preview = visibleMsgs
     .map((m) => `  「${(m.type === 'text' || m.type === 'heartbeat_log') ? m.text.slice(0, 60) : '[非文本]'}」`)
     .join('\n');
 
   return {
     observation: `${userName}发了${unreadMsgs.length}条未读消息：\n${preview}`,
     done: false,
+    memoryEvents: [
+      memoryEvent(
+        `我查看了未读消息，${userName}发了${unreadMsgs.length}条未读消息。我读到了最近${visibleMsgs.length}条：`,
+        ...visibleMsgs.map((m) =>
+          `- ${(m.type === 'text' || m.type === 'heartbeat_log') ? m.text : '[非文本]'}`),
+      ),
+    ],
   };
 }
 
@@ -649,7 +876,13 @@ function execViewUnreadInteractions(characterId: string): ToolResult {
   useXYData.getState().markCharacterInteractionRead(characterId, totalCount);
 
   if (newCount <= 0) {
-    return { observation: '没有新的互动通知。', done: false };
+    return {
+      observation: '没有新的互动通知。',
+      done: false,
+      memoryEvents: [
+        memoryEvent('我查看了未读互动，发现没有新的互动通知。'),
+      ],
+    };
   }
 
   const nameOf = (userId: string): string => {
@@ -671,5 +904,14 @@ function execViewUnreadInteractions(characterId: string): ToolResult {
     return `[评论] ${who} 评论了你的动态「${i.momentText}」：「${i.commentText?.slice(0, 40) ?? ''}」`;
   });
 
-  return { observation: `${newCount}条新互动：\n${lines.join('\n')}`, done: false };
+  return {
+    observation: `${newCount}条新互动：\n${lines.join('\n')}`,
+    done: false,
+    memoryEvents: [
+      memoryEvent(
+        `我查看了未读互动，发现${newCount}条新互动：`,
+        ...lines,
+      ),
+    ],
+  };
 }

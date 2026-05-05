@@ -9,7 +9,7 @@
  * See docs/superpowers/specs/2026-04-19-m4.1-ai-sdk-xingyu-migration-design.md §7
  */
 
-import type { Conversation, Message } from '@/apps/XingYu/data';
+import { getLocationPreview, type Conversation, type Message } from '@/apps/XingYu/data';
 import { useXYData } from '@/apps/XingYu/xingYuDataStore';
 import { useXYNav } from '@/apps/XingYu/xingYuNavStore';
 import { ensureSceneMarker } from '@/apps/XingYu/sceneMarker';
@@ -87,6 +87,7 @@ function derivePreview(msg: Message): string {
   //   - note share    → "[备忘录] <title>"
   //   - song share    → "[音乐] <title>"
   //   - image         → "[图片]"
+  //   - location      → "[位置] <label>"
   //   - sticker       → "[表情]"
   //   - forward       → "[聊天记录：<title>]"
   //   - heartbeat_log → full text
@@ -98,6 +99,8 @@ function derivePreview(msg: Message): string {
     }
     case 'image':
       return '[图片]';
+    case 'location':
+      return getLocationPreview(msg.location);
     case 'sticker':
       return '[表情]';
     case 'forward_card':

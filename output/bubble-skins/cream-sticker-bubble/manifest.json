@@ -1,0 +1,14 @@
+{
+  "id": "cream-sticker-v5",
+  "name": "奶油轻气泡 v5",
+  "description": "单内容节点，纯 CSS 自然高度，保留奶油纸纹和轻贴纸装饰",
+  "entryHtml": "bubble.html",
+  "entryCss": "bubble.css",
+  "entryJs": "bubble.js",
+  "accentColor": "#ff8ba7",
+  "minHeight": 40,
+  "assets": {
+    "paper": "assets/soft-paper.svg",
+    "lace": "assets/lace-strip.svg"
+  }
+}

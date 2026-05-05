@@ -1,12 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ChatDetail } from '../pages/ChatDetail';
 import { useXYNav } from '../xingYuNavStore';
 import { useXYData } from '../xingYuDataStore';
 import { useCharacterStore } from '@/platform/stores/characterStore';
 import { usePhoneOwnerStore } from '@/platform/stores/phoneOwnerStore';
+import { reverseGeocode } from '@/apps/Maps/searchService';
+import type { LocationMessage } from '../data';
+
+vi.mock('@/apps/Maps/searchService', () => ({
+  reverseGeocode: vi.fn(),
+}));
 
 const originalSendMessage = useXYData.getState().sendMessage;
+const originalSendLocationMessage = useXYData.getState().sendLocationMessage;
 
 function installTextareaScrollHeight(textarea: HTMLTextAreaElement) {
   Object.defineProperty(textarea, 'scrollHeight', {
@@ -18,7 +25,10 @@ function installTextareaScrollHeight(textarea: HTMLTextAreaElement) {
   });
 }
 
-function renderChatDetail(sendMessage = vi.fn()) {
+function renderChatDetail(
+  sendMessage = vi.fn(),
+  overrides: Partial<ReturnType<typeof useXYData.getState>> = {},
+) {
   usePhoneOwnerStore.getState().returnToMyPhone();
   useXYNav.getState().reset();
   useCharacterStore.setState({
@@ -48,8 +58,9 @@ function renderChatDetail(sendMessage = vi.fn()) {
         unread: 0,
       },
     ],
-    messages: [],
     sendMessage,
+    messages: [],
+    ...overrides,
   } as never);
   useXYNav.getState().openChat('conv-1');
 
@@ -68,7 +79,10 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  useXYData.setState({ sendMessage: originalSendMessage } as never);
+  useXYData.setState({
+    sendMessage: originalSendMessage,
+    sendLocationMessage: originalSendLocationMessage,
+  } as never);
   vi.restoreAllMocks();
 });
 
@@ -115,13 +129,87 @@ describe('ChatDetail input composer', () => {
     expect(screen.getByTestId('xy-attach-trigger')).toBeTruthy();
   });
 
-  it('tapping the + button opens the attachment drawer with photo entry', () => {
+  it('tapping the + button opens the attachment drawer with photo and location entries', () => {
     renderChatDetail();
     expect(screen.queryByTestId('xy-attachment-drawer')).toBeNull();
 
     fireEvent.pointerDown(screen.getByTestId('xy-attach-trigger'));
     expect(screen.getByTestId('xy-attachment-drawer')).toBeTruthy();
     expect(screen.getByTestId('xy-attach-photo')).toBeTruthy();
+    expect(screen.getByTestId('xy-attach-location')).toBeTruthy();
+  });
+
+  it('tapping location resolves a place name before sending', async () => {
+    const sendLocationMessage = vi.fn();
+    vi.mocked(reverseGeocode).mockResolvedValue({
+      id: 'osm-1',
+      name: '人民广场',
+      displayName: '人民广场, 黄浦区, 上海市, 中国',
+      lat: 31.2304,
+      lon: 121.4737,
+      type: 'square',
+      category: 'place',
+      address: '黄浦区, 上海市, 中国',
+    });
+    const getCurrentPosition = vi.fn((success: PositionCallback) => {
+      success({
+        coords: {
+          latitude: 31.2304,
+          longitude: 121.4737,
+          accuracy: 18,
+        },
+      } as GeolocationPosition);
+    });
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: { getCurrentPosition },
+    });
+    renderChatDetail(vi.fn(), { sendLocationMessage } as never);
+
+    fireEvent.pointerDown(screen.getByTestId('xy-attach-trigger'));
+    fireEvent.pointerDown(screen.getByTestId('xy-attach-location'));
+
+    expect(getCurrentPosition).toHaveBeenCalled();
+    expect(reverseGeocode).toHaveBeenCalledWith(31.2304, 121.4737);
+    await waitFor(() => {
+      expect(sendLocationMessage).toHaveBeenCalledWith('conv-1', {
+        label: '人民广场',
+        address: '黄浦区, 上海市, 中国',
+        displayName: '人民广场, 黄浦区, 上海市, 中国',
+        placeId: 'osm-1',
+        latitude: 31.2304,
+        longitude: 121.4737,
+        accuracy: 18,
+      });
+    });
+  });
+
+  it('renders a sent location as a real map card with place details', () => {
+    const locationMsg: LocationMessage = {
+      id: 'loc-1',
+      convId: 'conv-1',
+      senderId: 'me',
+      type: 'location',
+      location: {
+        label: '人民广场',
+        address: '黄浦区, 上海市, 中国',
+        displayName: '人民广场, 黄浦区, 上海市, 中国',
+        placeId: 'osm-1',
+        latitude: 31.2304,
+        longitude: 121.4737,
+        accuracy: 18,
+      },
+      timestamp: 1,
+    };
+
+    renderChatDetail(vi.fn(), { messages: [locationMsg] } as never);
+
+    expect(screen.getByTestId('xy-location-card')).toBeTruthy();
+    expect(screen.getByTestId('xy-location-map')).toBeTruthy();
+    expect(screen.getAllByAltText('地图瓦片').length).toBeGreaterThan(0);
+    expect(screen.getByText('人民广场')).toBeTruthy();
+    expect(screen.getByText('黄浦区, 上海市, 中国')).toBeTruthy();
+    expect(screen.queryByText('31.230400, 121.473700')).toBeNull();
   });
 
   it('tapping the AI trigger calls triggerSingleReply for the active conv', () => {

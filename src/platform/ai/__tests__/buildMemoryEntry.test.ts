@@ -181,6 +181,33 @@ describe('buildMemoryEntry — image / sticker / forward_card / heartbeat_log', 
     expect(entry?.speakerId).toBe('me');
   });
 
+  it('user location → plain text location summary for AI memory', () => {
+    const entry = buildMemoryEntry(
+      {
+        id: 'm-location',
+        convId: 'c-char-001',
+        senderId: 'me',
+        timestamp: 0,
+        type: 'location',
+        location: {
+          label: '人民广场',
+          address: '黄浦区, 上海市, 中国',
+          displayName: '人民广场, 黄浦区, 上海市, 中国',
+          placeId: 'osm-1',
+          latitude: 31.2304,
+          longitude: 121.4737,
+          accuracy: 18,
+        },
+      },
+      'xingyu',
+      ctx,
+    );
+
+    expect(entry?.content).toBe('[位置] 人民广场\n地址：黄浦区, 上海市, 中国');
+    expect(entry?.role).toBe('user');
+    expect(entry?.speakerId).toBe('me');
+  });
+
   it('sticker with description → [表情：desc]', () => {
     const entry = buildMemoryEntry(
       {
@@ -242,6 +269,42 @@ describe('buildMemoryEntry — image / sticker / forward_card / heartbeat_log', 
     expect(entry?.role).toBe('assistant');
     expect(entry?.speakerId).toBe('char-001');
     expect(entry?.source).toBe('heartbeat');
+  });
+
+  it('experience heartbeat_log keeps [经历] as the top-level memory label', () => {
+    const entry = buildMemoryEntry(
+      {
+        id: 'm-story',
+        convId: 'c-char-001',
+        senderId: 'char-001',
+        type: 'heartbeat_log',
+        text: '[经历]\n时间跨度：2026-05-03 10:00 至 2026-05-04 10:00\n\n我去试了一杯咸柠气泡水。\n[经历结束]',
+        timestamp: 1,
+      },
+      'heartbeat',
+      ctx,
+    );
+
+    expect(entry?.role).toBe('assistant');
+    expect(entry?.content).toBe('[经历]\n时间跨度：2026-05-03 10:00 至 2026-05-04 10:00\n\n我去试了一杯咸柠气泡水。\n[经历结束]');
+  });
+
+  it('legacy experience heartbeat_log labels are normalized to [经历]', () => {
+    const entry = buildMemoryEntry(
+      {
+        id: 'm-story-legacy',
+        convId: 'c-char-001',
+        senderId: 'char-001',
+        type: 'heartbeat_log',
+        text: '[虚拟世界经历]\n时间跨度：2026-05-03 10:00 至 2026-05-04 10:00\n\n我去试了一杯咸柠气泡水。\n[虚拟世界经历结束]',
+        timestamp: 1,
+      },
+      'heartbeat',
+      ctx,
+    );
+
+    expect(entry?.role).toBe('assistant');
+    expect(entry?.content).toBe('[经历]\n时间跨度：2026-05-03 10:00 至 2026-05-04 10:00\n\n我去试了一杯咸柠气泡水。\n[经历结束]');
   });
 
   it('empty heartbeat_log → null (skip)', () => {

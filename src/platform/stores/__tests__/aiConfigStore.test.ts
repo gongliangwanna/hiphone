@@ -29,13 +29,23 @@ describe('aiConfigStore — preset state shape', () => {
       id: 'p1',
       name: 'demo',
       provider: 'openrouter',
+      openRouterProviderSlug: '',
       apiKey: 'k',
       apiEndpoint: '',
       model: '',
       fetchedModels: [],
     };
     expect(Object.keys(sample).sort()).toEqual(
-      ['apiEndpoint', 'apiKey', 'fetchedModels', 'id', 'model', 'name', 'provider'].sort(),
+      [
+        'apiEndpoint',
+        'apiKey',
+        'fetchedModels',
+        'id',
+        'model',
+        'name',
+        'openRouterProviderSlug',
+        'provider',
+      ].sort(),
     );
   });
 });
@@ -50,6 +60,7 @@ describe('createEmptyPreset', () => {
     expect(presets[0]!.id).toBe(id);
     expect(presets[0]!.name).toBe('我的预设');
     expect(presets[0]!.provider).toBe('openrouter');
+    expect(presets[0]!.openRouterProviderSlug).toBe('');
     expect(presets[0]!.apiKey).toBe('');
     expect(presets[0]!.apiEndpoint).toBe('');
     expect(presets[0]!.model).toBe('');
@@ -72,7 +83,15 @@ describe('setActivePreset', () => {
       ...s,
       presets: s.presets.map((p) =>
         p.id === id
-          ? { ...p, provider: 'siliconflow', apiKey: 'k1', apiEndpoint: 'https://api.example', model: 'm1', fetchedModels: [] }
+          ? {
+            ...p,
+            provider: 'siliconflow',
+            openRouterProviderSlug: 'cerebras',
+            apiKey: 'k1',
+            apiEndpoint: 'https://api.example',
+            model: 'm1',
+            fetchedModels: [],
+          }
           : p,
       ),
     }));
@@ -82,6 +101,7 @@ describe('setActivePreset', () => {
     const s = useAIConfigStore.getState();
     expect(s.activePresetId).toBe(id);
     expect(s.provider).toBe('siliconflow');
+    expect(s.openRouterProviderSlug).toBe('cerebras');
     expect(s.apiKey).toBe('k1');
     expect(s.apiEndpoint).toBe('https://api.example');
     expect(s.model).toBe('m1');
@@ -252,6 +272,36 @@ describe('setProvider write through', () => {
   });
 });
 
+describe('setOpenRouterProviderSlug write through', () => {
+  beforeEach(resetStore);
+
+  it('writes OpenRouter provider slug into active preset and top-level mirror', () => {
+    const aId = useAIConfigStore.getState().createEmptyPreset('A');
+    const bId = useAIConfigStore.getState().createEmptyPreset('B');
+    useAIConfigStore.getState().setActivePreset(aId);
+
+    useAIConfigStore.getState().setOpenRouterProviderSlug('cerebras');
+
+    const s = useAIConfigStore.getState();
+    expect(s.openRouterProviderSlug).toBe('cerebras');
+    expect(s.presets.find((p) => p.id === aId)!.openRouterProviderSlug).toBe('cerebras');
+    expect(s.presets.find((p) => p.id === bId)!.openRouterProviderSlug).toBe('');
+  });
+
+  it('restores the selected slug when switching presets', () => {
+    const aId = useAIConfigStore.getState().createEmptyPreset('A');
+    const bId = useAIConfigStore.getState().createEmptyPreset('B');
+    useAIConfigStore.getState().setActivePreset(aId);
+    useAIConfigStore.getState().setOpenRouterProviderSlug('cerebras');
+
+    useAIConfigStore.getState().setActivePreset(bId);
+    expect(useAIConfigStore.getState().openRouterProviderSlug).toBe('');
+
+    useAIConfigStore.getState().setActivePreset(aId);
+    expect(useAIConfigStore.getState().openRouterProviderSlug).toBe('cerebras');
+  });
+});
+
 describe('fetchModels persists to active preset', () => {
   beforeEach(resetStore);
   afterEach(() => vi.restoreAllMocks());
@@ -284,6 +334,7 @@ describe('persisted state migration v1 → v2', () => {
     expect(result.presets).toHaveLength(1);
     expect(result.presets[0]!.name).toBe('默认');
     expect(result.presets[0]!.apiKey).toBe('sk-x');
+    expect(result.presets[0]!.openRouterProviderSlug).toBe('');
     expect(result.activePresetId).toBe(result.presets[0]!.id);
     expect(result.apiKey).toBe('sk-x');
     expect(result.fetchedModels).toEqual([{ id: 'claude', name: 'C' }]);
@@ -326,6 +377,7 @@ describe('persisted state migration v1 → v2', () => {
           id: 'x',
           name: 'A',
           provider: 'openrouter' as const,
+          openRouterProviderSlug: 'cerebras',
           apiKey: 'k',
           apiEndpoint: '',
           model: '',
@@ -348,6 +400,7 @@ describe('ensureAtLeastOnePreset', () => {
           id: 'a',
           name: 'A',
           provider: 'openrouter' as const,
+          openRouterProviderSlug: '',
           apiKey: '',
           apiEndpoint: '',
           model: '',

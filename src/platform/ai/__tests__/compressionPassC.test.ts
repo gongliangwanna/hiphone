@@ -59,6 +59,19 @@ describe('runPassC', () => {
     expect(sysMsg).toContain('3000');
   });
 
+  it('OpenRouter 可严格限定厂商', async () => {
+    mock({ summary: '', highlights: [] });
+    await runPassC({
+      state: makeInitialState('char-1'), messages: [],
+      characterName: '小美', userName: '小明', contextWindow: 32000,
+      endpoint: 'x', apiKey: 'x', model: 'x',
+      providerId: 'openrouter', openRouterProviderSlug: 'cerebras',
+      maxTokens: 1000,
+    });
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.provider).toEqual({ only: ['cerebras'], allow_fallbacks: false });
+  });
+
   it('weight 越界自动 clamp', async () => {
     mock({
       summary: '',

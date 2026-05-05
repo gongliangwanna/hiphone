@@ -2,7 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BookOpen, Clock3, LoaderCircle, LogOut, Send } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { AppScreen, Material, NavBar } from '@/system';
-import { wasAppKilled, clearAppKilled } from '@/platform/stores/appRuntimeStore';
+import {
+  wasAppKilled,
+  clearAppKilled,
+  useAppRuntimeStore,
+} from '@/platform/stores/appRuntimeStore';
 import { useCharacterStore } from '@/platform/stores/characterStore';
 import { CharacterPicker } from './components/CharacterPicker';
 import { FragmentStream } from './components/FragmentStream';
@@ -34,6 +38,7 @@ export function PresenceApp() {
   const setSessionSummary = usePresenceStore((s) => s.setSessionSummary);
   const completeSession = usePresenceStore((s) => s.completeSession);
   const discardSession = usePresenceStore((s) => s.discardSession);
+  const setStatusBarStyle = useAppRuntimeStore((s) => s.setStatusBarStyle);
 
   const [view, setView] = useState<PresenceView>('home');
   const [selectedCharacterId, setSelectedCharacterId] = useState('');
@@ -54,6 +59,11 @@ export function PresenceApp() {
       setLeaveOpen(false);
     }
   }, []);
+
+  useEffect(() => {
+    setStatusBarStyle(view === 'scene' ? 'light' : 'dark');
+    return () => setStatusBarStyle('dark');
+  }, [setStatusBarStyle, view]);
 
   useEffect(() => {
     if (selectedCharacterId && characters.some((c) => c.id === selectedCharacterId)) {
@@ -222,6 +232,7 @@ export function PresenceApp() {
           showBack
           backLabel="返回"
           onBack={() => setView('home')}
+          tone="darkGlass"
           rightButtons={[
             {
               icon: <LogOut size={20} strokeWidth={1.8} />,
@@ -269,7 +280,7 @@ export function PresenceApp() {
   })();
 
   return (
-    <AppScreen backgroundColor="rgba(238,241,246,1)">
+    <AppScreen backgroundColor={view === 'scene' ? '#07080a' : 'rgba(238,241,246,1)'}>
       <div
         className="relative flex min-h-0 flex-1 flex-col overflow-hidden"
         data-testid="presence-app"
@@ -445,70 +456,101 @@ export function PresenceApp() {
               className="absolute inset-0 flex min-h-0 flex-col"
               data-testid="presence-scene-view"
               style={{
-                background:
-                  'linear-gradient(180deg, rgba(226,230,237,1), rgba(247,247,249,1))',
+                backgroundColor: '#101318',
               }}
               initial={{ opacity: 0, scale: 0.99 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.992 }}
               transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             >
-              <SceneHero
-                character={activeCharacter}
-                sceneText={activeSession.sceneText}
-                backdropId={activeSession.backdropId}
-              />
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                <FragmentStream turns={activeSession.turns} />
-                {activeSession.error && (
-                  <div className="px-4 pb-3">
-                    <div className="rounded-[18px] bg-red-500/10 px-3 py-2 text-[13px] text-red-600">
-                      {activeSession.error}
-                    </div>
-                  </div>
-                )}
-              </div>
-              <Material
-                variant="chrome"
-                className="shrink-0 border-t px-3 py-2"
-                style={{ borderColor: 'rgba(60,60,67,0.12)' }}
+              <div
+                className="absolute inset-0 overflow-hidden"
+                data-testid="presence-scene-backdrop"
               >
-                <div className="flex items-end gap-2">
-                  <textarea
-                    value={draftText}
-                    onChange={(event) => setDraftText(event.target.value)}
-                    placeholder="说点什么，或写下你的动作…"
-                    className="max-h-28 min-h-11 flex-1 resize-none rounded-[18px] px-3.5 py-2.5 text-[15px] outline-none"
-                    style={{
-                      backgroundColor: 'rgba(255,255,255,0.74)',
-                      border: '0.5px solid rgba(60,60,67,0.12)',
-                      color: 'var(--color-label)',
-                    }}
-                    data-testid="presence-input"
-                    disabled={sending}
+                <img
+                  src={getPresenceBackdrop(activeSession.backdropId).imageUrl}
+                  alt=""
+                  className="h-full w-full scale-[1.03] object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-b from-black/22 via-black/20 to-black/66" />
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    background:
+                      'linear-gradient(90deg, rgba(0,0,0,0.36), rgba(0,0,0,0.04) 56%, rgba(0,0,0,0.32))',
+                  }}
+                />
+              </div>
+              <div
+                className="relative z-10 flex min-h-0 flex-1 flex-col"
+                data-testid="presence-scene-content"
+              >
+                <SceneHero
+                  character={activeCharacter}
+                  sceneText={activeSession.sceneText}
+                  backdropId={activeSession.backdropId}
+                  immersive
+                />
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  <FragmentStream
+                    turns={activeSession.turns}
+                    characterName={activeCharacter?.name}
                   />
-                  <motion.button
-                    type="button"
-                    onClick={handleSend}
-                    disabled={!draftText.trim() || sending}
-                    className="flex h-11 w-11 items-center justify-center rounded-full text-white disabled:opacity-45"
-                    style={{
-                      background:
-                        'linear-gradient(180deg, rgba(0,122,255,1), rgba(0,98,220,1))',
-                      boxShadow: '0 12px 24px rgba(0,122,255,0.24)',
-                    }}
-                    data-testid="presence-send"
-                    aria-label="发送"
-                    whileTap={{ scale: 0.94 }}
-                  >
-                    {sending ? (
-                      <LoaderCircle className="animate-spin" size={19} />
-                    ) : (
-                      <Send size={18} />
-                    )}
-                  </motion.button>
+                  {activeSession.error && (
+                    <div className="px-4 pb-3">
+                      <div className="rounded-[18px] bg-red-500/10 px-3 py-2 text-[13px] text-red-600">
+                        {activeSession.error}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </Material>
+                <Material
+                  variant="chrome"
+                  className="mb-4 shrink-0 bg-transparent px-4 py-0"
+                  style={{
+                    backgroundColor: 'transparent',
+                  }}
+                  disableBackdrop
+                  data-testid="presence-input-tray"
+                >
+                  <div className="flex items-end gap-3">
+                    <textarea
+                      value={draftText}
+                      onChange={(event) => setDraftText(event.target.value)}
+                      placeholder="说点什么，或写下你的动作…"
+                      className="max-h-28 min-h-12 flex-1 resize-none rounded-[24px] px-4 py-3 text-[15px] text-white outline-none placeholder:text-white/48"
+                      style={{
+                        backgroundColor: 'rgba(24,22,22,0.68)',
+                        border: '0.5px solid rgba(255,255,255,0.18)',
+                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08), 0 14px 34px rgba(0,0,0,0.26)',
+                      }}
+                      data-testid="presence-input"
+                      disabled={sending}
+                    />
+                    <motion.button
+                      type="button"
+                      onClick={handleSend}
+                      disabled={!draftText.trim() || sending}
+                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-45"
+                      style={{
+                        background:
+                          'linear-gradient(180deg, rgba(111,132,255,0.96), rgba(52,78,194,0.92))',
+                        border: '0.5px solid rgba(255,255,255,0.28)',
+                        boxShadow: '0 14px 30px rgba(62,92,220,0.36)',
+                      }}
+                      data-testid="presence-send"
+                      aria-label="发送"
+                      whileTap={{ scale: 0.94 }}
+                    >
+                      {sending ? (
+                        <LoaderCircle className="animate-spin" size={19} />
+                      ) : (
+                        <Send size={18} />
+                      )}
+                    </motion.button>
+                  </div>
+                </Material>
+              </div>
               <LeaveSummarySheet
                 open={leaveOpen}
                 loading={summaryLoading}

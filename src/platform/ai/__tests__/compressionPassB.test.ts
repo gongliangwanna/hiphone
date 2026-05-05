@@ -44,6 +44,18 @@ describe('runPassB', () => {
     expect(r.stageChange).toBeUndefined();
   });
 
+  it('OpenRouter 可严格限定厂商', async () => {
+    mock({ affinityDelta: 0 });
+    await runPassB({
+      state: makeInitialState('char-1'), messages: [],
+      endpoint: 'x', apiKey: 'x', model: 'x',
+      providerId: 'openrouter', openRouterProviderSlug: 'cerebras',
+      maxTokens: 100,
+    });
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.provider).toEqual({ only: ['cerebras'], allow_fallbacks: false });
+  });
+
   it('HTTP 错误抛错', async () => {
     fetchMock.mockResolvedValueOnce({ ok: false, status: 500, text: async () => 'x' });
     await expect(

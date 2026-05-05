@@ -16,6 +16,7 @@ Keep the main flow short: check auth, build, deploy `dist`, verify the stable si
 - Project root: `/Users/wanqilin/WorkSpace/ai/hiPhone`
 - Build output: `dist/`
 - Cloudflare Pages project: `mini-iphone`
+- Production branch: `main`
 - Stable URL: `https://mini-iphone.pages.dev/`
 
 ## Workflow
@@ -55,14 +56,18 @@ Notes:
 Run:
 
 ```bash
-npx -y wrangler pages deploy dist --project-name mini-iphone --commit-dirty=true
+npx -y wrangler pages deploy dist --project-name mini-iphone --branch main --commit-dirty=true
 ```
+
+Why `--branch main`:
+- Cloudflare Pages treats this project branch as Production
+- deploying from a local feature branch without this flag creates only a Preview deployment and does not update `https://mini-iphone.pages.dev/`
 
 Why `--commit-dirty=true`:
 - hiPhone is often deployed with local uncommitted changes during iteration
 - this avoids Wrangler stopping on dirty working tree warnings
 
-After success, Wrangler prints a deployment preview URL. Keep it for logs if useful, but prefer the stable domain for human-facing replies.
+After success, Wrangler prints a deployment URL. Keep it for logs if useful, but prefer the stable domain for human-facing replies.
 
 ### 4. Verify the stable site
 
@@ -107,10 +112,11 @@ If replying on Weixin, send the final URL as a separate standalone message.
 ### Deploy succeeded but verify failed
 
 Check in this order:
-1. wrong folder deployed
-2. build output mismatch
-3. cached verification result
-4. runtime rendering issue on the live page
+1. wrong branch/environment deployed (Preview instead of Production/main)
+2. wrong folder deployed
+3. build output mismatch
+4. cached verification result
+5. runtime rendering issue on the live page
 
 ## Reference
 

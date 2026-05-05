@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import { motion } from 'motion/react';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, MapPin } from 'lucide-react';
 import { useXYNav } from '../xingYuNavStore';
 import { useXYData } from '../xingYuDataStore';
-import { formatChatTime, getIdol, DEFAULT_AVATAR } from '../data';
+import { formatChatTime, getIdol, DEFAULT_AVATAR, formatCoordinate, getLocationTitle } from '../data';
 import type { ForwardedMsg } from '../data';
 import { useCharacterStore } from '@/platform/stores/characterStore';
 import { Avatar } from '../components/Avatar';
@@ -138,6 +138,36 @@ function ForwardedBubble({ msg, isMine }: { msg: ForwardedMsg; isMine: boolean }
         alt=""
         style={{ width: 96, height: 96, objectFit: 'contain', display: 'block' }}
       />
+    );
+  }
+  if (msg.type === 'location' && msg.location) {
+    return (
+      <div
+        className="flex items-center gap-3"
+        style={{
+          width: 220,
+          background: T.card,
+          border: `0.5px solid ${T.border}`,
+          borderRadius: 14,
+          padding: '10px 12px',
+          boxShadow: T.shadow1,
+        }}
+      >
+        <div
+          className="flex shrink-0 items-center justify-center"
+          style={{ width: 38, height: 38, borderRadius: 12, background: T.accentGrad }}
+        >
+          <MapPin size={20} strokeWidth={2.2} color="#fff" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate" style={{ fontSize: 13, fontWeight: 600, color: T.textPrimary }}>
+            {getLocationTitle(msg.location)}
+          </div>
+          <div className="truncate" style={{ fontSize: 12, color: T.textSecondary, marginTop: 2 }}>
+            {formatCoordinate(msg.location.latitude)}, {formatCoordinate(msg.location.longitude)}
+          </div>
+        </div>
+      </div>
     );
   }
   if (!msg.text) return null;

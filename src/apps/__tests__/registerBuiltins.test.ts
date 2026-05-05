@@ -21,6 +21,7 @@ describe('registerBuiltins', () => {
       'music-dock',
       'notes',
       'photos',
+      'presence',
       'safari',
       'safari-dock',
       'settings',

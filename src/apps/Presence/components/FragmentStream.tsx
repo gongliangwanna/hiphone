@@ -4,30 +4,97 @@ import type { PresenceTurn } from '../presenceTypes';
 interface FragmentStreamProps {
   turns: PresenceTurn[];
   emptyText?: string;
+  characterName?: string;
 }
 
-function renderAssistantContent(content: string) {
+type AssistantLineKind = 'stage' | 'dialogue' | 'narration';
+
+function formatTurnTime(ts: number): string {
+  const date = new Date(ts);
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
+function unwrapPaired(text: string, pairs: Array<[string, string]>): string {
+  const trimmed = text.trim();
+  for (const [open, close] of pairs) {
+    if (trimmed.startsWith(open) && trimmed.endsWith(close)) {
+      return trimmed.slice(open.length, trimmed.length - close.length).trim();
+    }
+  }
+  return trimmed;
+}
+
+function classifyAssistantLine(line: string): {
+  kind: AssistantLineKind;
+  text: string;
+} {
+  const trimmed = line.trim();
+  const stageText = unwrapPaired(trimmed, [
+    ['（', '）'],
+    ['(', ')'],
+  ]);
+  if (stageText !== trimmed || trimmed.startsWith('（') || trimmed.startsWith('(')) {
+    return { kind: 'stage', text: stageText };
+  }
+
+  const dialogueText = unwrapPaired(trimmed, [
+    ['"', '"'],
+    ['“', '”'],
+    ['「', '」'],
+    ['『', '』'],
+  ]);
+  if (dialogueText !== trimmed) {
+    return { kind: 'dialogue', text: dialogueText };
+  }
+
+  return { kind: 'narration', text: trimmed };
+}
+
+function renderAssistantContent(content: string, characterName: string) {
   const lines = content.split('\n').filter((line) => line.trim().length > 0);
 
   return lines.map((line, index) => {
-    const trimmed = line.trim();
-    const isStage =
-      /^（[\s\S]*）$/.test(trimmed) ||
-      /^\([\s\S]*\)$/.test(trimmed) ||
-      trimmed.startsWith('（') ||
-      trimmed.startsWith('(');
+    const parsed = classifyAssistantLine(line);
+
+    if (parsed.kind === 'stage') {
+      return (
+        <p
+          key={`${index}-${parsed.text}`}
+          className="text-[14px] italic leading-6"
+          style={{ color: 'rgba(60,60,67,0.78)' }}
+          data-testid="presence-assistant-stage-line"
+        >
+          {parsed.text}
+        </p>
+      );
+    }
+
+    if (parsed.kind === 'dialogue') {
+      return (
+        <p
+          key={`${index}-${parsed.text}`}
+          className="my-3 text-[18px] font-semibold leading-8"
+          style={{
+            color: 'rgba(18,22,30,0.96)',
+            textShadow: '0 1px 0 rgba(255,255,255,0.32)',
+          }}
+          data-testid="presence-assistant-dialogue-line"
+        >
+          {characterName}：{parsed.text}
+        </p>
+      );
+    }
 
     return (
       <p
-        key={`${index}-${trimmed}`}
-        className={isStage ? 'text-[14px] italic leading-7' : 'text-[16px] leading-7'}
-        style={{
-          color: isStage
-            ? 'var(--color-secondaryLabel)'
-            : 'var(--color-label)',
-        }}
+        key={`${index}-${parsed.text}`}
+        className="text-[17px] leading-8"
+        style={{ color: 'rgba(20,22,28,0.94)' }}
+        data-testid="presence-assistant-narration-line"
       >
-        {trimmed}
+        {parsed.text}
       </p>
     );
   });
@@ -36,16 +103,18 @@ function renderAssistantContent(content: string) {
 export function FragmentStream({
   turns,
   emptyText = '写下第一句话，或者描述你的动作。',
+  characterName = '角色',
 }: FragmentStreamProps) {
   if (turns.length === 0) {
     return (
       <motion.div
-        className="mx-4 mt-5 rounded-[22px] px-5 py-8 text-center text-[15px] leading-6"
+        className="mx-5 mt-4 rounded-[28px] px-5 py-8 text-center text-[15px] leading-6"
         style={{
-          backgroundColor: 'rgba(255,255,255,0.68)',
-          border: '0.5px solid rgba(60,60,67,0.12)',
-          color: 'var(--color-secondaryLabel)',
-          boxShadow: '0 16px 38px rgba(24,28,36,0.06)',
+          background:
+            'linear-gradient(180deg, rgba(255,249,236,0.82), rgba(255,255,247,0.72))',
+          border: '0.5px solid rgba(255,255,255,0.48)',
+          color: 'rgba(62,54,45,0.72)',
+          boxShadow: '0 18px 48px rgba(0,0,0,0.2)',
         }}
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
@@ -58,16 +127,18 @@ export function FragmentStream({
   }
 
   return (
-    <div className="space-y-3 px-4 py-4" data-testid="presence-fragment-stream">
+    <div className="space-y-3 py-4" data-testid="presence-fragment-stream">
       {turns.map((turn, index) => {
         if (turn.role === 'user') {
           return (
-            <motion.p
+            <motion.div
               key={turn.id}
-              className="border-l-2 pl-3 text-[15px] leading-7"
+              className="ml-auto mr-5 max-w-[72%] rounded-[20px] px-4 py-2.5 text-[15px] font-semibold leading-6 text-white"
               style={{
-                borderColor: 'rgba(0,122,255,0.34)',
-                color: 'var(--color-label)',
+                background:
+                  'linear-gradient(135deg, rgba(112,125,198,0.92), rgba(55,78,154,0.9))',
+                border: '0.5px solid rgba(255,255,255,0.22)',
+                boxShadow: '0 14px 30px rgba(25,40,110,0.3)',
               }}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -78,31 +149,39 @@ export function FragmentStream({
               }}
               data-testid="presence-user-turn"
             >
-              {turn.content}
-            </motion.p>
+              <span>你：{turn.content}</span>
+              <span
+                className="ml-3 align-baseline text-[11px] font-medium text-white/42"
+                data-testid="presence-user-turn-time"
+              >
+                {formatTurnTime(turn.createdAt)}
+              </span>
+            </motion.div>
           );
         }
 
         return (
           <motion.article
             key={turn.id}
-            className="space-y-2 rounded-[22px] px-4 py-4"
+            className="mx-5 rounded-[30px] px-5 py-5"
             style={{
-              backgroundColor: 'rgba(255,255,255,0.72)',
-              border: '0.5px solid rgba(60,60,67,0.12)',
-              boxShadow: '0 14px 34px rgba(24,28,36,0.06)',
+              background:
+                'linear-gradient(180deg, rgba(246,236,219,0.82), rgba(255,249,238,0.74))',
+              border: '0.5px solid rgba(255,255,255,0.58)',
+              boxShadow: '0 24px 62px rgba(0,0,0,0.18)',
             }}
-            initial={{ opacity: 0, y: 16, scale: 0.985 }}
+            initial={{ opacity: 0, y: 16, scale: 0.99 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{
               delay: Math.min(index * 0.04, 0.22),
-              type: 'spring',
-              stiffness: 320,
-              damping: 30,
+              duration: 0.36,
+              ease: [0.22, 1, 0.36, 1],
             }}
-            data-testid="presence-assistant-turn"
+            data-testid="presence-reading-sheet"
           >
-            {renderAssistantContent(turn.content)}
+            <section className="space-y-2" data-testid="presence-assistant-turn">
+              {renderAssistantContent(turn.content, characterName)}
+            </section>
           </motion.article>
         );
       })}

@@ -24,6 +24,7 @@ function requireAIConfig() {
     apiKey: cfg.apiKey.trim(),
     model: cfg.model.trim(),
     providerId: cfg.provider,
+    openRouterProviderSlug: cfg.openRouterProviderSlug,
     generation: {
       ...pickGenerationParams(cfg),
       maxTokens: Math.min(Math.max(cfg.maxTokens || 1600, 1200), 2000),
@@ -76,6 +77,7 @@ export async function generateCharacterDescription(
       apiKey: cfg.apiKey,
       model: cfg.model,
       providerId: cfg.providerId,
+      openRouterProviderSlug: cfg.openRouterProviderSlug,
     },
     buildMessages({ ...input, seed }),
     cfg.generation,

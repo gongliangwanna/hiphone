@@ -19,16 +19,27 @@ export interface QuoteRef {
   msgId: string;
   senderId: string;
   preview: string;
-  type: 'text' | 'image' | 'sticker' | 'note' | 'song';
+  type: 'text' | 'image' | 'sticker' | 'note' | 'song' | 'location';
+}
+
+export interface LocationPayload {
+  label: string;
+  latitude: number;
+  longitude: number;
+  address?: string;
+  displayName?: string;
+  placeId?: string;
+  accuracy?: number;
 }
 
 export interface ForwardedMsg {
   senderId: string;
   senderName: string;
-  type: 'text' | 'image' | 'sticker';
+  type: 'text' | 'image' | 'sticker' | 'location';
   text?: string;
   imageUrl?: string;
   stickerUrl?: string;
+  location?: LocationPayload;
   timestamp: number;
 }
 
@@ -73,6 +84,11 @@ export interface StickerMessage extends MessageBase {
   stickerDesc?: string;
 }
 
+export interface LocationMessage extends MessageBase {
+  type: 'location';
+  location: LocationPayload;
+}
+
 export interface ForwardCardMessage extends MessageBase {
   type: 'forward_card';
   forwardCard: {
@@ -87,7 +103,7 @@ export interface HeartbeatLogMessage extends MessageBase {
   text: string;
 }
 
-export type Message = TextMessage | ImageMessage | StickerMessage
+export type Message = TextMessage | ImageMessage | StickerMessage | LocationMessage
   | ForwardCardMessage | HeartbeatLogMessage;
 
 export type MsgType = Message['type'];
@@ -105,6 +121,7 @@ export interface Favorite {
     text?: string;
     imageUrl?: string;
     stickerUrl?: string;
+    location?: LocationPayload;
     noteRef?: TextMessage['noteRef'];
     songRef?: TextMessage['songRef'];
     forwardCard?: ForwardCardMessage['forwardCard'];
@@ -162,6 +179,37 @@ export interface MomentInteraction {
 }
 
 /* ── Helpers ── */
+
+export function formatCoordinate(value: number): string {
+  return Number.isFinite(value) ? value.toFixed(6) : '未知';
+}
+
+export function getLocationTitle(location: LocationPayload): string {
+  return location.label?.trim() || location.address?.trim() || '我的位置';
+}
+
+export function getLocationAddress(location: LocationPayload): string {
+  return location.address?.trim() || location.displayName?.trim() || '';
+}
+
+export function getLocationPreview(location: LocationPayload): string {
+  return `[位置] ${getLocationTitle(location)}`;
+}
+
+export function formatLocationText(location: LocationPayload): string {
+  const address = getLocationAddress(location);
+  if (address) {
+    return [getLocationPreview(location), `地址：${address}`].join('\n');
+  }
+  const lines = [
+    getLocationPreview(location),
+    `坐标：${formatCoordinate(location.latitude)}, ${formatCoordinate(location.longitude)}`,
+  ];
+  if (Number.isFinite(location.accuracy)) {
+    lines.push(`精度：约 ${Math.round(location.accuracy!)} 米`);
+  }
+  return lines.join('\n');
+}
 
 /**
  * 本地托管的真人头像（JPG，放在 public/resource/avatars/）。

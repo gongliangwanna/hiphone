@@ -6,6 +6,7 @@ describe('resolveBuilderProviderConfig', () => {
   beforeEach(() => {
     useAIConfigStore.setState({
       provider: 'openrouter',
+      openRouterProviderSlug: 'cerebras',
       apiKey: ' sk-test ',
       apiEndpoint: '',
       model: ' openai/gpt-4.1 ',
@@ -26,6 +27,7 @@ describe('resolveBuilderProviderConfig', () => {
       apiKey: 'sk-test',
       model: 'openai/gpt-4.1',
       providerId: 'openrouter',
+      openRouterProviderSlug: 'cerebras',
       generation: {
         maxTokens: 1234,
         temperature: 0.2,

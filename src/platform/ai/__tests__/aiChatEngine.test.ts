@@ -229,4 +229,22 @@ describe('runAIChat — multi-round resilience', () => {
     expect(input.appSystemPromptSnapshot).toBeDefined();
     expect(typeof input.appSystemPromptSnapshot).toBe('string');
   });
+
+  it('passes OpenRouter provider slug through to chatComplete', async () => {
+    useAIConfigStore.setState({ openRouterProviderSlug: 'cerebras' } as never);
+    const spy = vi.spyOn(chatCompleteMod, 'chatComplete')
+      .mockResolvedValueOnce('[{"type":"text","param":"x"}]');
+
+    const ac = new AbortController();
+    await runAIChat({
+      initiatorCharId: A,
+      targetCharId: B,
+      openingMessage: 'hi',
+      maxRounds: 1,
+      signal: ac.signal,
+    });
+
+    expect(spy).toHaveBeenCalled();
+    expect(spy.mock.calls[0]![0].openRouterProviderSlug).toBe('cerebras');
+  });
 });

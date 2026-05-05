@@ -117,6 +117,23 @@ export interface GenerationParams {
   reasoningEffort?: 'low' | 'medium' | 'high';
 }
 
+export interface OpenRouterProviderRouting {
+  only: string[];
+  allow_fallbacks: false;
+}
+
+export function buildOpenRouterProviderRouting(
+  providerId: string,
+  openRouterProviderSlug?: string,
+): OpenRouterProviderRouting | undefined {
+  const slug = openRouterProviderSlug?.trim();
+  if (providerId !== 'openrouter' || !slug) return undefined;
+  return {
+    only: [slug],
+    allow_fallbacks: false,
+  };
+}
+
 /**
  * Map an aiConfig-shaped object to a GenerationParams. Centralizes the
  * `reasoningEffort: 'off' → undefined` rule so call sites don't each
@@ -154,7 +171,14 @@ export async function streamChat(
     apiKey,
     model,
     providerId,
-  }: { endpoint: string; apiKey: string; model: string; providerId: string },
+    openRouterProviderSlug,
+  }: {
+    endpoint: string;
+    apiKey: string;
+    model: string;
+    providerId: string;
+    openRouterProviderSlug?: string;
+  },
   messages: ChatMessage[],
   onToken: (token: string) => void,
   signal?: AbortSignal,
@@ -180,6 +204,8 @@ export async function streamChat(
   if (generationParams?.frequencyPenalty != null) body.frequency_penalty = generationParams.frequencyPenalty;
   if (generationParams?.presencePenalty != null) body.presence_penalty = generationParams.presencePenalty;
   if (generationParams?.reasoningEffort) body.reasoning_effort = generationParams.reasoningEffort;
+  const providerRouting = buildOpenRouterProviderRouting(providerId, openRouterProviderSlug);
+  if (providerRouting) body.provider = providerRouting;
 
   const res = await fetch(`${endpoint}/chat/completions`, {
     method: 'POST',

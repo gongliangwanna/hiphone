@@ -20,6 +20,8 @@ describe('heartbeat notes tools', () => {
       const result = await executeHeartbeatTool('view_notes', { page: 1 }, CHAR_ID);
       expect(result.done).toBe(false);
       expect(result.observation).toContain('还没有写过备忘录');
+      expect(result.memoryEvents?.join('\n')).toContain('我查看了备忘录');
+      expect(result.memoryEvents?.join('\n')).toContain('还没有写过备忘录');
     });
 
     it('returns paginated notes with aliases', async () => {
@@ -32,6 +34,11 @@ describe('heartbeat notes tools', () => {
       expect(result.observation).toContain('[n1]');
       expect(result.observation).toContain('[n2]');
       expect(result.observation).toContain('共2条');
+      expect(result.memoryEvents?.join('\n')).toContain('我查看了备忘录');
+      expect(result.memoryEvents?.join('\n')).toContain('Note A');
+      expect(result.memoryEvents?.join('\n')).toContain('Body A');
+      expect(result.memoryEvents?.join('\n')).toContain('Note B');
+      expect(result.memoryEvents?.join('\n')).toContain('Body B');
     });
 
     it('returns page-out-of-range message', async () => {
@@ -40,6 +47,7 @@ describe('heartbeat notes tools', () => {
 
       const result = await executeHeartbeatTool('view_notes', { page: 99 }, CHAR_ID);
       expect(result.observation).toContain('没有更多备忘录了');
+      expect(result.memoryEvents?.join('\n')).toContain('第99页没有更多备忘录');
     });
 
     it('defaults to page 1 when no page given', async () => {
@@ -60,6 +68,9 @@ describe('heartbeat notes tools', () => {
       );
       expect(result.done).toBe(false);
       expect(result.observation).toContain('备忘录已创建');
+      expect(result.memoryEvents?.join('\n')).toContain('我写了一篇备忘录');
+      expect(result.memoryEvents?.join('\n')).toContain('标题：My Diary');
+      expect(result.memoryEvents?.join('\n')).toContain('内容：Today was a good day.');
 
       const notes = getCharStore().getState().notes;
       expect(notes).toHaveLength(1);

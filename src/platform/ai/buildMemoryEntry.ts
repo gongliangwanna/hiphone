@@ -13,7 +13,7 @@
  * See docs/superpowers/specs/2026-04-19-m4.1-ai-sdk-xingyu-migration-design.md §6
  */
 
-import type { Message } from '@/apps/XingYu/data';
+import { formatLocationText, type Message } from '@/apps/XingYu/data';
 import type {
   MemoryEntry,
   MemorySource,
@@ -33,6 +33,12 @@ import { stripCharPrefix } from '@/platform/utils/characterId';
 function bareCharacterId(id: string): string {
   while (id.startsWith('char-')) id = id.slice('char-'.length);
   return id;
+}
+
+function normalizeExperienceLabels(content: string): string {
+  return content
+    .split('[虚拟世界经历结束]').join('[经历结束]')
+    .split('[虚拟世界经历]').join('[经历]');
 }
 
 export interface BuildMemoryContext {
@@ -91,6 +97,8 @@ function messageToRawContent(msg: Message, ctx: BuildMemoryContext): string | nu
     }
     case 'image':
       return `[图片 ${msg.imageUrl}]`;
+    case 'location':
+      return formatLocationText(msg.location);
     case 'sticker':
       return msg.stickerDesc ? `[表情：${msg.stickerDesc}]` : '[表情]';
     case 'forward_card': {
@@ -98,13 +106,20 @@ function messageToRawContent(msg: Message, ctx: BuildMemoryContext): string | nu
         const body =
           fm.type === 'image' ? '[图片]' :
           fm.type === 'sticker' ? '[表情]' :
+          fm.type === 'location' && fm.location ? formatLocationText(fm.location) :
           (fm.text ?? '');
         return `- ${fm.senderName}：${body}`;
       });
       return `[转发的聊天记录：${msg.forwardCard.title}]\n${lines.join('\n')}\n[/转发结束]`;
     }
-    case 'heartbeat_log':
-      return msg.text ? `[自主活动记录]\n${msg.text}` : null;
+    case 'heartbeat_log': {
+      const text = msg.text?.trim();
+      if (!text) return null;
+      if (text.startsWith('[经历]') || text.startsWith('[虚拟世界经历]')) {
+        return normalizeExperienceLabels(text);
+      }
+      return `[自主活动记录]\n${text}`;
+    }
     default:
       return null;
   }

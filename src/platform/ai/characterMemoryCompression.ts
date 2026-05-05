@@ -129,6 +129,7 @@ async function doCompression(
     apiKey: aiConfig.apiKey,
     model: aiConfig.model,
     providerId: aiConfig.provider,
+    openRouterProviderSlug: aiConfig.openRouterProviderSlug,
     maxTokens: aiConfig.maxTokens,
   });
 

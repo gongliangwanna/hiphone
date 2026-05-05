@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Image as ImageIcon } from 'lucide-react';
+import { Image as ImageIcon, MapPin } from 'lucide-react';
 import { T } from '../theme';
 
 interface AttachmentItem {
@@ -14,11 +14,13 @@ interface AttachmentItem {
 interface Props {
   visible: boolean;
   onPickImage: () => void;
+  onPickLocation: () => void;
 }
 
-export function AttachmentDrawer({ visible, onPickImage }: Props) {
+export function AttachmentDrawer({ visible, onPickImage, onPickLocation }: Props) {
   const items: AttachmentItem[] = [
     { id: 'photo', label: '照片', Icon: ImageIcon, enabled: true, onTap: onPickImage },
+    { id: 'location', label: '位置', Icon: MapPin, enabled: true, onTap: onPickLocation },
   ];
 
   return (

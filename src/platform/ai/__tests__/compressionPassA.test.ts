@@ -82,6 +82,18 @@ describe('runPassA', () => {
     expect(sysPrompt).toContain('小美');
   });
 
+  it('OpenRouter 可严格限定厂商', async () => {
+    mockChatJson({ factAdds: [], factAppends: [], loopsOpened: [], loopsClosed: [], jokeAdds: [] });
+    await runPassA({
+      state: makeInitialState('char-1'), messages: [], peers: [],
+      endpoint: 'x', apiKey: 'x', model: 'x',
+      providerId: 'openrouter', openRouterProviderSlug: 'cerebras',
+      maxTokens: 100,
+    });
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.provider).toEqual({ only: ['cerebras'], allow_fallbacks: false });
+  });
+
   it('HTTP 错误抛错', async () => {
     fetchMock.mockResolvedValueOnce({
       ok: false, status: 500, text: async () => 'oops',
